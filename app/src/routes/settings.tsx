@@ -49,6 +49,7 @@ function SettingsPage() {
           {data && (
             <div className="flex flex-col">
               <Row label="Version" value={data.version} />
+              <Row label="Port" value={String(data.port)} />
               <Row label="Uptime" value={`${data.uptimeSeconds}s`} />
               <Row label="Skills" value={String(data.skillCount)} />
               <Row label="Profiles" value={String(data.profileCount)} />

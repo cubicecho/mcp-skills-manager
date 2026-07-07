@@ -20,7 +20,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useDeleteSkill, useSkills } from '@/lib/queries';
+import { mcpOrigin } from '@/lib/mcp';
+import { useDeleteSkill, useServerStatus, useSkills } from '@/lib/queries';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/')({
@@ -65,6 +66,7 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
 
 function SkillsPage() {
   const { data, isPending, error } = useSkills();
+  const { data: status } = useServerStatus();
   const [newOpen, setNewOpen] = useState(false);
 
   return (
@@ -148,7 +150,7 @@ function SkillsPage() {
           </Table>
 
           <ConnectCard
-            endpoint={`${window.location.origin}/mcp`}
+            endpoint={`${mcpOrigin(status?.port)}/mcp`}
             label="all skills"
             description="Point an MCP client at this endpoint to get every skill as a tool and a resource. Use a profile endpoint (/mcp/p/<slug>) to serve a filtered subset."
           />

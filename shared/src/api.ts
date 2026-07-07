@@ -89,6 +89,8 @@ export interface ServerStatus {
   skillCount: number;
   profileCount: number;
   authEnabled: boolean;
+  /** The port the HTTP server is actually listening on. */
+  port: number;
 }
 
 /** Standard error envelope for non-2xx responses. */

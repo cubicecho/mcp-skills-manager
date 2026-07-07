@@ -9,13 +9,15 @@ import { createMcpRouter } from './gateway/routes.ts';
 
 export interface AppDeps {
   store: ConfigStore;
+  /** The port the server will listen on; reported via GET /api/status. */
+  port: number;
   /** Override for tests; defaults to <repo>/app/dist. */
   appDistDir?: string;
 }
 
 /** Build the Express app (separate from listen() so tests can drive it with supertest). */
 export function buildApp(deps: AppDeps): express.Express {
-  const { store } = deps;
+  const { store, port } = deps;
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '8mb' }));
@@ -28,7 +30,7 @@ export function buildApp(deps: AppDeps): express.Express {
     };
   });
 
-  app.use('/api', auth, createApiRouter({ store }));
+  app.use('/api', auth, createApiRouter({ store, port }));
   app.use('/mcp', auth, createMcpRouter({ store }));
 
   // Production: serve the built web UI with an SPA fallback for non-API GETs.

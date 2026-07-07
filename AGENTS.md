@@ -28,7 +28,7 @@ All from the project root.
 ```bash
 # Dev
 npm run dev              # server (watch) + Vite dev server, concurrently
-npm run dev:server       # Express + MCP server only (port 3001, DATA_DIR=./data)
+npm run dev:server       # Express + MCP server only (port 3031, DATA_DIR=./data)
 npm run dev:app          # Vite dev server only (port 3000, proxies /api + /mcp)
 
 # Quality — run before every commit

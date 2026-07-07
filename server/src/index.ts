@@ -13,8 +13,8 @@ async function main(): Promise<void> {
   });
   store.startWatching();
 
-  const app = buildApp({ store });
   const port = Number(process.env.PORT ?? store.getSettings().port);
+  const app = buildApp({ store, port });
   const httpServer = app.listen(port, () => {
     console.log(`mcp-skills-manager listening on http://localhost:${port} (data dir: ${dataDir})`);
     const settings = store.getSettings();
@@ -27,6 +27,17 @@ async function main(): Promise<void> {
     } else {
       console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${settings.authToken}`);
     }
+  });
+
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(
+        `Port ${port} is already in use by another process. ` +
+          'Set PORT (or the "port" field in settings.json) to a free port and restart.',
+      );
+      process.exit(1);
+    }
+    throw err;
   });
 
   let shuttingDown = false;

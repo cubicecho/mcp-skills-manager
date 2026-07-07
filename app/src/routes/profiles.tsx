@@ -20,7 +20,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useDeleteProfile, useProfiles } from '@/lib/queries';
+import { mcpOrigin } from '@/lib/mcp';
+import { useDeleteProfile, useProfiles, useServerStatus } from '@/lib/queries';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/profiles')({
@@ -30,11 +31,11 @@ export const Route = createFileRoute('/profiles')({
 /** create → the New button; edit → a specific profile; null → closed. */
 type DialogState = { mode: 'create' } | { mode: 'edit'; profile: ProfileStatus } | null;
 
-function CopyUrlButton({ path }: { path: string }) {
+function CopyUrlButton({ path, origin }: { path: string; origin: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      await navigator.clipboard.writeText(`${origin}${path}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -80,7 +81,9 @@ function DeleteProfileButton({ profile }: { profile: ProfileStatus }) {
 
 function ProfilesPage() {
   const { data, isPending, error } = useProfiles();
+  const { data: status } = useServerStatus();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const origin = mcpOrigin(status?.port);
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +142,7 @@ function ProfilesPage() {
                 <TableCell>
                   <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
                     {profile.path}
-                    <CopyUrlButton path={profile.path} />
+                    <CopyUrlButton path={profile.path} origin={origin} />
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">

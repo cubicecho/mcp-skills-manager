@@ -17,6 +17,8 @@ import { SERVER_VERSION } from '../version.ts';
 
 export interface ApiDeps {
   store: ConfigStore;
+  /** The port the HTTP server is listening on, surfaced via GET /status. */
+  port: number;
 }
 
 function toSummary(skill: Skill): SkillSummary {
@@ -35,7 +37,7 @@ function toDetail(skill: Skill): SkillDetail {
 }
 
 export function createApiRouter(deps: ApiDeps): Router {
-  const { store } = deps;
+  const { store, port } = deps;
   const startedAt = Date.now();
   const router = Router();
 
@@ -56,6 +58,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       skillCount: store.getSkills().length,
       profileCount: store.getProfiles().length,
       authEnabled: store.getSettings().authEnabled,
+      port,
     };
     res.json(status);
   });
