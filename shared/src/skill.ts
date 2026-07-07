@@ -30,6 +30,14 @@ export const skillFrontmatterSchema = z
   .object({
     name: z.string().optional(),
     description: z.string().optional(),
+    /**
+     * Whether the skill is served on the root `/mcp` aggregate. Absent or `true`
+     * → global (the default; every hand-authored skill stays visible). Set to
+     * `false` to hide it from root while still serving it on any profile that
+     * lists it — this is how agent-authored, profile-scoped skills stay
+     * private to their profile.
+     */
+    global: z.boolean().optional(),
   })
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
@@ -56,6 +64,8 @@ export const skillSchema = z.object({
   /** Full parsed frontmatter (including unknown keys). */
   frontmatter: skillFrontmatterSchema.default({}),
   format: skillFormatSchema,
+  /** Whether the skill is served on the root `/mcp` aggregate (frontmatter `global`, default true). */
+  global: z.boolean().default(true),
   /** File path relative to the skills dir (`<name>.md` or `<name>/SKILL.md`). */
   path: z.string(),
   /** Last-modified time of the skill's SKILL.md / `.md`, ISO 8601. */

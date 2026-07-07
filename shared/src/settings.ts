@@ -13,6 +13,13 @@ export const settingsFileSchema = z
     authToken: z.string().nullable().default(null),
     /** Disable to allow unauthenticated access (trusted networks only). */
     authEnabled: z.boolean().default(true),
+    /**
+     * Whether agents may author/update skills over MCP (the create_skill,
+     * update_skill, write_skill_file, … tools). Enabled by default; set to
+     * false to make every MCP endpoint read-only. Writes are always still
+     * behind the same bearer auth as the rest of `/mcp`.
+     */
+    authoringEnabled: z.boolean().default(true),
   })
   .passthrough();
 

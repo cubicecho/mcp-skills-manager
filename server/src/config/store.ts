@@ -3,7 +3,14 @@ import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ProfileConfig, SettingsFile, Skill, SkillFile, SkillFileRead } from '@mcp-skills/shared';
+import type {
+  ProfileConfig,
+  SettingsFile,
+  Skill,
+  SkillFile,
+  SkillFileRead,
+  SkillFrontmatter,
+} from '@mcp-skills/shared';
 import { profileConfigSchema, settingsFileSchema, skillNameSchema, skillSchema } from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
@@ -194,6 +201,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** Skills served on the root `/mcp` aggregate — every skill except those flagged `global: false`. */
+  getGlobalSkills(): Skill[] {
+    return this.getSkills().filter((skill) => skill.global);
+  }
+
+  /** Whether agents may author skills over MCP (settings.authoringEnabled). */
+  isAuthoringEnabled(): boolean {
+    return this.settings.authoringEnabled;
+  }
+
   getSkill(name: string): Skill | undefined {
     return this.skills.get(name);
   }
@@ -224,6 +241,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     description: string;
     body: string;
     format?: Skill['format'];
+    /** When false, write `global: false` frontmatter so the skill is hidden from the root aggregate. */
+    global?: boolean;
   }): Promise<Skill> {
     const name = skillNameSchema.parse(input.name);
     if (this.skills.has(name)) {
@@ -233,21 +252,29 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const relPath = format === 'dir' ? path.join(name, 'SKILL.md') : `${name}.md`;
     const fullPath = path.join(this.skillsDir, relPath);
     await mkdir(path.dirname(fullPath), { recursive: true });
-    const content = serializeMarkdown({ name, description: input.description }, input.body);
+    // Only persist the `global` key when it is false — the true default stays implicit for clean files.
+    const frontmatter: SkillFrontmatter = { name, description: input.description };
+    if (input.global === false) {
+      frontmatter.global = false;
+    }
+    const content = serializeMarkdown(frontmatter, input.body);
     await this.writeTextAtomic(fullPath, content);
     return this.reloadSkill(name, relPath, format);
   }
 
-  /** Update an existing skill's description and/or body in place, preserving unknown frontmatter and format. */
-  async updateSkill(name: string, patch: { description?: string; body?: string }): Promise<Skill> {
+  /** Update an existing skill's description, body and/or global visibility in place, preserving unknown frontmatter and format. */
+  async updateSkill(name: string, patch: { description?: string; body?: string; global?: boolean }): Promise<Skill> {
     const existing = this.skills.get(name);
     if (!existing) {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
-    const frontmatter = {
+    const nextGlobal = patch.global ?? existing.global;
+    const frontmatter: SkillFrontmatter = {
       ...existing.frontmatter,
       name,
       description: patch.description ?? existing.description,
+      // Persist `global: false` only; drop the key entirely when the skill is (back to) global.
+      global: nextGlobal ? undefined : false,
     };
     const body = patch.body ?? existing.body;
     const fullPath = path.join(this.skillsDir, existing.path);
@@ -558,6 +585,27 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     await rm(this.profileFile(slug), { force: true });
   }
 
+  /** Append a skill to a profile's member list (idempotent). Used when an agent authors a skill via a profile endpoint. */
+  async addSkillToProfile(slug: string, name: string): Promise<ProfileConfig> {
+    const profile = this.profiles.get(slug);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profile "${slug}"`);
+    }
+    if (profile.skills.includes(name)) {
+      return profile;
+    }
+    return this.saveProfile({ ...profile, skills: [...profile.skills, name] });
+  }
+
+  /** Remove a skill from a profile's member list (no-op if absent or the profile is gone). */
+  async removeSkillFromProfile(slug: string, name: string): Promise<void> {
+    const profile = this.profiles.get(slug);
+    if (!profile || !profile.skills.includes(name)) {
+      return;
+    }
+    await this.saveProfile({ ...profile, skills: profile.skills.filter((s) => s !== name) });
+  }
+
   // --- internals ---
 
   private profileFile(slug: string): string {
@@ -649,6 +697,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       body,
       frontmatter,
       format,
+      // Only an explicit `global: false` hides a skill from the root aggregate; anything else is global.
+      global: frontmatter.global !== false,
       path: relPath,
       updatedAt: stats.mtime.toISOString(),
       files,

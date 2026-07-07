@@ -38,9 +38,13 @@ async function main(): Promise<void> {
         const profile = store.getProfile(profileSlug);
         return profile ? store.getSkillsForProfile(profile) : [];
       }
-    : () => store.getSkills();
+    : () => store.getGlobalSkills();
 
-  const server = createSkillServer({ label: profileSlug ?? 'all', getSkills });
+  const server = createSkillServer({
+    label: profileSlug ?? 'all',
+    getSkills,
+    authoring: { store, profileSlug },
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // Log to stderr — stdout is the MCP transport channel and must stay clean.
