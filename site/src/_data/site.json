@@ -3,5 +3,8 @@
   "tagline": "Serve your skills to every agent.",
   "description": "An MCP server that serves skills — reusable markdown documents (instructions, playbooks, references) — to agents. Every skill is exposed both as an MCP tool and a skill:// resource; the /mcp endpoint serves them all, and profiles serve named subsets at /mcp/p/<slug>. Write and organize skills in a React web UI, or hand-edit flat markdown files on disk.",
   "repo": "https://github.com/cubicecho/mcp-skills-manager",
-  "url": "https://cubicecho.github.io/mcp-skills-manager"
+  "url": "https://cubicecho.github.io/mcp-skills-manager",
+  "dockerHub": "https://hub.docker.com/r/vantreeseba/mcp-skills-manager",
+  "dockerImage": "vantreeseba/mcp-skills-manager",
+  "ghcrImage": "ghcr.io/cubicecho/mcp-skills-manager"
 }

@@ -120,24 +120,33 @@ title: false
   <div class="wrap">
     <h2>Quickstart</h2>
 
-    <h3>Docker Compose (recommended)</h3>
+    <h3>Docker <span class="pill">recommended · no clone</span></h3>
+    <p>Pull the prebuilt image and run it — nothing to build:</p>
+    <pre class="code"><code>docker run -d -p 3000:3000 -v ./data:/data \
+  -e MCP_SKILLS_TOKEN=your-secret-token \
+  {{ site.dockerImage }}:latest</code></pre>
+    <p>Open <code>http://localhost:3000</code>, enter your token, and start writing skills. All state lives in
+      <code>./data</code>, bind-mounted to <code>/data</code> in the container — delete the container anytime;
+      your skills and config stay on the host. Every release is published to
+      <a href="{{ site.dockerHub }}">Docker Hub (<code>{{ site.dockerImage }}</code>)</a> and GHCR
+      (<code>{{ site.ghcrImage }}</code>), tagged <code>latest</code> and the semver version.</p>
+
+    <h3>Docker Compose</h3>
+    <p>Prefer Compose, or want to build from source and tweak it? Clone the repo and bring it up:</p>
     <pre class="code"><code>git clone https://github.com/cubicecho/mcp-skills-manager &amp;&amp; cd mcp-skills-manager
 cp .env.example .env      <span class="cmt"># set a real MCP_SKILLS_TOKEN</span>
-docker compose up -d --build</code></pre>
-    <p>Open <code>http://localhost:3000</code>, enter your token, and start writing skills. All state lives in
-      <code>./data</code>, bind-mounted to <code>/data</code> in the container.</p>
+docker compose up -d</code></pre>
+    <p>The bundled <code>docker-compose.yml</code> mounts <code>./data</code> at <code>/data</code> and serves on
+      <code>:3000</code>.</p>
 
-    <h3>Local dev <span class="pill">Node ≥ 22.18</span></h3>
+    <h3>Bare Node <span class="pill">Node ≥ 22.18</span></h3>
     <pre class="code"><code>npm install
-npm run dev      <span class="cmt"># server on :3001, web UI on :3000</span></code></pre>
-    <p>On first run a bearer token is generated into <code>data/config/settings.json</code> and printed to the
-      logs; paste it into the web UI when prompted.</p>
-
-    <h3>Production</h3>
-    <pre class="code"><code>npm run build    <span class="cmt"># shared → server → app</span>
+npm run build    <span class="cmt"># shared → server → app</span>
 MCP_SKILLS_TOKEN=your-secret-token npm start</code></pre>
     <p>Listens on port 3000 (override with <code>PORT</code>) and serves the built web UI alongside the MCP and
-      management endpoints.</p>
+      management endpoints. For development, <code>npm run dev</code> runs the server on <code>:3001</code> and the
+      Vite UI on <code>:3000</code>; on first run a token is generated into
+      <code>data/config/settings.json</code> and logged.</p>
   </div>
 </section>
 
