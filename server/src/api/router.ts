@@ -1,7 +1,10 @@
 import type { ProfileConfig, ProfileStatus, ServerStatus, Skill, SkillDetail, SkillSummary } from '@mcp-skills/shared';
 import {
   createProfileRequestSchema,
+  createSkillFolderRequestSchema,
   createSkillRequestSchema,
+  importSkillRequestSchema,
+  moveSkillPathRequestSchema,
   profileConfigSchema,
   profileSlugSchema,
   skillNameSchema,
@@ -9,8 +12,10 @@ import {
   slugifySkillName,
   updateProfileRequestSchema,
   updateSkillRequestSchema,
+  writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
 import { Router } from 'express';
+import { authDisabledByEnv } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
 import { SERVER_VERSION } from '../version.ts';
@@ -57,7 +62,9 @@ export function createApiRouter(deps: ApiDeps): Router {
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       skillCount: store.getSkills().length,
       profileCount: store.getProfiles().length,
-      authEnabled: store.getSettings().authEnabled,
+      // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
+      // matching the auth middleware in app.ts.
+      authEnabled: store.getSettings().authEnabled && !authDisabledByEnv(),
       port,
     };
     res.json(status);
@@ -83,7 +90,27 @@ export function createApiRouter(deps: ApiDeps): Router {
       name: parsed.data,
       description: request.description,
       body: request.body,
+      format: request.format,
     });
+    res.status(201).json(toDetail(skill));
+  });
+
+  // Create a skill from an uploaded .md / directory / zip (normalized client-side).
+  router.post('/skills/import', async (req, res) => {
+    const request = importSkillRequestSchema.parse(req.body);
+    const name = request.name ?? (request.title ? slugifySkillName(request.title) : undefined);
+    if (!name) {
+      throw new HttpError(400, 'A "name" or "title" is required to import a skill');
+    }
+    const parsed = skillNameSchema.safeParse(name);
+    if (!parsed.success) {
+      throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
+    }
+    const files = request.files.map((file) => ({
+      path: file.path,
+      content: Buffer.from(file.content, file.encoding),
+    }));
+    const skill = await store.importSkill({ name: parsed.data, format: request.format, files });
     res.status(201).json(toDetail(skill));
   });
 
@@ -105,6 +132,66 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.delete('/skills/:name', async (req, res) => {
     await store.deleteSkill(req.params.name);
     res.status(204).end();
+  });
+
+  // Export a skill as a .zip download.
+  router.get('/skills/:name/export', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const zip = await store.exportSkillZip(name);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
+    res.send(zip);
+  });
+
+  // Read one supporting file's content: GET /skills/:name/files/content?path=<relative path>
+  router.get('/skills/:name/files/content', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!relPath) {
+      throw new HttpError(400, 'A "path" query parameter is required');
+    }
+    res.json(await store.readSupportingFile(name, relPath));
+  });
+
+  // Add or overwrite a supporting file (promotes a `file` skill to a `dir`).
+  router.put('/skills/:name/files', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const request = writeSkillFileRequestSchema.parse(req.body);
+    const skill = await store.writeSupportingFile(name, request.path, Buffer.from(request.content, request.encoding));
+    res.json(toDetail(skill));
+  });
+
+  // Create an empty sub-directory under a skill (promotes a `file` skill to a `dir`).
+  router.post('/skills/:name/folders', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const request = createSkillFolderRequestSchema.parse(req.body);
+    const skill = await store.createSupportingFolder(name, request.path);
+    res.json(toDetail(skill));
+  });
+
+  // Rename or move a supporting file or folder.
+  router.post('/skills/:name/files/move', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const request = moveSkillPathRequestSchema.parse(req.body);
+    const skill = await store.moveSupportingPath(name, request.from, request.to);
+    res.json(toDetail(skill));
+  });
+
+  // Delete a supporting file or folder: DELETE /skills/:name/files?path=<relative path>
+  router.delete('/skills/:name/files', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!relPath) {
+      throw new HttpError(400, 'A "path" query parameter is required');
+    }
+    const skill = await store.deleteSupportingFile(name, relPath);
+    res.json(toDetail(skill));
   });
 
   // --- profiles ---

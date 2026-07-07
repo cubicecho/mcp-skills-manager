@@ -20,7 +20,8 @@ export function buildApp(deps: AppDeps): express.Express {
   const { store, port } = deps;
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '8mb' }));
+  // Generous limit: skill uploads carry base64-encoded supporting files inline.
+  app.use(express.json({ limit: '25mb' }));
 
   const auth = createAuthMiddleware(() => {
     const settings = store.getSettings();

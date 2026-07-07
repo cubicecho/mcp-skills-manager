@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { profileConfigSchema, profileSlugSchema } from './profile.ts';
-import { skillFileSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
+import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
 
 /**
  * DTOs for the management REST API (/api/*).
@@ -38,8 +38,75 @@ export const createSkillRequestSchema = z.object({
   description: z.string().default(''),
   /** Markdown body (frontmatter is generated from name/description). */
   body: z.string().default(''),
+  /** On-disk layout: `file` → `<name>.md`, `dir` → `<name>/SKILL.md`. Defaults to `file`. */
+  format: skillFormatSchema.optional(),
 });
 export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
+
+// --- POST /api/skills/import (upload an .md / directory / .zip) ---
+
+/**
+ * One file in an upload payload. `content` is the raw file body, encoded as
+ * `utf8` text or `base64` (used for binary supporting files). `path` is relative
+ * to the skill's root, e.g. "SKILL.md" or "scripts/run.py".
+ */
+export const skillFileContentSchema = z.object({
+  path: z.string().min(1).max(255),
+  content: z.string(),
+  encoding: z.enum(['utf8', 'base64']).default('utf8'),
+});
+export type SkillFileContent = z.infer<typeof skillFileContentSchema>;
+
+/**
+ * Create a skill from an upload. The client normalizes an .md file, a picked
+ * directory, or an unzipped .zip into this shape: a `format` plus a flat file
+ * list. A `dir` import must include a `SKILL.md`; a `file` import carries the
+ * single Markdown file written verbatim as `<name>.md`.
+ */
+export const importSkillRequestSchema = z.object({
+  name: skillNameSchema.optional(),
+  title: z.string().optional(),
+  format: skillFormatSchema,
+  files: z.array(skillFileContentSchema).min(1).max(500),
+});
+export type ImportSkillRequest = z.infer<typeof importSkillRequestSchema>;
+
+// --- PUT /api/skills/:name/files (add or replace a supporting file) ---
+
+/** Add or overwrite one supporting file under a skill's directory; promotes a `file` skill to `dir`. */
+export const writeSkillFileRequestSchema = skillFileContentSchema;
+export type WriteSkillFileRequest = z.infer<typeof writeSkillFileRequestSchema>;
+
+// --- GET /api/skills/:name/files/content?path=… (read one supporting file) ---
+
+/** The content of a single supporting file. Binary files come back base64-encoded with `binary: true`. */
+export const skillFileReadSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  encoding: z.enum(['utf8', 'base64']),
+  size: z.number().int().nonnegative(),
+  /** True when the file is not valid UTF-8 text and should not be opened in the text editor. */
+  binary: z.boolean(),
+});
+export type SkillFileRead = z.infer<typeof skillFileReadSchema>;
+
+// --- POST /api/skills/:name/folders (create an empty sub-directory) ---
+
+export const createSkillFolderRequestSchema = z.object({
+  /** Directory path relative to the skill root, e.g. "reference/examples". */
+  path: z.string().min(1).max(255),
+});
+export type CreateSkillFolderRequest = z.infer<typeof createSkillFolderRequestSchema>;
+
+// --- POST /api/skills/:name/files/move (rename or move a file or folder) ---
+
+export const moveSkillPathRequestSchema = z.object({
+  /** Existing file/folder path, relative to the skill root. */
+  from: z.string().min(1).max(255),
+  /** New path, relative to the skill root. */
+  to: z.string().min(1).max(255),
+});
+export type MoveSkillPathRequest = z.infer<typeof moveSkillPathRequestSchema>;
 
 // --- PATCH /api/skills/:name ---
 

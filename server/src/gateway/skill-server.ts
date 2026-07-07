@@ -26,10 +26,11 @@ function toolName(skill: Skill): string {
 
 /** The text handed to an agent when it loads a skill: the Markdown body, plus a note about any bundled files. */
 function renderSkill(skill: Skill): string {
-  if (skill.files.length === 0) {
+  const files = skill.files.filter((f) => f.type === 'file');
+  if (files.length === 0) {
     return skill.body;
   }
-  const list = skill.files.map((f) => `- ${f.path}`).join('\n');
+  const list = files.map((f) => `- ${f.path}`).join('\n');
   return `${skill.body}\n\n---\nBundled supporting files (in the skill directory \`${skill.name}/\`):\n${list}\n`;
 }
 

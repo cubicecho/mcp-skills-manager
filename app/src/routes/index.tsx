@@ -1,9 +1,10 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { BookMarkedIcon, FileTextIcon, FolderIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { BookMarkedIcon, FileTextIcon, FolderIcon, PencilIcon, PlusIcon, Trash2Icon, UploadIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
+import { UploadSkillDialog } from '@/components/domain/skill/upload-skill-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +69,7 @@ function SkillsPage() {
   const { data, isPending, error } = useSkills();
   const { data: status } = useServerStatus();
   const [newOpen, setNewOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,9 +80,14 @@ function SkillsPage() {
             Markdown documents served to agents over MCP. Each is exposed as both a tool and a resource.
           </p>
         </div>
-        <Button onClick={() => setNewOpen(true)}>
-          <PlusIcon /> New skill
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setUploadOpen(true)}>
+            <UploadIcon /> Upload
+          </Button>
+          <Button onClick={() => setNewOpen(true)}>
+            <PlusIcon /> New skill
+          </Button>
+        </div>
       </div>
 
       {isPending && (
@@ -98,9 +105,14 @@ function SkillsPage() {
           <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
             <BookMarkedIcon className="size-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">No skills yet.</p>
-            <Button onClick={() => setNewOpen(true)}>
-              <PlusIcon /> New skill
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setUploadOpen(true)}>
+                <UploadIcon /> Upload
+              </Button>
+              <Button onClick={() => setNewOpen(true)}>
+                <PlusIcon /> New skill
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -158,6 +170,7 @@ function SkillsPage() {
       )}
 
       {newOpen && <NewSkillDialog open onOpenChange={setNewOpen} />}
+      {uploadOpen && <UploadSkillDialog open onOpenChange={setUploadOpen} />}
     </div>
   );
 }

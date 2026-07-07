@@ -34,11 +34,13 @@ export const skillFrontmatterSchema = z
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
 
-/** A supporting file bundled next to a `dir`-format skill's SKILL.md. */
+/** An entry (file or sub-directory) bundled next to a `dir`-format skill's SKILL.md. */
 export const skillFileSchema = z.object({
-  /** Path relative to the skill directory, e.g. "scripts/run.py". */
+  /** Path relative to the skill directory, e.g. "scripts/run.py" or "scripts". */
   path: z.string(),
-  /** Byte size on disk. */
+  /** Whether this entry is a regular file or a sub-directory. */
+  type: z.enum(['file', 'dir']).default('file'),
+  /** Byte size on disk (0 for directories). */
   size: z.number().int().nonnegative(),
 });
 export type SkillFile = z.infer<typeof skillFileSchema>;

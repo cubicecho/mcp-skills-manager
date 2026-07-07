@@ -31,7 +31,7 @@ clients.
 
 ```bash
 npm install
-npm run dev          # server on :3031, web UI on :3000 (proxies to the server)
+npm run dev          # server on :3001, web UI on :3000 (proxies to the server)
 ```
 
 Open http://localhost:3000. On first run a bearer token is generated into

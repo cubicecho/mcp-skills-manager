@@ -17,8 +17,8 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     proxy: {
-      '/api': 'http://localhost:3031',
-      '/mcp': 'http://localhost:3031',
+      '/api': 'http://localhost:3001',
+      '/mcp': 'http://localhost:3001',
     },
   },
 });

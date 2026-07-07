@@ -73,7 +73,7 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-4">
+          <div className="flex min-w-0 flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="profile-name">Name</Label>
               <Input
@@ -127,7 +127,7 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
                       <span className="min-w-0">
                         <span className="block text-sm font-medium">{skill.name}</span>
                         {skill.description && (
-                          <span className="block truncate text-xs text-muted-foreground">{skill.description}</span>
+                          <span className="block break-words text-xs text-muted-foreground">{skill.description}</span>
                         )}
                       </span>
                     </label>

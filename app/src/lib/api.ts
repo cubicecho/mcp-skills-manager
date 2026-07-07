@@ -1,13 +1,18 @@
 import type {
   ApiError,
   CreateProfileRequest,
+  CreateSkillFolderRequest,
   CreateSkillRequest,
+  ImportSkillRequest,
+  MoveSkillPathRequest,
   ProfileStatus,
   ServerStatus,
   SkillDetail,
+  SkillFileRead,
   SkillSummary,
   UpdateProfileRequest,
   UpdateSkillRequest,
+  WriteSkillFileRequest,
 } from '@mcp-skills/shared';
 import { getToken, requireAuth } from './auth';
 
@@ -25,7 +30,7 @@ export class ApiRequestError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 
@@ -88,6 +93,49 @@ export function getSkill(name: string): Promise<SkillDetail> {
 
 export function createSkill(body: CreateSkillRequest): Promise<SkillDetail> {
   return request('/api/skills', { method: 'POST', body });
+}
+
+export function importSkill(body: ImportSkillRequest): Promise<SkillDetail> {
+  return request('/api/skills/import', { method: 'POST', body });
+}
+
+export function writeSkillFile(name: string, body: WriteSkillFileRequest): Promise<SkillDetail> {
+  return request(`/api/skills/${encodeURIComponent(name)}/files`, { method: 'PUT', body });
+}
+
+export function readSkillFile(name: string, filePath: string): Promise<SkillFileRead> {
+  return request(`/api/skills/${encodeURIComponent(name)}/files/content?path=${encodeURIComponent(filePath)}`);
+}
+
+export function createSkillFolder(name: string, body: CreateSkillFolderRequest): Promise<SkillDetail> {
+  return request(`/api/skills/${encodeURIComponent(name)}/folders`, { method: 'POST', body });
+}
+
+export function moveSkillPath(name: string, body: MoveSkillPathRequest): Promise<SkillDetail> {
+  return request(`/api/skills/${encodeURIComponent(name)}/files/move`, { method: 'POST', body });
+}
+
+export function deleteSkillFile(name: string, filePath: string): Promise<SkillDetail> {
+  return request(`/api/skills/${encodeURIComponent(name)}/files?path=${encodeURIComponent(filePath)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Fetch a skill's .zip export (with auth) as a Blob, for the caller to trigger a download. */
+export async function exportSkill(name: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`/api/skills/${encodeURIComponent(name)}/export`, { headers });
+  if (response.status === 401) {
+    requireAuth();
+  }
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, response.statusText || `Export failed (${response.status})`);
+  }
+  return response.blob();
 }
 
 export function updateSkill(name: string, body: UpdateSkillRequest): Promise<SkillDetail> {

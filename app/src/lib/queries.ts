@@ -1,8 +1,12 @@
 import type {
   CreateProfileRequest,
+  CreateSkillFolderRequest,
   CreateSkillRequest,
+  ImportSkillRequest,
+  MoveSkillPathRequest,
   UpdateProfileRequest,
   UpdateSkillRequest,
+  WriteSkillFileRequest,
 } from '@mcp-skills/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './api';
@@ -40,6 +44,17 @@ export function useSkill(name: string) {
   });
 }
 
+/** Read one supporting file's content; disabled until a path is selected. */
+export function useSkillFileContent(name: string, filePath: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.skill(name), 'file', filePath],
+    queryFn: () => api.readSkillFile(name, filePath as string),
+    enabled: filePath != null,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 export function useProfiles() {
   return useQuery({
     queryKey: queryKeys.profiles,
@@ -58,6 +73,63 @@ export function useCreateSkill() {
       queryClient.invalidateQueries({ queryKey: queryKeys.skills });
       queryClient.setQueryData(queryKeys.skill(skill.name), skill);
       queryClient.invalidateQueries({ queryKey: queryKeys.status });
+    },
+  });
+}
+
+export function useImportSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ImportSkillRequest) => api.importSkill(body),
+    onSuccess: (skill) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+      queryClient.setQueryData(queryKeys.skill(skill.name), skill);
+      queryClient.invalidateQueries({ queryKey: queryKeys.status });
+    },
+  });
+}
+
+/** Add/replace a supporting file on a skill; may promote a `file` skill to a `dir`. */
+export function useWriteSkillFile(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: WriteSkillFileRequest) => api.writeSkillFile(name, body),
+    onSuccess: (skill) => {
+      queryClient.setQueryData(queryKeys.skill(name), skill);
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+    },
+  });
+}
+
+export function useCreateSkillFolder(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSkillFolderRequest) => api.createSkillFolder(name, body),
+    onSuccess: (skill) => {
+      queryClient.setQueryData(queryKeys.skill(name), skill);
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+    },
+  });
+}
+
+export function useMoveSkillPath(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MoveSkillPathRequest) => api.moveSkillPath(name, body),
+    onSuccess: (skill) => {
+      queryClient.setQueryData(queryKeys.skill(name), skill);
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+    },
+  });
+}
+
+export function useDeleteSkillFile(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filePath: string) => api.deleteSkillFile(name, filePath),
+    onSuccess: (skill) => {
+      queryClient.setQueryData(queryKeys.skill(name), skill);
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
     },
   });
 }

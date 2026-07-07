@@ -1,6 +1,8 @@
+import type { SkillFormat } from '@mcp-skills/shared';
 import { slugifySkillName } from '@mcp-skills/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { type FormEvent, useState } from 'react';
+import { FileTextIcon, FolderIcon } from 'lucide-react';
+import { type FormEvent, type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateSkill } from '@/lib/queries';
 import { toastApiError } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 /** Create a skill from a title (which becomes the slug) + one-line description. Opens the editor on success. */
 export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -22,6 +25,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const create = useCreateSkill();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [format, setFormat] = useState<SkillFormat>('file');
 
   const name = slugifySkillName(title);
 
@@ -31,12 +35,13 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       return;
     }
     create.mutate(
-      { title, description, body: `# ${title || name}\n\n` },
+      { title, description, format, body: `# ${title || name}\n\n` },
       {
         onSuccess: (skill) => {
           onOpenChange(false);
           setTitle('');
           setDescription('');
+          setFormat('file');
           navigate({ to: '/skills/$name', params: { name: skill.name } });
         },
         onError: toastApiError,
@@ -80,6 +85,28 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 rows={2}
               />
             </div>
+            <div className="flex flex-col gap-2">
+              <Label>Layout</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <FormatOption
+                  active={format === 'file'}
+                  onClick={() => setFormat('file')}
+                  icon={<FileTextIcon className="size-4" />}
+                  title="Single file"
+                  hint={`skills/${name || 'name'}.md`}
+                />
+                <FormatOption
+                  active={format === 'dir'}
+                  onClick={() => setFormat('dir')}
+                  icon={<FolderIcon className="size-4" />}
+                  title="Directory"
+                  hint={`skills/${name || 'name'}/SKILL.md`}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A directory can hold supporting files alongside its <code className="font-mono">SKILL.md</code>.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -92,5 +119,37 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FormatOption({
+  active,
+  onClick,
+  icon,
+  title,
+  hint,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'flex flex-col gap-1 rounded-md border p-3 text-left transition-colors',
+        active ? 'border-primary bg-accent' : 'hover:bg-accent/50',
+      )}
+    >
+      <span className="flex items-center gap-2 text-sm font-medium">
+        {icon}
+        {title}
+      </span>
+      <span className="truncate font-mono text-xs text-muted-foreground">{hint}</span>
+    </button>
   );
 }

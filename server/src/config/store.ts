@@ -3,9 +3,10 @@ import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ProfileConfig, SettingsFile, Skill, SkillFile } from '@mcp-skills/shared';
+import type { ProfileConfig, SettingsFile, Skill, SkillFile, SkillFileRead } from '@mcp-skills/shared';
 import { profileConfigSchema, settingsFileSchema, skillNameSchema, skillSchema } from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
+import { zipSync } from 'fflate';
 import { authDisabledByEnv } from '../auth.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
@@ -17,6 +18,24 @@ export interface ConfigState {
 }
 
 const WATCH_DEBOUNCE_MS = 300;
+
+/** Normalize an OS-native path (which may use `\` on Windows) to a POSIX-style relative path. */
+function toPosix(p: string): string {
+  return p.split(path.sep).join('/');
+}
+
+/** Heuristic: a file is binary if it holds a NUL byte or is not decodable as UTF-8. */
+function isBinary(buffer: Buffer): boolean {
+  if (buffer.includes(0)) {
+    return true;
+  }
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 /** Body of the starter skill written on a fresh install (see seedDefaults). */
 const GETTING_STARTED_BODY = `# Getting started
@@ -285,6 +304,238 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
+  /**
+   * Create a skill from an uploaded .md / directory / zip. Files are written
+   * verbatim (frontmatter preserved). A `dir` import must include a SKILL.md;
+   * a `file` import is a single Markdown file written as `<name>.md`.
+   */
+  async importSkill(input: {
+    name: string;
+    format: Skill['format'];
+    files: { path: string; content: Buffer }[];
+  }): Promise<Skill> {
+    const name = skillNameSchema.parse(input.name);
+    if (this.skills.has(name)) {
+      throw new HttpError(409, `Skill "${name}" already exists`);
+    }
+    if (input.files.length === 0) {
+      throw new HttpError(400, 'An imported skill must contain at least one file');
+    }
+    const [only] = input.files;
+    if (input.format === 'file') {
+      if (input.files.length !== 1 || !only) {
+        throw new HttpError(400, 'A file-format skill must contain exactly one Markdown file');
+      }
+      const relPath = `${name}.md`;
+      await this.writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
+      return this.reloadSkill(name, relPath, 'file');
+    }
+    // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
+    const entries = input.files.map((file) => ({ rel: this.safeSkillRelPath(name, file.path), content: file.content }));
+    if (!entries.some((entry) => entry.rel === 'SKILL.md')) {
+      throw new HttpError(400, 'A directory skill must include a SKILL.md at its root');
+    }
+    const dir = path.join(this.skillsDir, name);
+    await mkdir(dir, { recursive: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.rel);
+      await mkdir(path.dirname(full), { recursive: true });
+      await this.writeBufferAtomic(full, entry.content);
+    }
+    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+  }
+
+  /**
+   * Add or overwrite a supporting file under a skill's directory. A `file`-format
+   * skill is first promoted to a `dir` (its `.md` becomes `<name>/SKILL.md`).
+   */
+  async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const rel = this.safeSkillRelPath(name, relPath);
+    if (rel === 'SKILL.md') {
+      throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
+    }
+    if (existing.format === 'file') {
+      await this.promoteToDir(name);
+    }
+    const full = path.join(this.skillsDir, name, rel);
+    await mkdir(path.dirname(full), { recursive: true });
+    await this.writeBufferAtomic(full, content);
+    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+  }
+
+  /** Read one supporting file, returning UTF-8 text or, for binary files, base64 bytes. */
+  async readSupportingFile(name: string, relPath: string): Promise<SkillFileRead> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const rel = this.requireDirRelPath(existing, relPath);
+    const full = path.join(this.skillsDir, name, rel);
+    let stats: Awaited<ReturnType<typeof stat>>;
+    try {
+      stats = await stat(full);
+    } catch {
+      throw new HttpError(404, `No file "${rel}" in skill "${name}"`);
+    }
+    if (!stats.isFile()) {
+      throw new HttpError(400, `"${rel}" is a directory, not a file`);
+    }
+    const buffer = await readFile(full);
+    const binary = isBinary(buffer);
+    return {
+      path: rel,
+      content: buffer.toString(binary ? 'base64' : 'utf8'),
+      encoding: binary ? 'base64' : 'utf8',
+      size: stats.size,
+      binary,
+    };
+  }
+
+  /** Create an empty sub-directory under a skill (promoting a `file` skill to a `dir` first). */
+  async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const rel = this.safeSkillRelPath(name, relPath);
+    if (rel === 'SKILL.md') {
+      throw new HttpError(400, 'A folder cannot be named SKILL.md');
+    }
+    if (existing.format === 'file') {
+      await this.promoteToDir(name);
+    }
+    const full = path.join(this.skillsDir, name, rel);
+    if (existsSync(full)) {
+      throw new HttpError(409, `"${rel}" already exists in skill "${name}"`);
+    }
+    await mkdir(full, { recursive: true });
+    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+  }
+
+  /** Rename or move a supporting file or folder within a skill's directory. */
+  async moveSupportingPath(name: string, fromPath: string, toPath: string): Promise<Skill> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const from = this.requireDirRelPath(existing, fromPath);
+    const to = this.safeSkillRelPath(name, toPath);
+    if (to === 'SKILL.md') {
+      throw new HttpError(400, 'A supporting file cannot be named SKILL.md');
+    }
+    if (from === to) {
+      return existing;
+    }
+    if (to === from || to.startsWith(`${from}/`)) {
+      throw new HttpError(400, 'Cannot move a folder into itself');
+    }
+    const fromFull = path.join(this.skillsDir, name, from);
+    const toFull = path.join(this.skillsDir, name, to);
+    if (!existsSync(fromFull)) {
+      throw new HttpError(404, `No file or folder "${from}" in skill "${name}"`);
+    }
+    if (existsSync(toFull)) {
+      throw new HttpError(409, `"${to}" already exists in skill "${name}"`);
+    }
+    await mkdir(path.dirname(toFull), { recursive: true });
+    await rename(fromFull, toFull);
+    await this.pruneEmptyDirs(path.dirname(fromFull), path.join(this.skillsDir, name));
+    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+  }
+
+  /** Delete one supporting file or folder (folders recursively), pruning directories it leaves empty. */
+  async deleteSupportingFile(name: string, relPath: string): Promise<Skill> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const rel = this.requireDirRelPath(existing, relPath);
+    const full = path.join(this.skillsDir, name, rel);
+    await rm(full, { recursive: true, force: true });
+    await this.pruneEmptyDirs(path.dirname(full), path.join(this.skillsDir, name));
+    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+  }
+
+  /** Zip a skill for download: a `dir` skill nested under `<name>/`, a `file` skill as a lone `<name>.md`. */
+  async exportSkillZip(name: string): Promise<Buffer> {
+    const existing = this.skills.get(name);
+    if (!existing) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const entries: Record<string, Uint8Array> = {};
+    if (existing.format === 'file') {
+      entries[`${name}.md`] = await readFile(path.join(this.skillsDir, existing.path));
+    } else {
+      const dir = path.join(this.skillsDir, name);
+      const collect = async (current: string): Promise<void> => {
+        for (const entry of await readdir(current, { withFileTypes: true })) {
+          const full = path.join(current, entry.name);
+          if (entry.isDirectory()) {
+            await collect(full);
+          } else if (entry.isFile()) {
+            entries[`${name}/${toPosix(path.relative(dir, full))}`] = await readFile(full);
+          }
+        }
+      };
+      await collect(dir);
+    }
+    return Buffer.from(zipSync(entries));
+  }
+
+  /** Require a `dir`-format skill and return the safe relative path, rejecting the reserved SKILL.md. */
+  private requireDirRelPath(skill: Skill, relPath: string): string {
+    if (skill.format !== 'dir') {
+      throw new HttpError(400, `Skill "${skill.name}" has no supporting files`);
+    }
+    const rel = this.safeSkillRelPath(skill.name, relPath);
+    if (rel === 'SKILL.md') {
+      throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
+    }
+    return rel;
+  }
+
+  /** Move a `file` skill's `<name>.md` to `<name>/SKILL.md`, converting it to a `dir` skill in place. */
+  private async promoteToDir(name: string): Promise<void> {
+    const fileFull = path.join(this.skillsDir, `${name}.md`);
+    const raw = await readFile(fileFull, 'utf8');
+    const dir = path.join(this.skillsDir, name);
+    await mkdir(dir, { recursive: true });
+    await this.writeTextAtomic(path.join(dir, 'SKILL.md'), raw);
+    await rm(fileFull, { force: true });
+  }
+
+  /**
+   * Resolve a caller-supplied path within a skill's directory, rejecting absolute
+   * paths and `..` traversal. Returns the safe POSIX-style relative path.
+   */
+  private safeSkillRelPath(name: string, relPath: string): string {
+    const cleaned = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const skillDir = path.join(this.skillsDir, name);
+    const full = path.resolve(skillDir, cleaned);
+    const rel = path.relative(skillDir, full);
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new HttpError(400, `Unsafe file path "${relPath}"`, 'paths must stay within the skill directory');
+    }
+    return rel.split(path.sep).join('/');
+  }
+
+  /** Remove now-empty directories from `dir` up to (but not including) `stopAt`. */
+  private async pruneEmptyDirs(dir: string, stopAt: string): Promise<void> {
+    let current = dir;
+    while (current !== stopAt && current.startsWith(stopAt + path.sep)) {
+      const remaining = await readdir(current);
+      if (remaining.length > 0) {
+        break;
+      }
+      await rm(current, { recursive: true, force: true });
+      current = path.dirname(current);
+    }
+  }
+
   // --- profiles ---
 
   getProfiles(): ProfileConfig[] {
@@ -404,7 +655,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Every file under skills/<name> except the SKILL.md itself, relative to that directory. */
+  /** Every entry under skills/<name> except the SKILL.md itself — files and sub-directories, relative to that dir. */
   private async listSupportingFiles(name: string): Promise<SkillFile[]> {
     const dir = path.join(this.skillsDir, name);
     const out: SkillFile[] = [];
@@ -412,15 +663,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       const entries = await readdir(current, { withFileTypes: true });
       for (const entry of entries) {
         const full = path.join(current, entry.name);
+        const rel = toPosix(path.relative(dir, full));
         if (entry.isDirectory()) {
+          out.push({ path: rel, type: 'dir', size: 0 });
           await walk(full);
         } else if (entry.isFile()) {
-          const rel = path.relative(dir, full);
           if (rel === 'SKILL.md') {
             continue;
           }
           const stats = await stat(full);
-          out.push({ path: rel, size: stats.size });
+          out.push({ path: rel, type: 'file', size: stats.size });
         }
       }
     };
@@ -474,6 +726,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Atomic write of text: tmp file in the same dir, rename over the target. */
   private async writeTextAtomic(file: string, content: string, mode = 0o644): Promise<void> {
+    await this.writeBufferAtomic(file, Buffer.from(content, 'utf8'), mode);
+  }
+
+  /** Atomic write of raw bytes: tmp file in the same dir, chmod, rename over the target. */
+  private async writeBufferAtomic(file: string, content: Buffer, mode = 0o644): Promise<void> {
     const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, content, { mode });
     await chmod(tmp, mode);
