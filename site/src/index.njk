@@ -1,0 +1,176 @@
+---
+layout: base.njk
+title: false
+---
+
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">MCP skills server</p>
+    <h1>{{ site.tagline }}</h1>
+    <p class="lede">
+      Write reusable skills — instructions, playbooks, references — as markdown, and serve them to agents over
+      <a href="https://modelcontextprotocol.io">MCP</a>. Every skill is both a callable <strong>tool</strong> and a
+      <code>skill://</code> <strong>resource</strong>. Point a client at one endpoint for all of them, or a
+      <strong>profile</strong> for just the subset an agent should see.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#quickstart">Get started</a>
+      <a class="btn btn-ghost" href="{{ site.repo }}">View on GitHub ↗</a>
+    </div>
+
+    <div class="endpoint-card" aria-hidden="false">
+      <div class="endpoint-row">
+        <span class="method method-agg">ALL</span>
+        <code>http://host:3000/mcp</code>
+        <span class="endpoint-note">every skill</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method">ALL</span>
+        <code>http://host:3000/mcp/p/&lt;slug&gt;</code>
+        <span class="endpoint-note">one profile</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-icon">🔧</div>
+        <h3>Skills as tools</h3>
+        <p>Each skill is exposed as an MCP tool — calling it returns the skill's markdown body, plus a note listing
+          any bundled supporting files. Agents pull a skill on demand, only when they need it.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔗</div>
+        <h3>Skills as resources</h3>
+        <p>The same content is served as an MCP resource at <code>skill://&lt;name&gt;</code>, for clients that
+          browse and attach resources rather than call tools.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🧩</div>
+        <h3>Profiles</h3>
+        <p>Group a chosen subset of skills into a <strong>profile</strong> at its own
+          <code>/mcp/p/&lt;slug&gt;</code> URL. Hand each agent exactly the skills it needs — nothing more.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📝</div>
+        <h3>Web editor</h3>
+        <p>A React web UI with a live split-pane markdown editor, full skill CRUD, and a file/folder manager for
+          directory-format skills — create, rename, upload, and export as a <code>.zip</code>.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📁</div>
+        <h3>Two skill formats</h3>
+        <p>A flat <code>&lt;name&gt;.md</code> file, or a <code>&lt;name&gt;/SKILL.md</code> directory (the Claude
+          Code convention) with supporting files alongside it. Both use YAML frontmatter.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔌</div>
+        <h3>HTTP &amp; stdio</h3>
+        <p>Serve over streamable HTTP for networked clients, or over stdio for local ones with the
+          <code>mcp-skills-stdio</code> binary — optionally scoped to a single profile.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🗃️</div>
+        <h3>Flat-file config</h3>
+        <p>Skills and profiles are plain files on disk under <code>DATA_DIR</code> — hand-editable, watched, and
+          hot-reloaded. The web UI and the filesystem are two views of the same source of truth.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔐</div>
+        <h3>One token, one door</h3>
+        <p>A single bearer token guards the management API and every MCP endpoint. Disable it for trusted local
+          networks with <code>SECURE_LOCAL_NET=true</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="flow">
+      <div class="flow-node flow-client">
+        <strong>Your MCP client</strong>
+        <span>Claude Code, Claude Desktop, any streamable-HTTP or stdio client</span>
+      </div>
+      <div class="flow-arrow">→ <code>/mcp</code> →</div>
+      <div class="flow-node flow-router">
+        <strong>MCP Skills Manager</strong>
+        <span>auth · profiles · tools + resources</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node flow-servers">
+        <strong>Skill files</strong>
+        <span>markdown on disk under <code>DATA_DIR/skills</code></span>
+      </div>
+    </div>
+    <p class="flow-caption">
+      The server validates the bearer token, then exposes every skill (or a profile's subset) as an MCP tool and a
+      <code>skill://</code> resource. Calling a skill's tool returns its markdown body; directory-format skills also
+      list their bundled supporting files so the agent knows they exist.
+    </p>
+  </div>
+</section>
+
+<section class="section" id="quickstart">
+  <div class="wrap">
+    <h2>Quickstart</h2>
+
+    <h3>Docker Compose (recommended)</h3>
+    <pre class="code"><code>git clone https://github.com/cubicecho/mcp-skills-manager &amp;&amp; cd mcp-skills-manager
+cp .env.example .env      <span class="cmt"># set a real MCP_SKILLS_TOKEN</span>
+docker compose up -d --build</code></pre>
+    <p>Open <code>http://localhost:3000</code>, enter your token, and start writing skills. All state lives in
+      <code>./data</code>, bind-mounted to <code>/data</code> in the container.</p>
+
+    <h3>Local dev <span class="pill">Node ≥ 22.18</span></h3>
+    <pre class="code"><code>npm install
+npm run dev      <span class="cmt"># server on :3001, web UI on :3000</span></code></pre>
+    <p>On first run a bearer token is generated into <code>data/config/settings.json</code> and printed to the
+      logs; paste it into the web UI when prompted.</p>
+
+    <h3>Production</h3>
+    <pre class="code"><code>npm run build    <span class="cmt"># shared → server → app</span>
+MCP_SKILLS_TOKEN=your-secret-token npm start</code></pre>
+    <p>Listens on port 3000 (override with <code>PORT</code>) and serves the built web UI alongside the MCP and
+      management endpoints.</p>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="wrap">
+    <h2>Connect a client</h2>
+    <p>Point <strong>Claude Code</strong> at the aggregate endpoint — every skill, as a tool and a resource:</p>
+    <pre class="code"><code>claude mcp add --transport http skills http://localhost:3000/mcp \
+  --header "Authorization: Bearer &lt;token&gt;"</code></pre>
+
+    <p>Or a <strong>profile</strong> — just the skills that client should see:</p>
+    <pre class="code"><code>claude mcp add --transport http backend http://localhost:3000/mcp/p/backend \
+  --header "Authorization: Bearer &lt;token&gt;"</code></pre>
+
+    <p>Or run it locally over <strong>stdio</strong> with the packaged binary:</p>
+    <pre class="code"><code>{
+  "mcpServers": {
+    "skills": {
+      "command": "mcp-skills-stdio",
+      "args": ["--data-dir", "/path/to/data", "--profile", "backend"]
+    }
+  }
+}</code></pre>
+  </div>
+</section>
+
+<section class="section cta-final">
+  <div class="wrap">
+    <h2>Write skills once. Serve them everywhere.</h2>
+    <p>Read the full configuration and API reference, or grab the source.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="{{ '/docs/' | url }}">Read the docs</a>
+      <a class="btn btn-ghost" href="{{ site.repo }}">GitHub ↗</a>
+    </div>
+  </div>
+</section>

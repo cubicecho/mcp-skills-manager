@@ -1,0 +1,169 @@
+---
+layout: base.njk
+title: Docs
+description: MCP Skills Manager documentation — skill formats, profiles, configuration, REST API, and MCP endpoints.
+permalink: /docs/
+---
+
+<section class="section docs">
+  <div class="wrap wrap-docs">
+    <div class="docs-layout">
+      <aside class="toc">
+        <p class="toc-title">On this page</p>
+        <nav>
+          <a href="#skills">Skills on disk</a>
+          <a href="#frontmatter">Frontmatter</a>
+          <a href="#profiles">Profiles</a>
+          <a href="#config">Configuration</a>
+          <a href="#api">REST API</a>
+          <a href="#mcp">MCP endpoints</a>
+          <a href="#security">Security notes</a>
+        </nav>
+        <p class="toc-foot"><a href="{{ site.repo }}/blob/main/README.md">Full README ↗</a></p>
+      </aside>
+
+      <article class="docs-body">
+        <h1>Documentation</h1>
+        <p class="lede">
+          A condensed reference. For the complete guide, see the
+          <a href="{{ site.repo }}/blob/main/README.md">README on GitHub</a>.
+        </p>
+
+        <h2 id="skills">Skills on disk</h2>
+        <p>Skills live under <code>DATA_DIR/skills/</code> in either of two shapes. Both use YAML frontmatter
+          (<code>name</code>, <code>description</code>) followed by the markdown body.</p>
+
+        <h3>Flat file</h3>
+        <p>A single <code>&lt;name&gt;.md</code> — the simplest skill:</p>
+        <pre class="code"><code>---
+name: commit-messages
+description: Write clear, conventional git commit messages.
+---
+
+# Writing good commit messages
+
+...the skill body...</code></pre>
+
+        <h3>Directory (Claude Code convention)</h3>
+        <p>A <code>&lt;name&gt;/SKILL.md</code> plus any supporting files — reference docs, scripts, templates:</p>
+        <pre class="code"><code>skills/pdf-forms/
+├── SKILL.md           <span class="cmt"># frontmatter + body</span>
+├── reference.md       <span class="cmt"># supporting file</span>
+└── scripts/fill.py    <span class="cmt"># nested supporting file</span></code></pre>
+        <p>Supporting files are listed on the skill and referenced in the rendered tool output, so the agent knows
+          they exist. Manage them from the web UI's file tree — create, upload, rename, delete, or export the whole
+          skill as a <code>.zip</code> — or edit them directly on disk.</p>
+
+        <h3 id="frontmatter">Frontmatter</h3>
+        <p>The <code>name</code> must be a slug: lowercase letters, digits, <code>.</code>, <code>_</code>,
+          <code>-</code> (max 64 chars). It doubles as the MCP tool name (dots sanitized to <code>_</code>) and the
+          resource URI (<code>skill://&lt;name&gt;</code>). <code>description</code> is surfaced as the MCP
+          tool/resource description. Unknown frontmatter keys are preserved across round-trips.</p>
+
+        <h2 id="profiles">Profiles</h2>
+        <p>A <strong>profile</strong> is a named subset of skills served at its own <code>/mcp/p/&lt;slug&gt;</code>
+          endpoint. It is a JSON file at <code>DATA_DIR/config/profiles/&lt;slug&gt;.json</code>:</p>
+        <pre class="code"><code>{
+  "name": "Backend",
+  "slug": "backend",
+  "enabled": true,               <span class="cmt">// false = the /mcp/p/&lt;slug&gt; endpoint 404s</span>
+  "description": "Skills for backend work.",
+  "skills": ["commit-messages", "pdf-forms"]
+}</code></pre>
+        <p>Served at <code>/mcp/p/backend</code> over HTTP and via <code>--profile backend</code> over stdio.
+          The slug is derived from the name and doubles as the filename. Manage profiles from the
+          <strong>Profiles</strong> page in the web UI, or edit the files directly — changes are picked up
+          automatically.</p>
+
+        <h2 id="config">Configuration</h2>
+        <p>Everything lives under <code>DATA_DIR</code> (default <code>./data</code> locally,
+          <code>/data</code> in Docker). Config files are written atomically with mode <code>0600</code>. Edits on
+          disk are watched (debounced) and hot-reloaded; you can also force a re-read:</p>
+        <pre class="code"><code>curl -X POST -H "Authorization: Bearer $MCP_SKILLS_TOKEN" \
+  http://localhost:3000/api/reload</code></pre>
+        <pre class="code"><code>data/
+├── config/
+│   ├── settings.json          <span class="cmt"># port, auth token, auth toggle</span>
+│   └── profiles/
+│       └── &lt;slug&gt;.json        <span class="cmt"># one file per profile</span>
+└── skills/
+    ├── &lt;name&gt;.md              <span class="cmt"># flat-file skill</span>
+    └── &lt;name&gt;/                <span class="cmt"># directory-format skill</span>
+        ├── SKILL.md
+        └── &lt;supporting files&gt;</code></pre>
+
+        <h3>Environment variables</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>DATA_DIR</code></td><td><code>./data</code></td><td>Root directory for skills and config</td></tr>
+              <tr><td><code>PORT</code></td><td><code>3000</code></td><td>HTTP listen port (or <code>settings.json</code>)</td></tr>
+              <tr><td><code>MCP_SKILLS_TOKEN</code></td><td>—</td><td>Bearer token; overrides <code>settings.json</code></td></tr>
+              <tr><td><code>SECURE_LOCAL_NET</code></td><td><code>false</code></td><td><code>true</code> disables auth entirely (trusted networks only)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>If no token is configured and <code>SECURE_LOCAL_NET</code> is not set, a random token is generated into
+          <code>settings.json</code> on first run and logged once.</p>
+
+        <h2 id="api">REST API</h2>
+        <p>Management API under <code>/api</code>, bearer auth, JSON in/out. Errors are non-2xx with
+          <code>{ "error": "...", "detail": "..." }</code>.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Method &amp; path</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/profile counts, auth mode</td></tr>
+              <tr><td><code>GET /api/skills</code></td><td>List skills (summaries)</td></tr>
+              <tr><td><code>POST /api/skills</code></td><td>Create a skill</td></tr>
+              <tr><td><code>POST /api/skills/import</code></td><td>Import an uploaded <code>.md</code> / directory / zip</td></tr>
+              <tr><td><code>GET /api/skills/:name</code></td><td>Get a skill (with body)</td></tr>
+              <tr><td><code>PATCH /api/skills/:name</code></td><td>Update body/description, or rename</td></tr>
+              <tr><td><code>DELETE /api/skills/:name</code></td><td>Delete a skill</td></tr>
+              <tr><td><code>GET /api/skills/:name/export</code></td><td>Download the skill as a <code>.zip</code></td></tr>
+              <tr><td><code>GET /api/skills/:name/files/content?path=</code></td><td>Read one supporting file</td></tr>
+              <tr><td><code>PUT /api/skills/:name/files</code></td><td>Add/overwrite a supporting file (promotes to a dir)</td></tr>
+              <tr><td><code>POST /api/skills/:name/folders</code></td><td>Create an empty sub-folder</td></tr>
+              <tr><td><code>POST /api/skills/:name/files/move</code></td><td>Rename / move a file or folder</td></tr>
+              <tr><td><code>DELETE /api/skills/:name/files?path=</code></td><td>Delete a file or folder</td></tr>
+              <tr><td><code>GET/POST /api/profiles</code></td><td>List / create profiles</td></tr>
+              <tr><td><code>GET/PATCH/DELETE /api/profiles/:slug</code></td><td>Get / update / delete a profile</td></tr>
+              <tr><td><code>POST /api/reload</code></td><td>Re-read all config from disk</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="mcp">MCP endpoints</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>ALL /mcp</code></td><td>Every skill — each as a tool and a <code>skill://</code> resource</td></tr>
+              <tr><td><code>ALL /mcp/p/&lt;slug&gt;</code></td><td>A profile's skills only</td></tr>
+              <tr><td><code>mcp-skills-stdio</code></td><td>stdio transport; <code>--data-dir</code>, optional <code>--profile &lt;slug&gt;</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The HTTP endpoints speak streamable HTTP and require the bearer token (unless <code>authEnabled</code> is
+          false). Disabled profiles return 404; auth failures return 401 before any MCP handling.</p>
+
+        <h2 id="security">Security notes</h2>
+        <ul class="notes">
+          <li><strong>The auth token is plaintext</strong> in <code>settings.json</code>. Files are mode
+            <code>0600</code>, but anyone with read access to <code>DATA_DIR</code> can read it. Protect the
+            directory.</li>
+          <li><strong>One bearer token guards everything.</strong> Treat it like a password. Set it via
+            <code>MCP_SKILLS_TOKEN</code>.</li>
+          <li><strong>Don't expose the server directly to the internet</strong> — it speaks plain HTTP. Put it
+            behind a TLS-terminating reverse proxy, or bind to localhost / a private network.</li>
+          <li><strong>Skills are content, not code</strong> — the server serves markdown; it doesn't execute
+            supporting scripts. But agents may act on what a skill tells them, so treat skill content as
+            trusted instructions.</li>
+        </ul>
+
+        <p class="docs-cta"><a class="btn btn-primary" href="{{ site.repo }}/blob/main/README.md">Read the full README ↗</a></p>
+      </article>
+    </div>
+  </div>
+</section>
