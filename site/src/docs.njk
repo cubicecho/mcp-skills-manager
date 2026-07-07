@@ -148,6 +148,13 @@ description: Write clear, conventional git commit messages.
         <p>The HTTP endpoints speak streamable HTTP and require the bearer token (unless <code>authEnabled</code> is
           false). Disabled profiles return 404; auth failures return 401 before any MCP handling.</p>
 
+        <h3 id="list-skills">Discovering skills</h3>
+        <p>Every endpoint also exposes a <code>list_skills</code> tool. Calling it returns a JSON catalogue of the
+          available skills — <code>name</code>, <code>description</code>, <code>format</code>, supporting
+          <code>files</code>, <code>updatedAt</code>, and the <code>tool</code> name to call to load each — without
+          any skill bodies. An agent can call it first to decide which skill(s) are worth loading, then call the
+          named tool (or read the matching <code>skill://&lt;name&gt;</code> resource) to pull the full contents.</p>
+
         <h2 id="security">Security notes</h2>
         <ul class="notes">
           <li><strong>The auth token is plaintext</strong> in <code>settings.json</code>. Files are mode

@@ -11,6 +11,11 @@ Every skill is exposed two ways at once:
 - as an MCP **resource** at `skill://<name>` — for clients that browse and
   attach resources.
 
+A `list_skills` tool on every endpoint returns a JSON catalogue of the available
+skills — name, description, format, supporting files, and the tool name to call
+to load each — with no bodies, so an agent can discover what's on offer and
+decide which skills are worth loading.
+
 The root endpoint `/mcp` serves **all** skills. **Profiles** are named subsets
 served at their own endpoint `/mcp/p/<slug>`, so you can hand a specific agent
 just the skills it needs. Everything is also available over **stdio** for local

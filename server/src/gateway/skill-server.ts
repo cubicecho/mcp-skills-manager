@@ -16,6 +16,13 @@ const SKILL_CAPABILITIES = { capabilities: { tools: {}, resources: {} } };
 const RESOURCE_SCHEME = 'skill';
 
 /**
+ * Name of the meta-tool that returns the skill catalogue. A skill could in
+ * theory be named `list_skills` too; the meta-tool wins (that skill stays
+ * reachable as a resource and is omitted from the tool list to avoid a dupe).
+ */
+const INDEX_TOOL_NAME = 'list_skills';
+
+/**
  * MCP tool names are conventionally restricted to `[A-Za-z0-9_-]`, but skill
  * names may contain dots — sanitize for the tool name and keep a reverse map
  * (built per request from the live skill list) to resolve calls back.
@@ -32,6 +39,23 @@ function renderSkill(skill: Skill): string {
   }
   const list = files.map((f) => `- ${f.path}`).join('\n');
   return `${skill.body}\n\n---\nBundled supporting files (in the skill directory \`${skill.name}/\`):\n${list}\n`;
+}
+
+/** One catalogue entry: the metadata an agent needs to decide whether to load a skill (never the body). */
+function indexEntry(skill: Skill) {
+  return {
+    name: skill.name,
+    tool: toolName(skill),
+    description: skill.description,
+    format: skill.format,
+    files: skill.files.filter((f) => f.type === 'file').map((f) => f.path),
+    updatedAt: skill.updatedAt,
+  };
+}
+
+/** The JSON catalogue returned by the index tool: every skill's metadata, no bodies. */
+function renderIndex(skills: Skill[]): string {
+  return JSON.stringify({ count: skills.length, skills: skills.map(indexEntry) }, null, 2);
 }
 
 export interface SkillServerDeps {
@@ -53,15 +77,30 @@ export function createSkillServer(deps: SkillServerDeps): Server {
   const findByToolName = (name: string): Skill | undefined => deps.getSkills().find((s) => toolName(s) === name);
   const findByName = (name: string): Skill | undefined => deps.getSkills().find((s) => s.name === name);
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: deps.getSkills().map((skill) => ({
-      name: toolName(skill),
-      description: skill.description || `Load the "${skill.name}" skill.`,
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const skills = deps.getSkills();
+    const indexTool = {
+      name: INDEX_TOOL_NAME,
+      description:
+        'List every skill available from this endpoint with its name, description, format, and supporting ' +
+        'files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call ' +
+        "the tool named in each entry's `tool` field to fetch that skill's full contents.",
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    })),
-  }));
+    };
+    const skillTools = skills
+      .filter((skill) => toolName(skill) !== INDEX_TOOL_NAME)
+      .map((skill) => ({
+        name: toolName(skill),
+        description: skill.description || `Load the "${skill.name}" skill.`,
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      }));
+    return { tools: [indexTool, ...skillTools] };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    if (req.params.name === INDEX_TOOL_NAME) {
+      return { content: [{ type: 'text', text: renderIndex(deps.getSkills()) }] };
+    }
     const skill = findByToolName(req.params.name);
     if (!skill) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill tool "${req.params.name}"`);
