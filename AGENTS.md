@@ -18,6 +18,20 @@ Skills come in two on-disk shapes, both supported:
 
 Both use YAML frontmatter (`name`, `description`) followed by the markdown body.
 
+**Agents can author their own skills over MCP** (self-improvement): every MCP
+endpoint also exposes authoring tools (`create_skill`, `update_skill`,
+`rename_skill`, `delete_skill`, `write_skill_file`, `read_skill_file`,
+`create_skill_folder`, `move_skill_file`, `delete_skill_file`) that delegate to
+the same `ConfigStore` mutators as the REST API. They live in
+`server/src/gateway/authoring-tools.ts` and are gated on the
+`settings.authoringEnabled` flag (default true). A skill authored **via a
+profile endpoint** is scoped to that profile by default: written with a
+`global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
+see `ConfigStore.getGlobalSkills`) and appended to the profile's member list.
+Root-authored skills are global. `create_skill`/`update_skill` take a `global`
+argument to override either default (e.g. promote a profile skill to global).
+New skills default to the `dir` layout so ref files can be attached.
+
 Monorepo (npm workspaces): `shared/` (zod schemas + types — the contract),
 `server/` (Express 5 + MCP TS SDK), `app/` (React + Vite + shadcn/ui).
 

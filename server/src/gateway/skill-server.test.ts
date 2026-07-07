@@ -10,6 +10,7 @@ function skill(overrides: Partial<Skill> & Pick<Skill, 'name'>): Skill {
     body: `# ${overrides.name}\n\nbody`,
     frontmatter: {},
     format: 'file',
+    global: true,
     path: `${overrides.name}.md`,
     updatedAt: '2026-01-01T00:00:00.000Z',
     files: [],

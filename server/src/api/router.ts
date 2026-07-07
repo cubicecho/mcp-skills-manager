@@ -31,6 +31,7 @@ function toSummary(skill: Skill): SkillSummary {
     name: skill.name,
     description: skill.description,
     format: skill.format,
+    global: skill.global,
     path: skill.path,
     updatedAt: skill.updatedAt,
     files: skill.files,
@@ -91,6 +92,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       description: request.description,
       body: request.body,
       format: request.format,
+      global: request.global,
     });
     res.status(201).json(toDetail(skill));
   });
@@ -122,7 +124,11 @@ export function createApiRouter(deps: ApiDeps): Router {
     const name = req.params.name;
     requireSkill(name);
     const update = updateSkillRequestSchema.parse(req.body);
-    let skill = await store.updateSkill(name, { description: update.description, body: update.body });
+    let skill = await store.updateSkill(name, {
+      description: update.description,
+      body: update.body,
+      global: update.global,
+    });
     if (update.name !== undefined && update.name !== name) {
       skill = await store.renameSkill(name, update.name);
     }

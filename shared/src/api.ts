@@ -14,6 +14,8 @@ export const skillSummarySchema = z.object({
   name: skillNameSchema,
   description: z.string(),
   format: z.enum(['file', 'dir']),
+  /** Whether the skill is served on the root `/mcp` aggregate (false → profile-scoped only). */
+  global: z.boolean().default(true),
   path: z.string(),
   updatedAt: z.string(),
   files: z.array(skillFileSchema),
@@ -40,6 +42,8 @@ export const createSkillRequestSchema = z.object({
   body: z.string().default(''),
   /** On-disk layout: `file` → `<name>.md`, `dir` → `<name>/SKILL.md`. Defaults to `file`. */
   format: skillFormatSchema.optional(),
+  /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → profile-scoped only. */
+  global: z.boolean().optional(),
 });
 export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
 
@@ -115,6 +119,8 @@ export const updateSkillRequestSchema = z.object({
   name: skillNameSchema.optional(),
   description: z.string().optional(),
   body: z.string().optional(),
+  /** Toggle whether the skill is served on the root `/mcp` aggregate. */
+  global: z.boolean().optional(),
 });
 export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
 

@@ -8,7 +8,10 @@ import {
   McpError,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { errorMessage } from '../errors.ts';
 import { SERVER_VERSION } from '../version.ts';
+import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
+import { buildAuthoringTools } from './authoring-tools.ts';
 
 const SKILL_CAPABILITIES = { capabilities: { tools: {}, resources: {} } };
 
@@ -63,6 +66,12 @@ export interface SkillServerDeps {
   getSkills: () => Skill[];
   /** Endpoint label used in the MCP server info (e.g. "all skills" or a profile slug). */
   label: string;
+  /**
+   * When set, this endpoint also exposes skill-authoring tools (create/update/…),
+   * gated at call time on the store's `authoringEnabled` setting. Omit for a
+   * strictly read-only server.
+   */
+  authoring?: AuthoringDeps;
 }
 
 /**
@@ -77,6 +86,15 @@ export function createSkillServer(deps: SkillServerDeps): Server {
   const findByToolName = (name: string): Skill | undefined => deps.getSkills().find((s) => toolName(s) === name);
   const findByName = (name: string): Skill | undefined => deps.getSkills().find((s) => s.name === name);
 
+  // Authoring tools are built once (closures over the store); whether they are
+  // actually served is decided live per request via `authoringEnabled`.
+  const authoringTools: AuthoringTool[] = deps.authoring ? buildAuthoringTools(deps.authoring) : [];
+  const authoringEnabled = (): boolean => Boolean(deps.authoring?.store.isAuthoringEnabled());
+  const activeAuthoringTools = (): AuthoringTool[] => (authoringEnabled() ? authoringTools : []);
+  // Tool names that must never be shadowed by a same-named skill (the meta-tool + any authoring tools).
+  const reservedNames = (): Set<string> =>
+    new Set<string>([INDEX_TOOL_NAME, ...activeAuthoringTools().map((t) => t.definition.name)]);
+
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const skills = deps.getSkills();
     const indexTool = {
@@ -87,19 +105,32 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         "the tool named in each entry's `tool` field to fetch that skill's full contents.",
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     };
+    const reserved = reservedNames();
     const skillTools = skills
-      .filter((skill) => toolName(skill) !== INDEX_TOOL_NAME)
+      .filter((skill) => !reserved.has(toolName(skill)))
       .map((skill) => ({
         name: toolName(skill),
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       }));
-    return { tools: [indexTool, ...skillTools] };
+    const authoring = activeAuthoringTools().map((t) => t.definition);
+    return { tools: [indexTool, ...authoring, ...skillTools] };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
       return { content: [{ type: 'text', text: renderIndex(deps.getSkills()) }] };
+    }
+    const authoringTool = activeAuthoringTools().find((t) => t.definition.name === req.params.name);
+    if (authoringTool) {
+      try {
+        const text = await authoringTool.run(req.params.arguments ?? {});
+        return { content: [{ type: 'text', text }] };
+      } catch (err) {
+        // Surface authoring failures as a readable tool error, not a transport-level exception,
+        // so the agent can see what went wrong and retry.
+        return { content: [{ type: 'text', text: errorMessage(err) }], isError: true };
+      }
     }
     const skill = findByToolName(req.params.name);
     if (!skill) {
