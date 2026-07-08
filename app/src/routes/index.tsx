@@ -133,9 +133,20 @@ function SkillsPage() {
               {data.map((skill) => (
                 <TableRow key={skill.name}>
                   <TableCell className="font-medium">
-                    <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
-                      {skill.name}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
+                        {skill.name}
+                      </Link>
+                      {!skill.global && (
+                        <Badge
+                          variant="secondary"
+                          className="font-normal"
+                          title="Hidden from the root /mcp endpoint; served only on profiles that list it."
+                        >
+                          profile-scoped
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-md truncate text-muted-foreground">{skill.description || '—'}</TableCell>
                   <TableCell>
