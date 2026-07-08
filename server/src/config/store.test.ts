@@ -456,3 +456,59 @@ describe('ConfigStore skill tags', () => {
     expect(store.getSkill('hand')?.tags).toEqual(['alpha', 'beta']);
   });
 });
+
+describe('ConfigStore usage analytics', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-usage-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reports zeros for a never-loaded skill', async () => {
+    await store.createSkill({ name: 'fresh', description: 'd', body: '# fresh' });
+    expect(store.getUsage('fresh')).toEqual({ count: 0, lastUsedAt: null });
+  });
+
+  it('counts loads and stamps lastUsedAt, persisting across a reopen', async () => {
+    await store.createSkill({ name: 'used', description: 'd', body: '# used' });
+    store.recordSkillUse('used');
+    store.recordSkillUse('used');
+
+    const stats = store.getUsage('used');
+    expect(stats.count).toBe(2);
+    expect(stats.lastUsedAt).not.toBeNull();
+
+    // close() flushes the pending usage.json write; a fresh store reads it back.
+    await store.close();
+    const reopened = new ConfigStore(dir);
+    await reopened.init();
+    expect(reopened.getUsage('used')).toEqual(stats);
+    await reopened.close();
+  });
+
+  it('carries usage over on rename and drops it on delete', async () => {
+    await store.createSkill({ name: 'before', description: 'd', body: '# before' });
+    store.recordSkillUse('before');
+
+    await store.renameSkill('before', 'after');
+    expect(store.getUsage('before')).toEqual({ count: 0, lastUsedAt: null });
+    expect(store.getUsage('after').count).toBe(1);
+
+    await store.deleteSkill('after');
+    expect(store.getUsage('after')).toEqual({ count: 0, lastUsedAt: null });
+  });
+
+  it('keeps usage.json out of the watched dirs (never under config/ or skills/)', () => {
+    expect(store.usageFile).toBe(path.join(dir, 'usage.json'));
+    expect(store.usageFile.startsWith(store.configDir)).toBe(false);
+    expect(store.usageFile.startsWith(store.skillsDir)).toBe(false);
+  });
+});

@@ -47,7 +47,7 @@ function formatDate(iso: string): string {
 
 type ScopeFilter = 'all' | 'global' | 'scoped';
 type FormatFilter = 'all' | 'dir' | 'file';
-type SortKey = 'name' | 'updated';
+type SortKey = 'name' | 'updated' | 'used';
 
 /** Apply the search query, scope/format/tag filters and sort to the raw skill list. */
 function filterAndSort(
@@ -67,9 +67,11 @@ function filterAndSort(
     if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) return false;
     return true;
   });
-  return matched.sort((a, b) =>
-    sort === 'updated' ? b.updatedAt.localeCompare(a.updatedAt) : a.name.localeCompare(b.name),
-  );
+  return matched.sort((a, b) => {
+    if (sort === 'updated') return b.updatedAt.localeCompare(a.updatedAt);
+    if (sort === 'used') return b.usage.count - a.usage.count || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
+  });
 }
 
 /** All distinct tags across the skill list, sorted for a stable filter dropdown. */
@@ -228,6 +230,7 @@ function SkillsPage() {
               <SelectContent>
                 <SelectItem value="name">Name (A–Z)</SelectItem>
                 <SelectItem value="updated">Recently updated</SelectItem>
+                <SelectItem value="used">Most used</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -241,6 +244,8 @@ function SkillsPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Format</TableHead>
+                  <TableHead className="text-right">Uses</TableHead>
+                  <TableHead>Last used</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -283,6 +288,12 @@ function SkillsPage() {
                         {skill.files.length > 0 &&
                           ` · ${skill.files.length} file${skill.files.length === 1 ? '' : 's'}`}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {skill.usage.count > 0 ? skill.usage.count : '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {skill.usage.lastUsedAt ? formatDate(skill.usage.lastUsedAt) : '—'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(skill.updatedAt)}</TableCell>
                     <TableCell className="text-right">

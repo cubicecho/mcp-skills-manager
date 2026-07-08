@@ -187,6 +187,11 @@ export interface SkillServerDeps {
    * authoring tools are enabled. Omit to not expose file resources at all.
    */
   readSupportingFile?: (skillName: string, relPath: string) => Promise<SkillFileRead>;
+  /**
+   * Called with a skill's name whenever its body is loaded over MCP (a per-skill
+   * tool or `load_skill`), for usage analytics. Best-effort — must not throw.
+   */
+  onSkillLoaded?: (skillName: string) => void;
 }
 
 /**
@@ -277,6 +282,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
       }
+      deps.onSkillLoaded?.(skill.name);
       return { content: [{ type: 'text', text: renderSkill(skill) }] };
     }
     const authoringTool = activeAuthoringTools().find((t) => t.definition.name === req.params.name);
@@ -294,6 +300,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     if (!skill) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill tool "${req.params.name}"`);
     }
+    deps.onSkillLoaded?.(skill.name);
     return { content: [{ type: 'text', text: renderSkill(skill) }] };
   });
 

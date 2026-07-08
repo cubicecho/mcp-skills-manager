@@ -10,6 +10,15 @@ import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSc
 
 // --- skills ---
 
+/** Runtime usage stats for a skill: how often it has been loaded over MCP, and when last. */
+export const skillUsageSchema = z.object({
+  /** Number of times the skill body has been loaded (per-skill tool or `load_skill`). */
+  count: z.number().int().nonnegative(),
+  /** ISO 8601 timestamp of the most recent load, or null if never loaded. */
+  lastUsedAt: z.string().nullable(),
+});
+export type SkillUsage = z.infer<typeof skillUsageSchema>;
+
 /** A skill without its body — the shape returned by GET /api/skills. */
 export const skillSummarySchema = z.object({
   name: skillNameSchema,
@@ -22,6 +31,8 @@ export const skillSummarySchema = z.object({
   files: z.array(skillFileSchema),
   /** Normalized tags/categories for organising and filtering. */
   tags: z.array(z.string()).default([]),
+  /** Load-usage stats for the skill. */
+  usage: skillUsageSchema.default({ count: 0, lastUsedAt: null }),
 });
 export type SkillSummary = z.infer<typeof skillSummarySchema>;
 

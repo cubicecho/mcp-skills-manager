@@ -104,6 +104,29 @@ describe('skill-server index tool', () => {
   });
 });
 
+describe('skill-server usage callback', () => {
+  it('fires onSkillLoaded with the skill name when a body is loaded (per-skill and loader)', async () => {
+    const loaded: string[] = [];
+    const perSkill = await connect(() => SKILLS, { onSkillLoaded: (name) => loaded.push(name) });
+    await perSkill.callTool({ name: 'commit_messages' });
+    expect(loaded).toEqual(['commit.messages']);
+
+    const loader = await connect(() => SKILLS, {
+      getSkillToolMode: () => 'loader',
+      onSkillLoaded: (name) => loaded.push(name),
+    });
+    await loader.callTool({ name: 'load_skill', arguments: { name: 'pdf-forms' } });
+    expect(loaded).toEqual(['commit.messages', 'pdf-forms']);
+  });
+
+  it('does not fire onSkillLoaded for the catalogue tool', async () => {
+    const loaded: string[] = [];
+    const client = await connect(() => SKILLS, { onSkillLoaded: (name) => loaded.push(name) });
+    await client.callTool({ name: 'list_skills' });
+    expect(loaded).toEqual([]);
+  });
+});
+
 describe('skill-server loader mode', () => {
   let client: Client;
   beforeEach(async () => {
