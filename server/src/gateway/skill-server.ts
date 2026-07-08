@@ -33,6 +33,13 @@ const INDEX_TOOL_NAME = 'list_skills';
 const LOAD_TOOL_NAME = 'load_skill';
 
 /**
+ * Name of the search meta-tool: full-text lookup over the catalogue (name,
+ * description, tags, and body) so an agent can find relevant skills by intent
+ * without loading every body. Returns the same metadata shape as `list_skills`.
+ */
+const SEARCH_TOOL_NAME = 'search_skills';
+
+/**
  * MCP tool names are conventionally restricted to `[A-Za-z0-9_-]`, but skill
  * names may contain dots — sanitize for the tool name and keep a reverse map
  * (built per request from the live skill list) to resolve calls back.
@@ -164,6 +171,33 @@ function renderIndex(skills: Skill[]): string {
   return JSON.stringify({ count: skills.length, skills: skills.map(indexEntry) }, null, 2);
 }
 
+/**
+ * Rank skills against a free-text query and/or a tag filter. `query` is matched
+ * case-insensitively against the name, description, tags, and body (each search
+ * term must appear somewhere); `tags` narrows to skills carrying at least one of
+ * the requested tags. With neither, every skill matches (mirrors `list_skills`).
+ * Matches keep the caller's order — the metadata each carries lets the agent rank.
+ */
+function searchSkills(skills: Skill[], query: string, tags: string[]): Skill[] {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const wantTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+  return skills.filter((skill) => {
+    if (wantTags.length > 0) {
+      const skillTags = skill.tags.map((t) => t.toLowerCase());
+      if (!wantTags.some((t) => skillTags.includes(t))) {
+        return false;
+      }
+    }
+    if (terms.length > 0) {
+      const haystack = `${skill.name}\n${skill.description}\n${skill.tags.join(' ')}\n${skill.body}`.toLowerCase();
+      if (!terms.every((term) => haystack.includes(term))) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
 export interface SkillServerDeps {
   /** Resolved fresh per request so config edits take effect without a restart. */
   getSkills: () => Skill[];
@@ -215,7 +249,11 @@ export function createSkillServer(deps: SkillServerDeps): Server {
   // Tool names that must never be shadowed by a same-named skill: the meta-tool,
   // any active authoring tools, and (in loader mode) the loader tool.
   const reservedNames = (): Set<string> => {
-    const names = new Set<string>([INDEX_TOOL_NAME, ...activeAuthoringTools().map((t) => t.definition.name)]);
+    const names = new Set<string>([
+      INDEX_TOOL_NAME,
+      SEARCH_TOOL_NAME,
+      ...activeAuthoringTools().map((t) => t.definition.name),
+    ]);
     if (skillToolMode() === 'loader') {
       names.add(LOAD_TOOL_NAME);
     }
@@ -234,6 +272,26 @@ export function createSkillServer(deps: SkillServerDeps): Server {
           : "call the tool named in each entry's `tool` field to fetch that skill's full contents."),
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     });
+    const searchTool = {
+      name: SEARCH_TOOL_NAME,
+      description:
+        'Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no ' +
+        'bodies). Provide a free-text `query` (matched against each skill’s name, description, tags, and body) ' +
+        'and/or a `tags` filter. Use this instead of `list_skills` when you know roughly what you need but not ' +
+        'the exact skill name; then load a match by its `tool`/`name` as usual.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Free-text search; every whitespace-separated term must match.' },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Only skills carrying at least one of these tags.',
+          },
+        },
+        additionalProperties: false,
+      },
+    };
     const authoring = activeAuthoringTools().map((t) => t.definition);
     const mode = skillToolMode();
 
@@ -253,7 +311,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
           additionalProperties: false,
         },
       };
-      return { tools: [indexToolFor(mode), loadTool, ...authoring] };
+      return { tools: [indexToolFor(mode), searchTool, loadTool, ...authoring] };
     }
 
     // per-skill mode: one no-arg tool per skill.
@@ -265,12 +323,18 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       }));
-    return { tools: [indexToolFor(mode), ...authoring, ...skillTools] };
+    return { tools: [indexToolFor(mode), searchTool, ...authoring, ...skillTools] };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
       return { content: [{ type: 'text', text: renderIndex(deps.getSkills()) }] };
+    }
+    if (req.params.name === SEARCH_TOOL_NAME) {
+      const args = req.params.arguments ?? {};
+      const query = typeof args.query === 'string' ? args.query : '';
+      const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
+      return { content: [{ type: 'text', text: renderIndex(searchSkills(deps.getSkills(), query, tags)) }] };
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const raw = req.params.arguments?.name;
