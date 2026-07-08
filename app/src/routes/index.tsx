@@ -1,19 +1,10 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import {
-  BookMarkedIcon,
-  FileTextIcon,
-  FolderIcon,
-  PencilIcon,
-  PlusIcon,
-  SearchIcon,
-  Trash2Icon,
-  UploadIcon,
-} from 'lucide-react';
+import { BookMarkedIcon, FileTextIcon, FolderIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
-import { UploadSkillDialog } from '@/components/domain/skill/upload-skill-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,9 +22,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
-import { useDeleteSkill, useServerStatus, useSkills } from '@/lib/queries';
+import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/')({
@@ -110,11 +102,39 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   );
 }
 
+/** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its profiles (scoped). */
+function GlobalToggle({ skill }: { skill: SkillSummary }) {
+  const update = useUpdateSkill(skill.name);
+  return (
+    <Switch
+      checked={skill.global}
+      disabled={update.isPending}
+      aria-label={`Serve "${skill.name}" on the root /mcp endpoint`}
+      title={
+        skill.global
+          ? 'Served on the root /mcp endpoint. Turn off to make it profile-scoped.'
+          : 'Hidden from the root /mcp endpoint; served only on profiles that list it. Turn on to serve globally.'
+      }
+      onCheckedChange={(next) =>
+        update.mutate(
+          { global: next },
+          {
+            onSuccess: () =>
+              toast.success(
+                next ? 'Now served on the root /mcp endpoint' : 'Now profile-scoped — hidden from root /mcp',
+              ),
+            onError: toastApiError,
+          },
+        )
+      }
+    />
+  );
+}
+
 function SkillsPage() {
   const { data, isPending, error } = useSkills();
   const { data: status } = useServerStatus();
   const [newOpen, setNewOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [format, setFormat] = useState<FormatFilter>('all');
@@ -139,9 +159,6 @@ function SkillsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setUploadOpen(true)}>
-            <UploadIcon /> Upload
-          </Button>
           <Button onClick={() => setNewOpen(true)}>
             <PlusIcon /> New skill
           </Button>
@@ -164,9 +181,6 @@ function SkillsPage() {
             <BookMarkedIcon className="size-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">No skills yet.</p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setUploadOpen(true)}>
-                <UploadIcon /> Upload
-              </Button>
               <Button onClick={() => setNewOpen(true)}>
                 <PlusIcon /> New skill
               </Button>
@@ -247,6 +261,7 @@ function SkillsPage() {
                   <TableHead className="text-right">Uses</TableHead>
                   <TableHead>Last used</TableHead>
                   <TableHead>Updated</TableHead>
+                  <TableHead className="text-center">Global</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -258,15 +273,6 @@ function SkillsPage() {
                         <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
                           {skill.name}
                         </Link>
-                        {!skill.global && (
-                          <Badge
-                            variant="secondary"
-                            className="font-normal"
-                            title="Hidden from the root /mcp endpoint; served only on profiles that list it."
-                          >
-                            profile-scoped
-                          </Badge>
-                        )}
                         {skill.tags.map((t) => (
                           <Badge key={t} variant="outline" className="font-normal">
                             {t}
@@ -296,6 +302,9 @@ function SkillsPage() {
                       {skill.usage.lastUsedAt ? formatDate(skill.usage.lastUsedAt) : '—'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(skill.updatedAt)}</TableCell>
+                    <TableCell className="text-center">
+                      <GlobalToggle skill={skill} />
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon-sm" asChild aria-label={`Edit ${skill.name}`}>
@@ -321,7 +330,6 @@ function SkillsPage() {
       )}
 
       {newOpen && <NewSkillDialog open onOpenChange={setNewOpen} />}
-      {uploadOpen && <UploadSkillDialog open onOpenChange={setUploadOpen} />}
     </div>
   );
 }
