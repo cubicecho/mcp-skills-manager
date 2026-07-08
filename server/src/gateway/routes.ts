@@ -38,7 +38,13 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   // Root aggregate: every globally-visible skill (skills flagged `global: false` are profile-only).
   router.all('/', async (req, res) => {
     await handle(req, res, () =>
-      createSkillServer({ label: 'all', getSkills: () => store.getGlobalSkills(), authoring: { store } }),
+      createSkillServer({
+        label: 'all',
+        getSkills: () => store.getGlobalSkills(),
+        authoring: { store },
+        getSkillToolMode: () => store.getSkillToolMode(),
+        readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
+      }),
     );
   });
 
@@ -60,6 +66,12 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
         },
         // Skills authored via this endpoint are scoped to the profile (global:false + added to it).
         authoring: { store, profileSlug: slug },
+        // Resolve the profile's own mode override (falling back to the global default) fresh per request.
+        getSkillToolMode: () => {
+          const current = store.getProfile(slug);
+          return current ? store.getSkillToolModeForProfile(current) : store.getSkillToolMode();
+        },
+        readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
       }),
     );
   });

@@ -1,4 +1,4 @@
-import type { ProfileStatus } from '@mcp-skills/shared';
+import type { ProfileStatus, SkillToolMode } from '@mcp-skills/shared';
 import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,10 +11,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateProfile, useSkills, useUpdateProfile } from '@/lib/queries';
+import { SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
+
+/** Sentinel select value meaning "no override — inherit the global setting". */
+const INHERIT = 'inherit';
 
 interface Props {
   open: boolean;
@@ -35,6 +40,8 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
   const [description, setDescription] = useState(profile?.description ?? '');
   const [enabled, setEnabled] = useState(profile?.enabled ?? true);
   const [members, setMembers] = useState<Set<string>>(new Set(profile?.skills ?? []));
+  // `inherit` (no override) vs a concrete skill-tool mode for this profile's endpoint.
+  const [toolMode, setToolMode] = useState<SkillToolMode | typeof INHERIT>(profile?.skillToolMode ?? INHERIT);
 
   const toggle = (skill: string) => {
     setMembers((prev) => {
@@ -56,9 +63,18 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
     const skillList = [...members];
     const onSuccess = () => onOpenChange(false);
     if (isEdit && profile) {
-      updateProfile.mutate({ name, description, enabled, skills: skillList }, { onSuccess, onError: toastApiError });
+      // null clears the override (inherit); a value sets it.
+      const skillToolMode = toolMode === INHERIT ? null : toolMode;
+      updateProfile.mutate(
+        { name, description, enabled, skills: skillList, skillToolMode },
+        { onSuccess, onError: toastApiError },
+      );
     } else {
-      createProfile.mutate({ name, description, enabled, skills: skillList }, { onSuccess, onError: toastApiError });
+      const skillToolMode = toolMode === INHERIT ? undefined : toolMode;
+      createProfile.mutate(
+        { name, description, enabled, skills: skillList, skillToolMode },
+        { onSuccess, onError: toastApiError },
+      );
     }
   };
 
@@ -107,6 +123,23 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
                 <p className="text-xs text-muted-foreground">Disabled profiles 404 their endpoint.</p>
               </div>
               <Switch id="profile-enabled" checked={enabled} onCheckedChange={setEnabled} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="profile-tool-mode">MCP tool exposure</Label>
+              <Select value={toolMode} onValueChange={(value) => setToolMode(value as SkillToolMode | typeof INHERIT)}>
+                <SelectTrigger id="profile-tool-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={INHERIT}>Inherit global setting</SelectItem>
+                  <SelectItem value="per-skill">{SKILL_TOOL_MODE_LABELS['per-skill']}</SelectItem>
+                  <SelectItem value="loader">{SKILL_TOOL_MODE_LABELS.loader}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                How this profile’s endpoint advertises skills as tools. Inherit uses the global default from Settings.
+              </p>
             </div>
 
             <div className="flex flex-col gap-2">

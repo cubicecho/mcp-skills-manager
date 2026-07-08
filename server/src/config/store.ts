@@ -6,6 +6,7 @@ import path from 'node:path';
 import type {
   ProfileConfig,
   SettingsFile,
+  SettingsView,
   Skill,
   SkillFile,
   SkillFileRead,
@@ -209,6 +210,25 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Whether agents may author skills over MCP (settings.authoringEnabled). */
   isAuthoringEnabled(): boolean {
     return this.settings.authoringEnabled;
+  }
+
+  /** How skills are exposed as MCP tools — one tool per skill vs. a single loader tool (settings.skillToolMode). */
+  getSkillToolMode(): SettingsFile['skillToolMode'] {
+    return this.settings.skillToolMode;
+  }
+
+  /** The effective skill-tool mode for a profile endpoint: its override if set, else the global default. */
+  getSkillToolModeForProfile(profile: ProfileConfig): SettingsFile['skillToolMode'] {
+    return profile.skillToolMode ?? this.settings.skillToolMode;
+  }
+
+  /** The token-free subset of settings exposed over the management API. */
+  getSettingsView(): SettingsView {
+    return {
+      authEnabled: this.settings.authEnabled,
+      authoringEnabled: this.settings.authoringEnabled,
+      skillToolMode: this.settings.skillToolMode,
+    };
   }
 
   getSkill(name: string): Skill | undefined {

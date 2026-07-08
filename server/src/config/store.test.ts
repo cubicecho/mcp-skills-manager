@@ -214,3 +214,47 @@ describe('ConfigStore supporting files & import', () => {
     expect(Buffer.from(entries['onefile.md'] as Uint8Array).toString('utf8')).toContain('# One');
   });
 });
+
+describe('ConfigStore skillToolMode resolution', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-mode-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('defaults to per-skill and reflects a global override', async () => {
+    expect(store.getSkillToolMode()).toBe('per-skill');
+    await store.updateSettings({ skillToolMode: 'loader' });
+    expect(store.getSkillToolMode()).toBe('loader');
+    expect(store.getSettingsView().skillToolMode).toBe('loader');
+  });
+
+  it('inherits the global mode for a profile with no override, and overrides when set', async () => {
+    await store.updateSettings({ skillToolMode: 'loader' });
+    const inheriting = await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: [] });
+    expect(store.getSkillToolModeForProfile(inheriting)).toBe('loader'); // inherits global
+
+    const pinned = await store.saveProfile({
+      name: 'B',
+      slug: 'b',
+      enabled: true,
+      skills: [],
+      skillToolMode: 'per-skill',
+    });
+    expect(store.getSkillToolModeForProfile(pinned)).toBe('per-skill'); // override wins over global
+  });
+
+  it('omits the auth token from the settings view', async () => {
+    const view = store.getSettingsView();
+    expect(view).not.toHaveProperty('authToken');
+    expect(Object.keys(view).sort()).toEqual(['authEnabled', 'authoringEnabled', 'skillToolMode']);
+  });
+});

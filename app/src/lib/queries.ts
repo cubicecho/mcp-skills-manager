@@ -5,6 +5,7 @@ import type {
   ImportSkillRequest,
   MoveSkillPathRequest,
   UpdateProfileRequest,
+  UpdateSettingsRequest,
   UpdateSkillRequest,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
@@ -13,6 +14,7 @@ import * as api from './api';
 
 export const queryKeys = {
   status: ['status'] as const,
+  settings: ['settings'] as const,
   skills: ['skills'] as const,
   skill: (name: string) => ['skills', name] as const,
   profiles: ['profiles'] as const,
@@ -26,6 +28,13 @@ export function useServerStatus() {
     queryKey: queryKeys.status,
     queryFn: api.getStatus,
     refetchInterval: 15_000,
+  });
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: api.getSettings,
   });
 }
 
@@ -60,6 +69,19 @@ export function useProfiles() {
     queryKey: queryKeys.profiles,
     queryFn: api.listProfiles,
     refetchInterval: 10_000,
+  });
+}
+
+// --- settings mutations ---
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateSettingsRequest) => api.updateSettings(body),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(queryKeys.settings, settings);
+      queryClient.invalidateQueries({ queryKey: queryKeys.status });
+    },
   });
 }
 

@@ -38,6 +38,14 @@ export const skillFrontmatterSchema = z
      * private to their profile.
      */
     global: z.boolean().optional(),
+    /**
+     * Standard Agent Skills metadata (agentskills.io spec), surfaced to agents
+     * in the `list_skills` catalogue and the loaded-skill footer. Typed here so
+     * they round-trip cleanly; still optional and otherwise free-form.
+     */
+    license: z.string().optional(),
+    /** Tools the skill expects/permits — a comma-separated string or a list, per the spec. */
+    'allowed-tools': z.union([z.string(), z.array(z.string())]).optional(),
   })
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;

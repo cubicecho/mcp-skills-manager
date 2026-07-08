@@ -7,10 +7,12 @@ import type {
   MoveSkillPathRequest,
   ProfileStatus,
   ServerStatus,
+  SettingsView,
   SkillDetail,
   SkillFileRead,
   SkillSummary,
   UpdateProfileRequest,
+  UpdateSettingsRequest,
   UpdateSkillRequest,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
@@ -79,6 +81,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export function getStatus(): Promise<ServerStatus> {
   return request('/api/status');
+}
+
+// --- settings ---
+
+export function getSettings(): Promise<SettingsView> {
+  return request('/api/settings');
+}
+
+export function updateSettings(body: UpdateSettingsRequest): Promise<SettingsView> {
+  return request('/api/settings', { method: 'PATCH', body });
 }
 
 // --- skills ---

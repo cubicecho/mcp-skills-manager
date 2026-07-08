@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { profileConfigSchema, profileSlugSchema } from './profile.ts';
+import { skillToolModeSchema } from './settings.ts';
 import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
 
 /**
@@ -142,6 +143,8 @@ export const createProfileRequestSchema = z.object({
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   skills: z.array(skillNameSchema).optional(),
+  /** Override the global skill-tool mode for this profile's endpoint (omit to inherit). */
+  skillToolMode: skillToolModeSchema.optional(),
 });
 export type CreateProfileRequest = z.infer<typeof createProfileRequestSchema>;
 
@@ -151,6 +154,8 @@ export const updateProfileRequestSchema = z.object({
   description: z.string().optional(),
   /** Full replacement of the member list when provided. */
   skills: z.array(skillNameSchema).optional(),
+  /** Set to override the global skill-tool mode, or `null` to clear the override and inherit. */
+  skillToolMode: skillToolModeSchema.nullable().optional(),
 });
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
 

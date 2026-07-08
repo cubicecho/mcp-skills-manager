@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { skillToolModeSchema } from './settings.ts';
 import { skillNameSchema } from './skill.ts';
 
 /**
@@ -26,6 +27,13 @@ export const profileConfigSchema = z
     description: z.string().optional(),
     /** Skill names included in this profile. Skills that no longer exist are ignored at serve time. */
     skills: z.array(skillNameSchema).default([]),
+    /**
+     * Override how this profile's endpoint advertises skills as tools. Omitted
+     * → inherit the global `settings.skillToolMode`. Lets a large profile opt
+     * into the lean `loader` surface (or a small one force `per-skill`)
+     * independently of the root default.
+     */
+    skillToolMode: skillToolModeSchema.optional(),
   })
   .passthrough();
 

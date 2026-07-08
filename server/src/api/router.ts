@@ -11,6 +11,7 @@ import {
   slugify,
   slugifySkillName,
   updateProfileRequestSchema,
+  updateSettingsRequestSchema,
   updateSkillRequestSchema,
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
@@ -69,6 +70,18 @@ export function createApiRouter(deps: ApiDeps): Router {
       port,
     };
     res.json(status);
+  });
+
+  // --- settings ---
+
+  router.get('/settings', (_req, res) => {
+    res.json(store.getSettingsView());
+  });
+
+  router.patch('/settings', async (req, res) => {
+    const update = updateSettingsRequestSchema.parse(req.body);
+    await store.updateSettings(update);
+    res.json(store.getSettingsView());
   });
 
   // --- skills ---
@@ -251,6 +264,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       enabled: request.enabled ?? true,
       description: request.description,
       skills: request.skills ?? [],
+      skillToolMode: request.skillToolMode,
     });
     await store.saveProfile(config);
     res.status(201).json(toProfileStatus(config));
@@ -271,6 +285,9 @@ export function createApiRouter(deps: ApiDeps): Router {
     if (slug !== existing.slug && store.getProfile(slug)) {
       throw new HttpError(409, `Profile "${slug}" already exists`);
     }
+    // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.
+    const skillToolMode =
+      update.skillToolMode === undefined ? existing.skillToolMode : (update.skillToolMode ?? undefined);
     const next = profileConfigSchema.parse({
       ...existing,
       name,
@@ -278,6 +295,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       enabled: update.enabled ?? existing.enabled,
       description: update.description !== undefined ? update.description : existing.description,
       skills: update.skills ?? existing.skills,
+      skillToolMode,
     });
     await store.saveProfile(next);
     if (slug !== existing.slug) {

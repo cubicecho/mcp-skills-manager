@@ -1,6 +1,21 @@
 import { z } from 'zod';
 
 /**
+ * How skills are advertised as MCP tools.
+ * - `per-skill` (default): one no-arg tool per skill. Maximally discoverable —
+ *   each skill self-advertises through `tools/list` — but every skill's name +
+ *   description loads into the client's context upfront, so a large catalogue
+ *   bloats the tool list.
+ * - `loader`: a single `load_skill(name)` tool. The tool footprint stays fixed
+ *   (`list_skills` + `load_skill`) no matter how many skills exist — leaner
+ *   context, at the cost of the model consulting `list_skills` to discover
+ *   names before loading. Skills remain reachable as resources (`skill://<name>`)
+ *   under both modes.
+ */
+export const skillToolModeSchema = z.enum(['per-skill', 'loader']);
+export type SkillToolMode = z.infer<typeof skillToolModeSchema>;
+
+/**
  * Schema for DATA_DIR/config/settings.json. Hand-editable; parsing is lenient
  * on unknown keys so user additions survive round-trips.
  */
@@ -20,7 +35,29 @@ export const settingsFileSchema = z
      * behind the same bearer auth as the rest of `/mcp`.
      */
     authoringEnabled: z.boolean().default(true),
+    /** Default for how skills are advertised as MCP tools; a profile may override it. See skillToolModeSchema. */
+    skillToolMode: skillToolModeSchema.default('per-skill'),
   })
   .passthrough();
 
 export type SettingsFile = z.infer<typeof settingsFileSchema>;
+
+/**
+ * The subset of settings safe to expose over the management API — everything
+ * except the bearer token. Returned by GET /api/settings.
+ */
+export const settingsViewSchema = z.object({
+  authEnabled: z.boolean(),
+  authoringEnabled: z.boolean(),
+  skillToolMode: skillToolModeSchema,
+});
+export type SettingsView = z.infer<typeof settingsViewSchema>;
+
+/** Fields an operator may change via PATCH /api/settings (auth/token are managed out of band). */
+export const updateSettingsRequestSchema = z
+  .object({
+    authoringEnabled: z.boolean().optional(),
+    skillToolMode: skillToolModeSchema.optional(),
+  })
+  .strict();
+export type UpdateSettingsRequest = z.infer<typeof updateSettingsRequestSchema>;

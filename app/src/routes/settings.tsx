@@ -1,11 +1,14 @@
+import type { SkillToolMode } from '@mcp-skills/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { RefreshCwIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { reloadConfig } from '@/lib/api';
-import { useServerStatus } from '@/lib/queries';
+import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
+import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/settings')({
@@ -18,6 +21,50 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="font-mono text-sm">{value}</span>
     </div>
+  );
+}
+
+function SkillToolModeCard() {
+  const { data: settings, isPending } = useSettings();
+  const updateSettings = useUpdateSettings();
+
+  const onChange = (value: string) => {
+    updateSettings.mutate(
+      { skillToolMode: value as SkillToolMode },
+      {
+        onSuccess: () => toast.success('MCP tool exposure updated'),
+        onError: toastApiError,
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">MCP tool exposure</CardTitle>
+        <CardDescription>
+          How skills are advertised as tools on the root <code>/mcp</code> endpoint. Profiles can override this per
+          endpoint. Skills are always reachable as <code>skill://</code> resources regardless.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {isPending && <Skeleton className="h-9 w-64" />}
+        {settings && (
+          <>
+            <Select value={settings.skillToolMode} onValueChange={onChange} disabled={updateSettings.isPending}>
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="per-skill">{SKILL_TOOL_MODE_LABELS['per-skill']}</SelectItem>
+                <SelectItem value="loader">{SKILL_TOOL_MODE_LABELS.loader}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{SKILL_TOOL_MODE_HINTS[settings.skillToolMode]}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -58,6 +105,8 @@ function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <SkillToolModeCard />
 
       <Card>
         <CardHeader>

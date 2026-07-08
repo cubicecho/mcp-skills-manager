@@ -44,6 +44,8 @@ async function main(): Promise<void> {
     label: profileSlug ?? 'all',
     getSkills,
     authoring: { store, profileSlug },
+    getSkillToolMode: () => store.getSkillToolMode(),
+    readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);
