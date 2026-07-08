@@ -22,6 +22,7 @@ function toToolName(name: string): string {
 }
 
 const JSON_STRING = { type: 'string' } as const;
+const JSON_STRING_ARRAY = { type: 'array', items: { type: 'string' } } as const;
 
 /** One authoring tool: its advertised MCP definition plus the handler that runs it. */
 export interface AuthoringTool {
@@ -102,12 +103,14 @@ const createArgs = z.object({
   body: z.string().optional(),
   format: z.enum(['file', 'dir']).optional(),
   global: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
 const updateArgs = z.object({
   name: z.string(),
   description: z.string().optional(),
   body: z.string().optional(),
   global: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
 const renameArgs = z.object({ name: z.string(), new_name: z.string() });
 const deleteArgs = z.object({ name: z.string() });
@@ -163,6 +166,10 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
                 'Serve on the root /mcp aggregate. Defaults to true on the root endpoint and false ' +
                 '(profile-scoped only) on a profile endpoint. Set true from a profile to also serve globally.',
             },
+            tags: {
+              ...JSON_STRING_ARRAY,
+              description: 'Optional tags/categories for organising and filtering skills.',
+            },
           },
           required: [],
           additionalProperties: false,
@@ -190,6 +197,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
             body: input.body ?? '',
             format: input.format ?? 'dir',
             global,
+            tags: input.tags,
           }),
         );
         if (profileSlug) {
@@ -218,6 +226,10 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
                 'Serve on the root /mcp aggregate. Set false to hide from root (profile-scoped only), true to ' +
                 'promote a scoped skill to global. Omit to leave unchanged.',
             },
+            tags: {
+              ...JSON_STRING_ARRAY,
+              description: 'Replace the skill tags/categories (empty list clears them). Omit to leave unchanged.',
+            },
           },
           required: ['name'],
           additionalProperties: false,
@@ -226,7 +238,12 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       run: async (args) => {
         const input = parseArgs(updateArgs, args);
         const skill = await guard(() =>
-          store.updateSkill(input.name, { description: input.description, body: input.body, global: input.global }),
+          store.updateSkill(input.name, {
+            description: input.description,
+            body: input.body,
+            global: input.global,
+            tags: input.tags,
+          }),
         );
         return `Updated skill "${skill.name}". ${whereVisible(skill, profileSlug)} ${fileSummary(skill)}`;
       },

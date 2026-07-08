@@ -36,6 +36,7 @@ function toSummary(skill: Skill): SkillSummary {
     path: skill.path,
     updatedAt: skill.updatedAt,
     files: skill.files,
+    tags: skill.tags,
   };
 }
 
@@ -106,6 +107,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       body: request.body,
       format: request.format,
       global: request.global,
+      tags: request.tags,
     });
     res.status(201).json(toDetail(skill));
   });
@@ -141,6 +143,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       description: update.description,
       body: update.body,
       global: update.global,
+      tags: update.tags,
     });
     if (update.name !== undefined && update.name !== name) {
       skill = await store.renameSkill(name, update.name);

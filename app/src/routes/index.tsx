@@ -49,12 +49,13 @@ type ScopeFilter = 'all' | 'global' | 'scoped';
 type FormatFilter = 'all' | 'dir' | 'file';
 type SortKey = 'name' | 'updated';
 
-/** Apply the search query, scope/format filters and sort to the raw skill list. */
+/** Apply the search query, scope/format/tag filters and sort to the raw skill list. */
 function filterAndSort(
   skills: SkillSummary[],
   query: string,
   scope: ScopeFilter,
   format: FormatFilter,
+  tag: string,
   sort: SortKey,
 ): SkillSummary[] {
   const q = query.trim().toLowerCase();
@@ -62,12 +63,18 @@ function filterAndSort(
     if (scope === 'global' && !skill.global) return false;
     if (scope === 'scoped' && skill.global) return false;
     if (format !== 'all' && skill.format !== format) return false;
-    if (q && !`${skill.name} ${skill.description}`.toLowerCase().includes(q)) return false;
+    if (tag !== 'all' && !skill.tags.includes(tag)) return false;
+    if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) return false;
     return true;
   });
   return matched.sort((a, b) =>
     sort === 'updated' ? b.updatedAt.localeCompare(a.updatedAt) : a.name.localeCompare(b.name),
   );
+}
+
+/** All distinct tags across the skill list, sorted for a stable filter dropdown. */
+function collectTags(skills: SkillSummary[]): string[] {
+  return [...new Set(skills.flatMap((skill) => skill.tags))].sort((a, b) => a.localeCompare(b));
 }
 
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
@@ -109,11 +116,15 @@ function SkillsPage() {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [format, setFormat] = useState<FormatFilter>('all');
+  const [tag, setTag] = useState('all');
   const [sort, setSort] = useState<SortKey>('name');
 
+  const allTags = useMemo(() => (data ? collectTags(data) : []), [data]);
+  // A previously selected tag can disappear when skills change — fall back to "all".
+  const activeTag = tag !== 'all' && !allTags.includes(tag) ? 'all' : tag;
   const visible = useMemo(
-    () => (data ? filterAndSort(data, query, scope, format, sort) : []),
-    [data, query, scope, format, sort],
+    () => (data ? filterAndSort(data, query, scope, format, activeTag, sort) : []),
+    [data, query, scope, format, activeTag, sort],
   );
 
   return (
@@ -195,6 +206,21 @@ function SkillsPage() {
                 <SelectItem value="file">File</SelectItem>
               </SelectContent>
             </Select>
+            {allTags.length > 0 && (
+              <Select value={activeTag} onValueChange={setTag}>
+                <SelectTrigger className="w-36" aria-label="Filter by tag">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tags</SelectItem>
+                  {allTags.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
               <SelectTrigger className="w-40" aria-label="Sort skills">
                 <SelectValue />
@@ -236,6 +262,11 @@ function SkillsPage() {
                             profile-scoped
                           </Badge>
                         )}
+                        {skill.tags.map((t) => (
+                          <Badge key={t} variant="outline" className="font-normal">
+                            {t}
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell className="max-w-md truncate text-muted-foreground">

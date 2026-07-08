@@ -154,6 +154,7 @@ function indexEntry(skill: Skill) {
     format: skill.format,
     files: skill.files.filter((f) => f.type === 'file').map((f) => f.path),
     updatedAt: skill.updatedAt,
+    ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
     ...skillMeta(skill),
   };
 }

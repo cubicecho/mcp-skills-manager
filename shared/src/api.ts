@@ -20,6 +20,8 @@ export const skillSummarySchema = z.object({
   path: z.string(),
   updatedAt: z.string(),
   files: z.array(skillFileSchema),
+  /** Normalized tags/categories for organising and filtering. */
+  tags: z.array(z.string()).default([]),
 });
 export type SkillSummary = z.infer<typeof skillSummarySchema>;
 
@@ -45,6 +47,8 @@ export const createSkillRequestSchema = z.object({
   format: skillFormatSchema.optional(),
   /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → profile-scoped only. */
   global: z.boolean().optional(),
+  /** Tags/categories, written to frontmatter. */
+  tags: z.array(z.string()).optional(),
 });
 export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
 
@@ -122,6 +126,8 @@ export const updateSkillRequestSchema = z.object({
   body: z.string().optional(),
   /** Toggle whether the skill is served on the root `/mcp` aggregate. */
   global: z.boolean().optional(),
+  /** Replace the skill's tags/categories. */
+  tags: z.array(z.string()).optional(),
 });
 export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
 

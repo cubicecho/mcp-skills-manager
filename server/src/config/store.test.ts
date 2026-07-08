@@ -395,3 +395,64 @@ describe('ConfigStore profile membership integrity', () => {
     expect(store.getProfile('a')?.skills).toEqual(['real']);
   });
 });
+
+describe('ConfigStore skill tags', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-tags-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('persists normalized tags on create and round-trips them from disk', async () => {
+    const created = await store.createSkill({
+      name: 'tagged',
+      description: 'd',
+      body: '# tagged',
+      tags: [' Backend ', 'backend', 'testing', ''],
+    });
+    // Trimmed, empties dropped, de-duplicated case-insensitively (first casing wins).
+    expect(created.tags).toEqual(['Backend', 'testing']);
+    expect(store.getSkill('tagged')?.tags).toEqual(['Backend', 'testing']);
+
+    // A fresh store reading the same file sees the same tags.
+    const reopened = new ConfigStore(dir);
+    await reopened.init();
+    expect(reopened.getSkill('tagged')?.tags).toEqual(['Backend', 'testing']);
+    await reopened.close();
+  });
+
+  it('replaces tags on update and clears them with an empty list', async () => {
+    await store.createSkill({ name: 'edit', description: 'd', body: '# edit', tags: ['one', 'two'] });
+
+    const replaced = await store.updateSkill('edit', { tags: ['three'] });
+    expect(replaced.tags).toEqual(['three']);
+
+    const cleared = await store.updateSkill('edit', { tags: [] });
+    expect(cleared.tags).toEqual([]);
+    expect(cleared.frontmatter.tags).toBeUndefined();
+  });
+
+  it('leaves tags unchanged when the patch omits them', async () => {
+    await store.createSkill({ name: 'keep', description: 'd', body: '# keep', tags: ['stable'] });
+    const updated = await store.updateSkill('keep', { description: 'new desc' });
+    expect(updated.tags).toEqual(['stable']);
+  });
+
+  it('parses comma-separated frontmatter tags written by hand', async () => {
+    await mkdir(path.join(dir, 'skills'), { recursive: true });
+    await writeFile(
+      path.join(dir, 'skills', 'hand.md'),
+      '---\nname: hand\ndescription: d\ntags: alpha, beta ,alpha\n---\n\n# hand\n',
+    );
+    await store.reload();
+    expect(store.getSkill('hand')?.tags).toEqual(['alpha', 'beta']);
+  });
+});

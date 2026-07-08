@@ -12,7 +12,13 @@ import type {
   SkillFileRead,
   SkillFrontmatter,
 } from '@mcp-skills/shared';
-import { profileConfigSchema, settingsFileSchema, skillNameSchema, skillSchema } from '@mcp-skills/shared';
+import {
+  normalizeTags,
+  profileConfigSchema,
+  settingsFileSchema,
+  skillNameSchema,
+  skillSchema,
+} from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
 import { authDisabledByEnv } from '../auth.ts';
@@ -263,6 +269,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     format?: Skill['format'];
     /** When false, write `global: false` frontmatter so the skill is hidden from the root aggregate. */
     global?: boolean;
+    /** Tags/categories to write to frontmatter (normalized on write). */
+    tags?: string[];
   }): Promise<Skill> {
     const name = skillNameSchema.parse(input.name);
     if (this.skills.has(name)) {
@@ -277,24 +285,34 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (input.global === false) {
       frontmatter.global = false;
     }
+    const tags = normalizeTags(input.tags);
+    if (tags.length > 0) {
+      frontmatter.tags = tags;
+    }
     const content = serializeMarkdown(frontmatter, input.body);
     await this.writeTextAtomic(fullPath, content);
     return this.reloadSkill(relPath, format);
   }
 
   /** Update an existing skill's description, body and/or global visibility in place, preserving unknown frontmatter and format. */
-  async updateSkill(name: string, patch: { description?: string; body?: string; global?: boolean }): Promise<Skill> {
+  async updateSkill(
+    name: string,
+    patch: { description?: string; body?: string; global?: boolean; tags?: string[] },
+  ): Promise<Skill> {
     const existing = this.skills.get(name);
     if (!existing) {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const nextGlobal = patch.global ?? existing.global;
+    // Tags: undefined → keep existing; a list → replace (empty clears the key).
+    const nextTags = patch.tags !== undefined ? normalizeTags(patch.tags) : existing.tags;
     const frontmatter: SkillFrontmatter = {
       ...existing.frontmatter,
       name,
       description: patch.description ?? existing.description,
       // Persist `global: false` only; drop the key entirely when the skill is (back to) global.
       global: nextGlobal ? undefined : false,
+      tags: nextTags.length > 0 ? nextTags : undefined,
     };
     const body = patch.body ?? existing.body;
     const fullPath = path.join(this.skillsDir, existing.path);
@@ -774,6 +792,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       path: relPath,
       updatedAt: stats.mtime.toISOString(),
       files,
+      tags: normalizeTags(frontmatter.tags),
     });
   }
 
