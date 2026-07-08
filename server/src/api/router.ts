@@ -27,7 +27,7 @@ export interface ApiDeps {
   port: number;
 }
 
-function toSummary(skill: Skill): SkillSummary {
+function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
   return {
     name: skill.name,
     description: skill.description,
@@ -36,11 +36,13 @@ function toSummary(skill: Skill): SkillSummary {
     path: skill.path,
     updatedAt: skill.updatedAt,
     files: skill.files,
+    tags: skill.tags,
+    usage: store.getUsage(skill.name),
   };
 }
 
-function toDetail(skill: Skill): SkillDetail {
-  return { ...toSummary(skill), body: skill.body, frontmatter: skill.frontmatter };
+function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
+  return { ...toSummary(store, skill), body: skill.body, frontmatter: skill.frontmatter };
 }
 
 export function createApiRouter(deps: ApiDeps): Router {
@@ -87,7 +89,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // --- skills ---
 
   router.get('/skills', (_req, res) => {
-    res.json(store.getSkills().map(toSummary));
+    res.json(store.getSkills().map((skill) => toSummary(store, skill)));
   });
 
   router.post('/skills', async (req, res) => {
@@ -106,8 +108,9 @@ export function createApiRouter(deps: ApiDeps): Router {
       body: request.body,
       format: request.format,
       global: request.global,
+      tags: request.tags,
     });
-    res.status(201).json(toDetail(skill));
+    res.status(201).json(toDetail(store, skill));
   });
 
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
@@ -126,11 +129,11 @@ export function createApiRouter(deps: ApiDeps): Router {
       content: Buffer.from(file.content, file.encoding),
     }));
     const skill = await store.importSkill({ name: parsed.data, format: request.format, files });
-    res.status(201).json(toDetail(skill));
+    res.status(201).json(toDetail(store, skill));
   });
 
   router.get('/skills/:name', (req, res) => {
-    res.json(toDetail(requireSkill(req.params.name)));
+    res.json(toDetail(store, requireSkill(req.params.name)));
   });
 
   router.patch('/skills/:name', async (req, res) => {
@@ -141,11 +144,12 @@ export function createApiRouter(deps: ApiDeps): Router {
       description: update.description,
       body: update.body,
       global: update.global,
+      tags: update.tags,
     });
     if (update.name !== undefined && update.name !== name) {
       skill = await store.renameSkill(name, update.name);
     }
-    res.json(toDetail(skill));
+    res.json(toDetail(store, skill));
   });
 
   router.delete('/skills/:name', async (req, res) => {
@@ -180,7 +184,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     requireSkill(name);
     const request = writeSkillFileRequestSchema.parse(req.body);
     const skill = await store.writeSupportingFile(name, request.path, Buffer.from(request.content, request.encoding));
-    res.json(toDetail(skill));
+    res.json(toDetail(store, skill));
   });
 
   // Create an empty sub-directory under a skill (promotes a `file` skill to a `dir`).
@@ -189,7 +193,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     requireSkill(name);
     const request = createSkillFolderRequestSchema.parse(req.body);
     const skill = await store.createSupportingFolder(name, request.path);
-    res.json(toDetail(skill));
+    res.json(toDetail(store, skill));
   });
 
   // Rename or move a supporting file or folder.
@@ -198,7 +202,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     requireSkill(name);
     const request = moveSkillPathRequestSchema.parse(req.body);
     const skill = await store.moveSupportingPath(name, request.from, request.to);
-    res.json(toDetail(skill));
+    res.json(toDetail(store, skill));
   });
 
   // Delete a supporting file or folder: DELETE /skills/:name/files?path=<relative path>
@@ -210,7 +214,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       throw new HttpError(400, 'A "path" query parameter is required');
     }
     const skill = await store.deleteSupportingFile(name, relPath);
-    res.json(toDetail(skill));
+    res.json(toDetail(store, skill));
   });
 
   // --- profiles ---

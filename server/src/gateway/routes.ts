@@ -44,6 +44,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
         authoring: { store },
         getSkillToolMode: () => store.getSkillToolMode(),
         readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
+        onSkillLoaded: (name) => store.recordSkillUse(name),
       }),
     );
   });
@@ -72,6 +73,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
           return current ? store.getSkillToolModeForProfile(current) : store.getSkillToolMode();
         },
         readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
+        onSkillLoaded: (name) => store.recordSkillUse(name),
       }),
     );
   });

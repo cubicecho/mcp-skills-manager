@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { reloadConfig } from '@/lib/api';
 import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
@@ -71,6 +72,58 @@ function SkillToolModeCard() {
   );
 }
 
+function AuthoringCard() {
+  const { data: settings, isPending } = useSettings();
+  const updateSettings = useUpdateSettings();
+
+  const onChange = (authoringEnabled: boolean) => {
+    updateSettings.mutate(
+      { authoringEnabled },
+      {
+        onSuccess: () =>
+          toast.success(
+            authoringEnabled ? 'Agent authoring enabled' : 'Agent authoring disabled — endpoints read-only',
+          ),
+        onError: toastApiError,
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Agent authoring</CardTitle>
+        <CardDescription>
+          Let agents create and edit skills over MCP (the <code>create_skill</code>, <code>update_skill</code>,{' '}
+          <code>write_skill_file</code>, … tools). Turn off to make every <code>/mcp</code> endpoint read-only. Writes
+          always stay behind the same bearer auth.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isPending && <Skeleton className="h-6 w-40" />}
+        {settings && (
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <span className="text-sm font-medium">Allow agents to author skills</span>
+              <p className="text-xs text-muted-foreground">
+                {settings.authoringEnabled
+                  ? 'Authoring tools are exposed on every endpoint.'
+                  : 'Endpoints are read-only.'}
+              </p>
+            </div>
+            <Switch
+              checked={settings.authoringEnabled}
+              disabled={updateSettings.isPending}
+              onCheckedChange={onChange}
+              aria-label="Allow agents to author skills"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SettingsPage() {
   const { data, isPending } = useServerStatus();
 
@@ -110,6 +163,8 @@ function SettingsPage() {
       </Card>
 
       <SkillToolModeCard />
+
+      <AuthoringCard />
 
       <Card>
         <CardHeader>

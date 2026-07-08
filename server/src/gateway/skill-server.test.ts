@@ -14,6 +14,7 @@ function skill(overrides: Partial<Skill> & Pick<Skill, 'name'>): Skill {
     path: `${overrides.name}.md`,
     updatedAt: '2026-01-01T00:00:00.000Z',
     files: [],
+    tags: [],
     ...overrides,
   };
 }
@@ -65,7 +66,7 @@ describe('skill-server index tool', () => {
   it('advertises the index tool first, ahead of the skill tools', async () => {
     const { tools } = await client.listTools();
     expect(tools[0]?.name).toBe('list_skills');
-    expect(tools.map((t) => t.name)).toEqual(['list_skills', 'commit_messages', 'pdf-forms']);
+    expect(tools.map((t) => t.name)).toEqual(['list_skills', 'search_skills', 'commit_messages', 'pdf-forms']);
   });
 
   it('returns a catalogue of metadata without any skill bodies', async () => {
@@ -103,17 +104,88 @@ describe('skill-server index tool', () => {
   });
 });
 
+describe('skill-server usage callback', () => {
+  it('fires onSkillLoaded with the skill name when a body is loaded (per-skill and loader)', async () => {
+    const loaded: string[] = [];
+    const perSkill = await connect(() => SKILLS, { onSkillLoaded: (name) => loaded.push(name) });
+    await perSkill.callTool({ name: 'commit_messages' });
+    expect(loaded).toEqual(['commit.messages']);
+
+    const loader = await connect(() => SKILLS, {
+      getSkillToolMode: () => 'loader',
+      onSkillLoaded: (name) => loaded.push(name),
+    });
+    await loader.callTool({ name: 'load_skill', arguments: { name: 'pdf-forms' } });
+    expect(loaded).toEqual(['commit.messages', 'pdf-forms']);
+  });
+
+  it('does not fire onSkillLoaded for the catalogue tool', async () => {
+    const loaded: string[] = [];
+    const client = await connect(() => SKILLS, { onSkillLoaded: (name) => loaded.push(name) });
+    await client.callTool({ name: 'list_skills' });
+    expect(loaded).toEqual([]);
+  });
+});
+
+describe('skill-server search tool', () => {
+  const TAGGED: Skill[] = [
+    skill({ name: 'commit.messages', description: 'Write conventional commit messages.', tags: ['git'] }),
+    skill({ name: 'pdf-forms', description: 'Fill and inspect PDF forms.', tags: ['documents'] }),
+    skill({ name: 'grep-guide', description: 'Search code effectively.', body: '# grep-guide\n\nuse ripgrep' }),
+  ];
+
+  const names = (text: string): string[] =>
+    (JSON.parse(text) as { skills: Array<{ name: string }> }).skills.map((s) => s.name);
+
+  let client: Client;
+  beforeEach(async () => {
+    client = await connect(() => TAGGED);
+  });
+
+  it('advertises the search tool right after the catalogue tool', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name).slice(0, 2)).toEqual(['list_skills', 'search_skills']);
+  });
+
+  it('matches the query across name, description, tags, and body', async () => {
+    expect(names(firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'commit' } })))).toEqual([
+      'commit.messages',
+    ]);
+    // Body-only hit: "ripgrep" appears in grep-guide's body, nowhere in its metadata.
+    expect(names(firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'ripgrep' } })))).toEqual(
+      ['grep-guide'],
+    );
+  });
+
+  it('requires every whitespace-separated term to match (AND semantics)', async () => {
+    const hit = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'pdf inspect' } }));
+    expect(names(hit)).toEqual(['pdf-forms']);
+    const miss = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'pdf commit' } }));
+    expect(names(miss)).toEqual([]);
+  });
+
+  it('filters by tag, case-insensitively, independent of the query', async () => {
+    const byTag = firstText(await client.callTool({ name: 'search_skills', arguments: { tags: ['GIT'] } }));
+    expect(names(byTag)).toEqual(['commit.messages']);
+  });
+
+  it('returns the whole catalogue when given no query or tags (mirrors list_skills)', async () => {
+    const all = firstText(await client.callTool({ name: 'search_skills', arguments: {} }));
+    expect(names(all)).toEqual(['commit.messages', 'pdf-forms', 'grep-guide']);
+  });
+});
+
 describe('skill-server loader mode', () => {
   let client: Client;
   beforeEach(async () => {
     client = await connect(() => SKILLS, { getSkillToolMode: () => 'loader' });
   });
 
-  it('advertises only list_skills + load_skill regardless of catalogue size', async () => {
+  it('advertises only the meta-tools + load_skill regardless of catalogue size', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['list_skills', 'load_skill']);
+    expect(tools.map((t) => t.name)).toEqual(['list_skills', 'search_skills', 'load_skill']);
     // The loader tool takes a `name` argument, unlike the no-arg per-skill tools.
-    expect(tools[1]?.inputSchema.required).toEqual(['name']);
+    expect(tools[2]?.inputSchema.required).toEqual(['name']);
   });
 
   it('loads any skill body by name through load_skill', async () => {

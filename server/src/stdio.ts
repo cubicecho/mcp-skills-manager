@@ -54,6 +54,7 @@ async function main(): Promise<void> {
       return profile ? store.getSkillToolModeForProfile(profile) : store.getSkillToolMode();
     },
     readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
+    onSkillLoaded: (name) => store.recordSkillUse(name),
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);

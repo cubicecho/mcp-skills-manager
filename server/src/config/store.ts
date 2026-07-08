@@ -11,8 +11,16 @@ import type {
   SkillFile,
   SkillFileRead,
   SkillFrontmatter,
+  SkillUsage,
 } from '@mcp-skills/shared';
-import { profileConfigSchema, settingsFileSchema, skillNameSchema, skillSchema } from '@mcp-skills/shared';
+import {
+  normalizeTags,
+  profileConfigSchema,
+  settingsFileSchema,
+  skillNameSchema,
+  skillSchema,
+  skillUsageSchema,
+} from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
 import { authDisabledByEnv } from '../auth.ts';
@@ -26,6 +34,8 @@ export interface ConfigState {
 }
 
 const WATCH_DEBOUNCE_MS = 300;
+/** Coalesce bursts of skill loads into one usage.json write. */
+const USAGE_FLUSH_MS = 500;
 
 /** Normalize an OS-native path (which may use `\` on Windows) to a POSIX-style relative path. */
 function toPosix(p: string): string {
@@ -94,6 +104,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private profiles = new Map<string, ProfileConfig>();
   private watcher: FSWatcher | null = null;
   private watchDebounce: NodeJS.Timeout | null = null;
+  /** In-memory usage stats, authoritative once loaded; flushed to usage.json (unwatched) after each record. */
+  private usage = new Map<string, SkillUsage>();
+  private usageFlush: NodeJS.Timeout | null = null;
+  /** Absolute path to usage.json — kept at the dataDir root, OUTSIDE the watched dirs, so writes don't trigger reloads. */
+  readonly usageFile: string;
 
   constructor(dataDir: string) {
     super();
@@ -101,6 +116,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.configDir = path.join(dataDir, 'config');
     this.profilesDir = path.join(this.configDir, 'profiles');
     this.skillsDir = path.join(dataDir, 'skills');
+    this.usageFile = path.join(dataDir, 'usage.json');
   }
 
   /** Create directories, seed defaults on first run and load everything. */
@@ -108,6 +124,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     await mkdir(this.profilesDir, { recursive: true });
     await mkdir(this.skillsDir, { recursive: true });
     await this.loadAll();
+    // Usage lives outside the watched dirs and stays authoritative in memory, so it is loaded
+    // once here rather than in loadAll() (which reruns on every disk-change reload).
+    this.usage = await this.loadUsage();
     await this.seedDefaults();
   }
 
@@ -169,6 +188,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (this.watchDebounce) {
       clearTimeout(this.watchDebounce);
       this.watchDebounce = null;
+    }
+    // Flush any pending usage write so counts survive a graceful shutdown.
+    if (this.usageFlush) {
+      clearTimeout(this.usageFlush);
+      this.usageFlush = null;
+      await this.flushUsage().catch(() => {});
     }
     if (this.watcher) {
       await this.watcher.close();
@@ -252,6 +277,59 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return result;
   }
 
+  // --- usage analytics ---
+
+  /** Usage stats for a skill (zeros if it has never been loaded). */
+  getUsage(name: string): SkillUsage {
+    return this.usage.get(name) ?? { count: 0, lastUsedAt: null };
+  }
+
+  /**
+   * Record that a skill's body was loaded over MCP: bump its count and stamp `lastUsedAt`.
+   * The write to usage.json is debounced and best-effort — never blocks or fails a load.
+   */
+  recordSkillUse(name: string): void {
+    const prev = this.usage.get(name);
+    this.usage.set(name, { count: (prev?.count ?? 0) + 1, lastUsedAt: new Date().toISOString() });
+    this.scheduleUsageFlush();
+  }
+
+  private scheduleUsageFlush(): void {
+    if (this.usageFlush) {
+      return;
+    }
+    this.usageFlush = setTimeout(() => {
+      this.usageFlush = null;
+      this.flushUsage().catch((err: unknown) => {
+        console.error(`Persisting skill usage failed: ${errorMessage(err)}`);
+      });
+    }, USAGE_FLUSH_MS);
+  }
+
+  private async flushUsage(): Promise<void> {
+    await this.writeJsonAtomic(this.usageFile, Object.fromEntries(this.usage));
+  }
+
+  private async loadUsage(): Promise<Map<string, SkillUsage>> {
+    if (!existsSync(this.usageFile)) {
+      return new Map();
+    }
+    try {
+      const parsed = JSON.parse(await readFile(this.usageFile, 'utf8')) as Record<string, unknown>;
+      const usage = new Map<string, SkillUsage>();
+      for (const [name, value] of Object.entries(parsed)) {
+        const result = skillUsageSchema.safeParse(value);
+        if (result.success) {
+          usage.set(name, result.data);
+        }
+      }
+      return usage;
+    } catch (err) {
+      console.error(`Ignoring unreadable usage.json: ${errorMessage(err)}`);
+      return new Map();
+    }
+  }
+
   /**
    * Create a new skill. `file` format writes skills/<name>.md; `dir` format
    * writes skills/<name>/SKILL.md. Rejects if the name is already taken.
@@ -263,6 +341,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     format?: Skill['format'];
     /** When false, write `global: false` frontmatter so the skill is hidden from the root aggregate. */
     global?: boolean;
+    /** Tags/categories to write to frontmatter (normalized on write). */
+    tags?: string[];
   }): Promise<Skill> {
     const name = skillNameSchema.parse(input.name);
     if (this.skills.has(name)) {
@@ -277,24 +357,34 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (input.global === false) {
       frontmatter.global = false;
     }
+    const tags = normalizeTags(input.tags);
+    if (tags.length > 0) {
+      frontmatter.tags = tags;
+    }
     const content = serializeMarkdown(frontmatter, input.body);
     await this.writeTextAtomic(fullPath, content);
     return this.reloadSkill(relPath, format);
   }
 
   /** Update an existing skill's description, body and/or global visibility in place, preserving unknown frontmatter and format. */
-  async updateSkill(name: string, patch: { description?: string; body?: string; global?: boolean }): Promise<Skill> {
+  async updateSkill(
+    name: string,
+    patch: { description?: string; body?: string; global?: boolean; tags?: string[] },
+  ): Promise<Skill> {
     const existing = this.skills.get(name);
     if (!existing) {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const nextGlobal = patch.global ?? existing.global;
+    // Tags: undefined → keep existing; a list → replace (empty clears the key).
+    const nextTags = patch.tags !== undefined ? normalizeTags(patch.tags) : existing.tags;
     const frontmatter: SkillFrontmatter = {
       ...existing.frontmatter,
       name,
       description: patch.description ?? existing.description,
       // Persist `global: false` only; drop the key entirely when the skill is (back to) global.
       global: nextGlobal ? undefined : false,
+      tags: nextTags.length > 0 ? nextTags : undefined,
     };
     const body = patch.body ?? existing.body;
     const fullPath = path.join(this.skillsDir, existing.path);
@@ -328,6 +418,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       );
       this.skills.delete(name);
       const reloaded = await this.reloadSkill(relPath, 'dir');
+      this.retargetUsage(name, target);
       await this.retargetProfileSkill(name, target);
       return reloaded;
     }
@@ -339,8 +430,19 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     await rm(path.join(this.skillsDir, existing.path), { force: true });
     this.skills.delete(name);
     const reloaded = await this.reloadSkill(relPath, 'file');
+    this.retargetUsage(name, target);
     await this.retargetProfileSkill(name, target);
     return reloaded;
+  }
+
+  /** Carry a skill's usage stats over to its new name on rename, so history is not lost. */
+  private retargetUsage(from: string, to: string): void {
+    const stats = this.usage.get(from);
+    if (stats) {
+      this.usage.delete(from);
+      this.usage.set(to, stats);
+      this.scheduleUsageFlush();
+    }
   }
 
   /** Point every profile that listed `from` at `to`, preserving position (used when a skill is renamed). */
@@ -358,6 +460,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     this.skills.delete(name);
+    if (this.usage.delete(name)) {
+      this.scheduleUsageFlush();
+    }
     if (existing.format === 'dir') {
       await rm(this.skillRoot(existing), { recursive: true, force: true });
     } else {
@@ -774,6 +879,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       path: relPath,
       updatedAt: stats.mtime.toISOString(),
       files,
+      tags: normalizeTags(frontmatter.tags),
     });
   }
 

@@ -46,9 +46,35 @@ export const skillFrontmatterSchema = z
     license: z.string().optional(),
     /** Tools the skill expects/permits — a comma-separated string or a list, per the spec. */
     'allowed-tools': z.union([z.string(), z.array(z.string())]).optional(),
+    /**
+     * Free-form tags/categories for organising skills. Accepts a comma-separated
+     * string or a list in frontmatter; normalized to a clean string array on load
+     * via {@link normalizeTags}.
+     */
+    tags: z.union([z.string(), z.array(z.string())]).optional(),
   })
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
+
+/**
+ * Normalize a frontmatter `tags` value (comma-separated string or array) into a
+ * clean list: trimmed, empties dropped, de-duplicated case-insensitively while
+ * preserving the first occurrence's casing.
+ */
+export function normalizeTags(input: unknown): string[] {
+  const raw = Array.isArray(input) ? input : typeof input === 'string' ? input.split(',') : [];
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const entry of raw) {
+    const tag = String(entry).trim();
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+  }
+  return tags;
+}
 
 /** An entry (file or sub-directory) bundled next to a `dir`-format skill's SKILL.md. */
 export const skillFileSchema = z.object({
@@ -80,6 +106,8 @@ export const skillSchema = z.object({
   updatedAt: z.string(),
   /** Supporting files for a `dir` skill (empty for `file` skills). */
   files: z.array(skillFileSchema).default([]),
+  /** Normalized tags/categories (from frontmatter `tags`), for organising and filtering. */
+  tags: z.array(z.string()).default([]),
 });
 export type Skill = z.infer<typeof skillSchema>;
 
