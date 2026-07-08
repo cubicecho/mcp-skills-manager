@@ -1,4 +1,4 @@
-import type { Skill, SkillFileRead } from '@mcp-skills/shared';
+import type { Skill, SkillFileRead, SkillToolMode } from '@mcp-skills/shared';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -32,9 +32,6 @@ const INDEX_TOOL_NAME = 'list_skills';
  */
 const LOAD_TOOL_NAME = 'load_skill';
 
-/** How skills are advertised as tools (see settings.skillToolMode). */
-type SkillToolMode = 'per-skill' | 'loader';
-
 /**
  * MCP tool names are conventionally restricted to `[A-Za-z0-9_-]`, but skill
  * names may contain dots — sanitize for the tool name and keep a reverse map
@@ -44,31 +41,59 @@ function toolName(skill: Skill): string {
   return skill.name.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
-/** Best-effort MIME type for a bundled supporting file exposed as a resource. */
-function fileMimeType(relPath: string, binary: boolean): string {
-  const ext = relPath.slice(relPath.lastIndexOf('.') + 1).toLowerCase();
-  switch (ext) {
-    case 'md':
-    case 'markdown':
-      return 'text/markdown';
-    case 'json':
-      return 'application/json';
-    case 'txt':
-      return 'text/plain';
-    case 'py':
-      return 'text/x-python';
-    case 'js':
-    case 'mjs':
-      return 'text/javascript';
-    case 'ts':
-      return 'text/x-typescript';
-    case 'yaml':
-    case 'yml':
-      return 'application/yaml';
-    case 'csv':
-      return 'text/csv';
-    default:
-      return binary ? 'application/octet-stream' : 'text/plain';
+/**
+ * Extension → MIME type for bundled supporting files. Purely extension-driven so
+ * the resource *listing* and the resource *read* agree on the type (the read
+ * path decides blob-vs-text from the actual `binary` flag, independent of this).
+ * Returns `undefined` for unknown extensions — we omit the mimeType rather than
+ * guess `text/plain` and mislabel a binary blob.
+ */
+const MIME_BY_EXT: Record<string, string> = {
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  txt: 'text/plain',
+  json: 'application/json',
+  py: 'text/x-python',
+  js: 'text/javascript',
+  mjs: 'text/javascript',
+  ts: 'text/x-typescript',
+  yaml: 'application/yaml',
+  yml: 'application/yaml',
+  csv: 'text/csv',
+  html: 'text/html',
+  htm: 'text/html',
+  xml: 'application/xml',
+  toml: 'application/toml',
+  sh: 'application/x-sh',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+  zip: 'application/zip',
+};
+
+/** Best-effort MIME type for a bundled supporting file; `undefined` when the extension is unrecognized. */
+function fileMimeType(relPath: string): string | undefined {
+  const dot = relPath.lastIndexOf('.');
+  if (dot === -1) {
+    return undefined;
+  }
+  return MIME_BY_EXT[relPath.slice(dot + 1).toLowerCase()];
+}
+
+/**
+ * `decodeURIComponent`, but a malformed percent-escape (e.g. a lone `%`) surfaces
+ * as a clean `InvalidParams` MCP error instead of a raw `URIError` that would
+ * escape as a transport-level exception.
+ */
+function decodeResourcePart(part: string, uri: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
   }
 }
 
@@ -116,7 +141,8 @@ function renderSkill(skill: Skill): string {
     );
   }
 
-  return sections.length === 1 ? skill.body : `${sections.join('\n\n')}\n`;
+  // Single section ⇒ exactly `skill.body`; multiple ⇒ body + footers joined.
+  return sections.join('\n\n');
 }
 
 /** One catalogue entry: the metadata an agent needs to decide whether to load a skill (never the body). */
@@ -243,9 +269,10 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const raw = req.params.arguments?.name;
       const wanted = typeof raw === 'string' ? raw : '';
-      // Accept the skill's real name (as listed by list_skills); fall back to a
-      // sanitized tool name so callers coming from per-skill mode still resolve.
-      const skill = findByName(wanted) ?? findByToolName(wanted);
+      // Resolve by the skill's real name only — the exact field `list_skills`
+      // advertises. A sanitized-tool-name fallback would be ambiguous (distinct
+      // slugs like `commit.messages` and `commit_messages` collide).
+      const skill = findByName(wanted);
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
       }
@@ -286,7 +313,9 @@ export function createSkillServer(deps: SkillServerDeps): Server {
             uri: `${RESOURCE_SCHEME}://${skill.name}/${file.path}`,
             name: `${skill.name}/${file.path}`,
             description: `Supporting file for the "${skill.name}" skill.`,
-            mimeType: fileMimeType(file.path, false),
+            // Omit rather than guess when the extension is unknown — the read
+            // path stays consistent by computing mimeType the same way.
+            mimeType: fileMimeType(file.path),
           });
         }
       }
@@ -300,13 +329,15 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     if (!uri.startsWith(prefix)) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
     }
-    const rest = uri.slice(prefix.length);
+    // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
+    // delimits them (a literal `?`/`#` in a filename would be percent-encoded).
+    const rest = uri.slice(prefix.length).replace(/[?#].*$/, '');
     // Skill names never contain "/", so the first slash cleanly separates the
     // skill name from a bundled-file path: skill://<name> vs skill://<name>/<path>.
     const slash = rest.indexOf('/');
 
     if (slash === -1) {
-      const name = decodeURIComponent(rest);
+      const name = decodeResourcePart(rest, uri);
       const skill = name ? findByName(name) : undefined;
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
@@ -315,8 +346,8 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     }
 
     // Bundled supporting file.
-    const skillName = decodeURIComponent(rest.slice(0, slash));
-    const relPath = decodeURIComponent(rest.slice(slash + 1));
+    const skillName = decodeResourcePart(rest.slice(0, slash), uri);
+    const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/profile) are reachable.
     if (!findByName(skillName) || !deps.readSupportingFile) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
@@ -327,7 +358,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     } catch (err) {
       throw new McpError(ErrorCode.InvalidParams, `Cannot read resource "${uri}": ${errorMessage(err)}`);
     }
-    const mimeType = fileMimeType(relPath, file.binary);
+    const mimeType = fileMimeType(relPath);
     return {
       contents: [file.binary ? { uri, mimeType, blob: file.content } : { uri, mimeType, text: file.content }],
     };

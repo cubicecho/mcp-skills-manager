@@ -124,6 +124,14 @@ describe('skill-server loader mode', () => {
   it('errors on an unknown skill name', async () => {
     await expect(client.callTool({ name: 'load_skill', arguments: { name: 'nope' } })).rejects.toThrow(/Unknown skill/);
   });
+
+  it('resolves only by the real skill name, not the sanitized tool name', async () => {
+    // `commit.messages` sanitizes to `commit_messages`; the loader must not accept
+    // the tool-name form (ambiguous across distinct slugs) — only the listed name.
+    await expect(client.callTool({ name: 'load_skill', arguments: { name: 'commit_messages' } })).rejects.toThrow(
+      /Unknown skill/,
+    );
+  });
 });
 
 describe('skill-server metadata surfacing', () => {
@@ -222,5 +230,43 @@ describe('skill-server resources', () => {
     await expect(client.readResource({ uri: 'skill://other-skill/secret.md' })).rejects.toThrow(
       /Unknown skill resource/,
     );
+  });
+
+  it('rejects a malformed percent-encoded URI cleanly instead of throwing a URIError', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
+    });
+    // A lone `%` is an invalid escape — must surface as InvalidParams, not a raw URIError.
+    await expect(client.readResource({ uri: 'skill://%' })).rejects.toThrow(/Unknown skill resource/);
+    await expect(client.readResource({ uri: 'skill://pdf-forms/%E0%A4%A' })).rejects.toThrow(/Unknown skill resource/);
+  });
+
+  it('ignores a URI query/fragment when resolving the bundled-file path', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async (name, relPath) => ({
+        path: relPath,
+        content: `contents of ${name}/${relPath}`,
+        encoding: 'utf8',
+        size: 10,
+        binary: false,
+      }),
+    });
+    const res = await client.readResource({ uri: 'skill://pdf-forms/reference.md?v=2' });
+    // relPath must be reference.md, not reference.md?v=2.
+    expect(firstContent(res).text).toBe('contents of pdf-forms/reference.md');
+  });
+
+  it('omits mimeType for a bundled file with an unknown extension (never mislabels as text)', async () => {
+    const noExtSkill = skill({
+      name: 'assets',
+      format: 'dir',
+      path: 'assets/SKILL.md',
+      files: [{ path: 'LICENSE', type: 'file', size: 40 }],
+    });
+    const client = await connect(() => [noExtSkill], {
+      readSupportingFile: async () => ({ path: 'LICENSE', content: 'x', encoding: 'utf8', size: 1, binary: false }),
+    });
+    const listed = (await client.listResources()).resources.find((r) => r.uri === 'skill://assets/LICENSE');
+    expect(listed?.mimeType).toBeUndefined();
   });
 });

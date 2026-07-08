@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateProfile, useSkills, useUpdateProfile } from '@/lib/queries';
-import { SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
+import { SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
 
 /** Sentinel select value meaning "no override — inherit the global setting". */
@@ -133,8 +133,11 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={INHERIT}>Inherit global setting</SelectItem>
-                  <SelectItem value="per-skill">{SKILL_TOOL_MODE_LABELS['per-skill']}</SelectItem>
-                  <SelectItem value="loader">{SKILL_TOOL_MODE_LABELS.loader}</SelectItem>
+                  {SKILL_TOOL_MODES.map((mode) => (
+                    <SelectItem key={mode} value={mode}>
+                      {SKILL_TOOL_MODE_LABELS[mode]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

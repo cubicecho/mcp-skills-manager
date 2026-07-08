@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { reloadConfig } from '@/lib/api';
 import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
-import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
+import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/settings')({
@@ -56,8 +56,11 @@ function SkillToolModeCard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="per-skill">{SKILL_TOOL_MODE_LABELS['per-skill']}</SelectItem>
-                <SelectItem value="loader">{SKILL_TOOL_MODE_LABELS.loader}</SelectItem>
+                {SKILL_TOOL_MODES.map((mode) => (
+                  <SelectItem key={mode} value={mode}>
+                    {SKILL_TOOL_MODE_LABELS[mode]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{SKILL_TOOL_MODE_HINTS[settings.skillToolMode]}</p>

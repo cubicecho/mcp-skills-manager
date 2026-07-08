@@ -44,7 +44,15 @@ async function main(): Promise<void> {
     label: profileSlug ?? 'all',
     getSkills,
     authoring: { store, profileSlug },
-    getSkillToolMode: () => store.getSkillToolMode(),
+    // Mirror the HTTP profile route: a --profile endpoint honors that profile's
+    // skillToolMode override, falling back to the global default.
+    getSkillToolMode: () => {
+      if (!profileSlug) {
+        return store.getSkillToolMode();
+      }
+      const profile = store.getProfile(profileSlug);
+      return profile ? store.getSkillToolModeForProfile(profile) : store.getSkillToolMode();
+    },
     readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
   });
   const transport = new StdioServerTransport();
