@@ -327,7 +327,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
       );
       this.skills.delete(name);
-      return this.reloadSkill(relPath, 'dir');
+      const reloaded = await this.reloadSkill(relPath, 'dir');
+      await this.retargetProfileSkill(name, target);
+      return reloaded;
     }
     const relPath = `${target}.md`;
     await this.writeTextAtomic(
@@ -336,7 +338,18 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     );
     await rm(path.join(this.skillsDir, existing.path), { force: true });
     this.skills.delete(name);
-    return this.reloadSkill(relPath, 'file');
+    const reloaded = await this.reloadSkill(relPath, 'file');
+    await this.retargetProfileSkill(name, target);
+    return reloaded;
+  }
+
+  /** Point every profile that listed `from` at `to`, preserving position (used when a skill is renamed). */
+  private async retargetProfileSkill(from: string, to: string): Promise<void> {
+    for (const profile of this.getProfiles()) {
+      if (profile.skills.includes(from)) {
+        await this.saveProfile({ ...profile, skills: profile.skills.map((s) => (s === from ? to : s)) });
+      }
+    }
   }
 
   async deleteSkill(name: string): Promise<void> {
@@ -349,6 +362,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await rm(this.skillRoot(existing), { recursive: true, force: true });
     } else {
       await rm(path.join(this.skillsDir, existing.path), { force: true });
+    }
+    // Drop the deleted skill from any profile that referenced it (saveProfile prunes it now that it is gone).
+    for (const profile of this.getProfiles()) {
+      if (profile.skills.includes(name)) {
+        await this.saveProfile(profile);
+      }
     }
   }
 
@@ -598,9 +617,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   async saveProfile(config: ProfileConfig): Promise<ProfileConfig> {
     const parsed = profileConfigSchema.parse(config);
-    this.profiles.set(parsed.slug, parsed);
-    await this.writeJsonAtomic(this.profileFile(parsed.slug), parsed);
-    return parsed;
+    // A profile only lists live skills: silently drop any member that no longer exists.
+    const pruned: ProfileConfig = { ...parsed, skills: parsed.skills.filter((name) => this.skills.has(name)) };
+    this.profiles.set(pruned.slug, pruned);
+    await this.writeJsonAtomic(this.profileFile(pruned.slug), pruned);
+    return pruned;
   }
 
   async deleteProfile(slug: string): Promise<void> {

@@ -345,3 +345,53 @@ describe('ConfigStore skillToolMode resolution', () => {
     expect(Object.keys(view).sort()).toEqual(['authEnabled', 'authoringEnabled', 'skillToolMode']);
   });
 });
+
+describe('ConfigStore profile membership integrity', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-membership-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('drops a deleted skill from every profile that referenced it', async () => {
+    await store.createSkill({ name: 'keep', description: 'k', body: '# keep' });
+    await store.createSkill({ name: 'gone', description: 'g', body: '# gone' });
+    await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: ['keep', 'gone'] });
+    await store.saveProfile({ name: 'B', slug: 'b', enabled: true, skills: ['gone'] });
+
+    await store.deleteSkill('gone');
+
+    expect(store.getProfile('a')?.skills).toEqual(['keep']);
+    expect(store.getProfile('b')?.skills).toEqual([]);
+  });
+
+  it('retargets profile references to the new name when a skill is renamed', async () => {
+    await store.createSkill({ name: 'before', description: 'b', body: '# before' });
+    await store.createSkill({ name: 'other', description: 'o', body: '# other' });
+    await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: ['other', 'before'] });
+
+    await store.renameSkill('before', 'after');
+
+    expect(store.getProfile('a')?.skills).toEqual(['other', 'after']);
+  });
+
+  it('silently prunes members that no longer exist when a profile is saved', async () => {
+    await store.createSkill({ name: 'real', description: 'r', body: '# real' });
+    const saved = await store.saveProfile({
+      name: 'A',
+      slug: 'a',
+      enabled: true,
+      skills: ['real', 'ghost'],
+    });
+    expect(saved.skills).toEqual(['real']);
+    expect(store.getProfile('a')?.skills).toEqual(['real']);
+  });
+});

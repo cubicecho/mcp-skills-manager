@@ -230,15 +230,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     return profile;
   };
 
-  /** Every listed skill must currently exist. */
-  const assertSkillsExist = (skills: string[] | undefined): void => {
-    for (const name of skills ?? []) {
-      if (!store.getSkill(name)) {
-        throw new HttpError(400, `Unknown skill "${name}" in profile`);
-      }
-    }
-  };
-
   const requireValidSlug = (slug: string): string => {
     const parsed = profileSlugSchema.safeParse(slug);
     if (!parsed.success) {
@@ -257,7 +248,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     if (store.getProfile(slug)) {
       throw new HttpError(409, `Profile "${slug}" already exists`);
     }
-    assertSkillsExist(request.skills);
     const config = profileConfigSchema.parse({
       name: request.name,
       slug,
@@ -266,8 +256,8 @@ export function createApiRouter(deps: ApiDeps): Router {
       skills: request.skills ?? [],
       skillToolMode: request.skillToolMode,
     });
-    await store.saveProfile(config);
-    res.status(201).json(toProfileStatus(config));
+    const saved = await store.saveProfile(config);
+    res.status(201).json(toProfileStatus(saved));
   });
 
   router.get('/profiles/:slug', (req, res) => {
@@ -277,7 +267,6 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.patch('/profiles/:slug', async (req, res) => {
     const existing = requireProfile(req.params.slug);
     const update = updateProfileRequestSchema.parse(req.body);
-    assertSkillsExist(update.skills);
     // Auto-slug: renaming re-derives the slug (and thus the URL). Keep the old
     // slug when the name is unchanged so member-only edits never move the URL.
     const name = update.name ?? existing.name;
@@ -297,11 +286,11 @@ export function createApiRouter(deps: ApiDeps): Router {
       skills: update.skills ?? existing.skills,
       skillToolMode,
     });
-    await store.saveProfile(next);
+    const saved = await store.saveProfile(next);
     if (slug !== existing.slug) {
       await store.deleteProfile(existing.slug);
     }
-    res.json(toProfileStatus(next));
+    res.json(toProfileStatus(saved));
   });
 
   router.delete('/profiles/:slug', async (req, res) => {
