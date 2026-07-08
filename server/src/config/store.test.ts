@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
@@ -212,6 +212,93 @@ describe('ConfigStore supporting files & import', () => {
     const entries = unzipSync(new Uint8Array(zip));
     expect(Object.keys(entries)).toEqual(['onefile.md']);
     expect(Buffer.from(entries['onefile.md'] as Uint8Array).toString('utf8')).toContain('# One');
+  });
+});
+
+describe('ConfigStore on-disk skill identity', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-name-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** Write a dir-convention skill (folder + SKILL.md + optional supporting files) straight to disk. */
+  const dropDirSkill = async (
+    folder: string,
+    frontmatter: string,
+    files: Record<string, string> = {},
+  ): Promise<void> => {
+    const root = path.join(dir, 'skills', folder);
+    await mkdir(root, { recursive: true });
+    await writeFile(path.join(root, 'SKILL.md'), `---\n${frontmatter}\n---\n\n# ${folder}\n`);
+    for (const [rel, content] of Object.entries(files)) {
+      await mkdir(path.join(root, path.dirname(rel)), { recursive: true });
+      await writeFile(path.join(root, rel), content);
+    }
+  };
+
+  it('loads a skill under its frontmatter name even when the folder is not a slug', async () => {
+    // A real Agent-Skills folder copied in with an uppercased directory name — previously dropped
+    // silently because the folder basename failed the slug check.
+    await dropDirSkill('PDF-Forms', 'name: pdf-forms\ndescription: fill pdfs', { 'scripts/fill.py': 'print(1)' });
+    await store.reload();
+
+    const skill = store.getSkill('pdf-forms');
+    expect(skill).toBeDefined();
+    expect(skill?.path).toBe('PDF-Forms/SKILL.md');
+    expect(filePaths(skill ?? { files: [] })).toEqual(['scripts/fill.py']);
+    // Bundled files resolve through the real on-disk folder, not the identity name.
+    const read = await store.readSupportingFile('pdf-forms', 'scripts/fill.py');
+    expect(read.content).toBe('print(1)');
+  });
+
+  it('prefers the frontmatter name over a differing folder name', async () => {
+    await dropDirSkill('haxe-lang', 'name: haxe\ndescription: haxe');
+    await store.reload();
+    expect(store.getSkill('haxe')).toBeDefined();
+    expect(store.getSkill('haxe-lang')).toBeUndefined();
+  });
+
+  it('falls back to the folder name when no frontmatter name is given', async () => {
+    await dropDirSkill('plain', 'description: no name key');
+    await store.reload();
+    expect(store.getSkill('plain')).toBeDefined();
+  });
+
+  it('skips a skill when neither the folder nor the frontmatter yields a valid slug', async () => {
+    await dropDirSkill('Bad Folder', 'description: still no valid name');
+    await store.reload();
+    // Not seen, but the load did not crash and other skills are unaffected.
+    expect(store.getSkills().some((s) => s.name.includes(' '))).toBe(false);
+  });
+
+  it('keeps the first of two skills that resolve to the same name', async () => {
+    // Sorted folder order: "aaa" before "zzz"; both declare name "dupe".
+    await dropDirSkill('aaa', 'name: dupe\ndescription: first');
+    await dropDirSkill('zzz', 'name: dupe\ndescription: second');
+    await store.reload();
+    const dupe = store.getSkill('dupe');
+    expect(dupe?.path).toBe('aaa/SKILL.md');
+    expect(dupe?.description).toBe('first');
+  });
+
+  it('edits a mismatched-folder skill against its real folder, preserving identity', async () => {
+    await dropDirSkill('My-Skill', 'name: my-skill\ndescription: d');
+    await store.reload();
+    const skill = await store.writeSupportingFile('my-skill', 'notes.txt', Buffer.from('hi'));
+    expect(skill.name).toBe('my-skill');
+    expect(filePaths(skill)).toEqual(['notes.txt']);
+    // Written into the real folder, never a new folder named after the identity.
+    expect(existsSync(path.join(dir, 'skills/My-Skill/notes.txt'))).toBe(true);
+    expect(existsSync(path.join(dir, 'skills/my-skill'))).toBe(false);
   });
 });
 

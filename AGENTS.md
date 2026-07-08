@@ -94,8 +94,12 @@ hand-added keys survive round-trips.
 
 **Skill names are slugs:** `^[a-z0-9][a-z0-9._-]*$`, max 64. Names double as
 tool names (dots sanitized to `_` for the MCP tool name) and resource URIs
-(`skill://<name>`). Invalid on-disk names are skipped with a warning, never
-crash the load.
+(`skill://<name>`). A skill's canonical identity is its frontmatter `name` when
+that is a valid slug (so a folder can be named anything — the on-disk basename
+is only a storage detail, resolved via the skill's stored `path`); it falls
+back to the on-disk basename otherwise. If neither yields a valid slug the skill
+is skipped with a warning, and a name that two skills resolve to keeps the first
+(sorted) — never crash the load.
 
 **Frontend:** shadcn/ui primitives in `app/src/components/ui/` (no app logic
 there); feature components in `app/src/components/domain/`; file-based routes in

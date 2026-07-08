@@ -279,7 +279,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const content = serializeMarkdown(frontmatter, input.body);
     await this.writeTextAtomic(fullPath, content);
-    return this.reloadSkill(name, relPath, format);
+    return this.reloadSkill(relPath, format);
   }
 
   /** Update an existing skill's description, body and/or global visibility in place, preserving unknown frontmatter and format. */
@@ -299,7 +299,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const body = patch.body ?? existing.body;
     const fullPath = path.join(this.skillsDir, existing.path);
     await this.writeTextAtomic(fullPath, serializeMarkdown(frontmatter, body));
-    return this.reloadSkill(name, existing.path, existing.format);
+    return this.reloadSkill(existing.path, existing.format);
   }
 
   /** Rename a skill, moving its file or directory. Rejects if the target name is taken. */
@@ -316,7 +316,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(409, `Skill "${target}" already exists`);
     }
     if (existing.format === 'dir') {
-      const from = path.join(this.skillsDir, name);
+      // Rename aligns the on-disk folder to the new identity, even if it previously differed.
+      const from = this.skillRoot(existing);
       const to = path.join(this.skillsDir, target);
       await rename(from, to);
       const relPath = path.join(target, 'SKILL.md');
@@ -326,7 +327,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
       );
       this.skills.delete(name);
-      return this.reloadSkill(target, relPath, 'dir');
+      return this.reloadSkill(relPath, 'dir');
     }
     const relPath = `${target}.md`;
     await this.writeTextAtomic(
@@ -335,7 +336,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     );
     await rm(path.join(this.skillsDir, existing.path), { force: true });
     this.skills.delete(name);
-    return this.reloadSkill(target, relPath, 'file');
+    return this.reloadSkill(relPath, 'file');
   }
 
   async deleteSkill(name: string): Promise<void> {
@@ -345,7 +346,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     this.skills.delete(name);
     if (existing.format === 'dir') {
-      await rm(path.join(this.skillsDir, name), { recursive: true, force: true });
+      await rm(this.skillRoot(existing), { recursive: true, force: true });
     } else {
       await rm(path.join(this.skillsDir, existing.path), { force: true });
     }
@@ -375,7 +376,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       }
       const relPath = `${name}.md`;
       await this.writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
-      return this.reloadSkill(name, relPath, 'file');
+      return this.reloadSkill(relPath, 'file');
     }
     // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
     const entries = input.files.map((file) => ({ rel: this.safeSkillRelPath(name, file.path), content: file.content }));
@@ -389,7 +390,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await mkdir(path.dirname(full), { recursive: true });
       await this.writeBufferAtomic(full, entry.content);
     }
-    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+    return this.reloadSkill(path.join(name, 'SKILL.md'), 'dir');
   }
 
   /**
@@ -406,12 +407,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     if (existing.format === 'file') {
-      await this.promoteToDir(name);
+      await this.promoteToDir(existing);
     }
-    const full = path.join(this.skillsDir, name, rel);
+    const full = path.join(this.skillRoot(existing), rel);
     await mkdir(path.dirname(full), { recursive: true });
     await this.writeBufferAtomic(full, content);
-    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+    return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
   /** Read one supporting file, returning UTF-8 text or, for binary files, base64 bytes. */
@@ -421,7 +422,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const rel = this.requireDirRelPath(existing, relPath);
-    const full = path.join(this.skillsDir, name, rel);
+    const full = path.join(this.skillRoot(existing), rel);
     let stats: Awaited<ReturnType<typeof stat>>;
     try {
       stats = await stat(full);
@@ -453,14 +454,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(400, 'A folder cannot be named SKILL.md');
     }
     if (existing.format === 'file') {
-      await this.promoteToDir(name);
+      await this.promoteToDir(existing);
     }
-    const full = path.join(this.skillsDir, name, rel);
+    const full = path.join(this.skillRoot(existing), rel);
     if (existsSync(full)) {
       throw new HttpError(409, `"${rel}" already exists in skill "${name}"`);
     }
     await mkdir(full, { recursive: true });
-    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+    return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
   /** Rename or move a supporting file or folder within a skill's directory. */
@@ -480,8 +481,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (to === from || to.startsWith(`${from}/`)) {
       throw new HttpError(400, 'Cannot move a folder into itself');
     }
-    const fromFull = path.join(this.skillsDir, name, from);
-    const toFull = path.join(this.skillsDir, name, to);
+    const root = this.skillRoot(existing);
+    const fromFull = path.join(root, from);
+    const toFull = path.join(root, to);
     if (!existsSync(fromFull)) {
       throw new HttpError(404, `No file or folder "${from}" in skill "${name}"`);
     }
@@ -490,8 +492,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     await mkdir(path.dirname(toFull), { recursive: true });
     await rename(fromFull, toFull);
-    await this.pruneEmptyDirs(path.dirname(fromFull), path.join(this.skillsDir, name));
-    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+    await this.pruneEmptyDirs(path.dirname(fromFull), root);
+    return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
   /** Delete one supporting file or folder (folders recursively), pruning directories it leaves empty. */
@@ -501,10 +503,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const rel = this.requireDirRelPath(existing, relPath);
-    const full = path.join(this.skillsDir, name, rel);
+    const root = this.skillRoot(existing);
+    const full = path.join(root, rel);
     await rm(full, { recursive: true, force: true });
-    await this.pruneEmptyDirs(path.dirname(full), path.join(this.skillsDir, name));
-    return this.reloadSkill(name, path.join(name, 'SKILL.md'), 'dir');
+    await this.pruneEmptyDirs(path.dirname(full), root);
+    return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
   /** Zip a skill for download: a `dir` skill nested under `<name>/`, a `file` skill as a lone `<name>.md`. */
@@ -517,7 +520,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (existing.format === 'file') {
       entries[`${name}.md`] = await readFile(path.join(this.skillsDir, existing.path));
     } else {
-      const dir = path.join(this.skillsDir, name);
+      const dir = this.skillRoot(existing);
       const collect = async (current: string): Promise<void> => {
         for (const entry of await readdir(current, { withFileTypes: true })) {
           const full = path.join(current, entry.name);
@@ -545,11 +548,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return rel;
   }
 
-  /** Move a `file` skill's `<name>.md` to `<name>/SKILL.md`, converting it to a `dir` skill in place. */
-  private async promoteToDir(name: string): Promise<void> {
-    const fileFull = path.join(this.skillsDir, `${name}.md`);
+  /** Move a `file` skill's `.md` to `<folder>/SKILL.md`, converting it to a `dir` skill in place. */
+  private async promoteToDir(skill: Skill): Promise<void> {
+    const fileFull = path.join(this.skillsDir, skill.path);
     const raw = await readFile(fileFull, 'utf8');
-    const dir = path.join(this.skillsDir, name);
+    const dir = this.skillRoot(skill);
     await mkdir(dir, { recursive: true });
     await this.writeTextAtomic(path.join(dir, 'SKILL.md'), raw);
     await rm(fileFull, { force: true });
@@ -632,10 +635,27 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return path.join(this.profilesDir, `${slug}.json`);
   }
 
-  private async reloadSkill(name: string, relPath: string, format: Skill['format']): Promise<Skill> {
-    const skill = await this.readSkill(name, relPath, format);
-    this.skills.set(name, skill);
+  private async reloadSkill(relPath: string, format: Skill['format']): Promise<Skill> {
+    const skill = await this.readSkill(relPath, format);
+    this.skills.set(skill.name, skill);
     return skill;
+  }
+
+  /**
+   * A skill's on-disk root folder (absolute). For a `dir` skill this is the directory holding its
+   * SKILL.md; for a `file` skill it is the directory it would occupy once promoted (skillsDir/<stem>).
+   * Derived from the stored `path`, so it stays correct when a skill's identity (frontmatter `name`)
+   * differs from its folder name.
+   */
+  private skillRoot(skill: Skill): string {
+    const folder = skill.format === 'dir' ? path.dirname(skill.path) : skill.path.slice(0, -'.md'.length);
+    return path.join(this.skillsDir, folder);
+  }
+
+  /** The `<folder>/SKILL.md` relative path a `dir` skill loads from — using its real on-disk folder, not its name. */
+  private dirSkillRelPath(skill: Skill): string {
+    const folder = skill.format === 'dir' ? path.dirname(skill.path) : skill.path.slice(0, -'.md'.length);
+    return path.join(folder, 'SKILL.md');
   }
 
   private async loadAll(): Promise<void> {
@@ -673,7 +693,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const entries = await readdir(this.skillsDir, { withFileTypes: true });
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      let name: string;
       let relPath: string;
       let format: Skill['format'];
       if (entry.isDirectory()) {
@@ -681,36 +700,48 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         if (!existsSync(skillMd)) {
           continue; // a directory without a SKILL.md is not a skill
         }
-        name = entry.name;
         relPath = path.join(entry.name, 'SKILL.md');
         format = 'dir';
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        name = entry.name.slice(0, -'.md'.length);
         relPath = entry.name;
         format = 'file';
       } else {
         continue;
       }
-      if (!skillNameSchema.safeParse(name).success) {
-        console.warn(`Ignoring skill "${name}": name is not a valid slug`);
-        continue;
-      }
       try {
-        skills.set(name, await this.readSkill(name, relPath, format));
+        const skill = await this.readSkill(relPath, format);
+        const clash = skills.get(skill.name);
+        if (clash) {
+          // Two on-disk skills resolved to the same name (e.g. a frontmatter `name` colliding
+          // with another folder). Keep the first (sorted) deterministically and skip the rest.
+          console.warn(`Ignoring skill at "${relPath}": name "${skill.name}" already provided by "${clash.path}"`);
+          continue;
+        }
+        skills.set(skill.name, skill);
       } catch (err) {
         // A single broken (hand-edited) skill must not take the server down; report and skip it.
-        console.error(`Ignoring invalid skill "${name}": ${errorMessage(err)}`);
+        console.error(`Ignoring invalid skill at "${relPath}": ${errorMessage(err)}`);
       }
     }
     return skills;
   }
 
-  private async readSkill(name: string, relPath: string, format: Skill['format']): Promise<Skill> {
+  private async readSkill(relPath: string, format: Skill['format']): Promise<Skill> {
     const fullPath = path.join(this.skillsDir, relPath);
     const raw = await readFile(fullPath, 'utf8');
     const { frontmatter, body } = parseMarkdown(raw);
     const stats = await stat(fullPath);
-    const files = format === 'dir' ? await this.listSupportingFiles(name) : [];
+    // The on-disk basename: the directory for a `dir` skill, the filename stem for a `file` skill.
+    const basename = format === 'dir' ? path.dirname(relPath) : relPath.slice(0, -'.md'.length);
+    // Canonical identity is the frontmatter `name` when it is a valid slug (Agent Skills spec:
+    // the folder is a storage detail, the declared name is the skill's identity). Fall back to the
+    // on-disk basename so hand-written flat files without a `name` still load.
+    const declared = typeof frontmatter.name === 'string' ? frontmatter.name : undefined;
+    const name = declared && skillNameSchema.safeParse(declared).success ? declared : basename;
+    if (!skillNameSchema.safeParse(name).success) {
+      throw new Error(`name "${name}" is not a valid slug (set a valid \`name\` in the SKILL.md frontmatter)`);
+    }
+    const files = format === 'dir' ? await this.listSupportingFiles(path.dirname(relPath)) : [];
     return skillSchema.parse({
       name,
       description: typeof frontmatter.description === 'string' ? frontmatter.description : '',
@@ -725,9 +756,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Every entry under skills/<name> except the SKILL.md itself — files and sub-directories, relative to that dir. */
-  private async listSupportingFiles(name: string): Promise<SkillFile[]> {
-    const dir = path.join(this.skillsDir, name);
+  /** Every entry under a skill's folder (relative to skillsDir) except its SKILL.md — files and sub-dirs, paths relative to that folder. */
+  private async listSupportingFiles(folderRel: string): Promise<SkillFile[]> {
+    const dir = path.join(this.skillsDir, folderRel);
     const out: SkillFile[] = [];
     const walk = async (current: string): Promise<void> => {
       const entries = await readdir(current, { withFileTypes: true });
