@@ -64,6 +64,31 @@ function fileResourceUri(name: string, relPath: string): string {
 }
 
 /**
+ * Max resources returned per `resources/list` page. The list is rebuilt from live
+ * state each call, so the cursor is a plain offset — a mutation between pages can
+ * shift entries, which is acceptable under MCP's opaque-cursor semantics.
+ */
+const RESOURCE_PAGE_SIZE = 100;
+
+/** Encode a list offset as an opaque pagination cursor. */
+function encodeCursor(offset: number): string {
+  return Buffer.from(String(offset), 'utf8').toString('base64url');
+}
+
+/** Decode a pagination cursor back to an offset; a malformed cursor is an `InvalidParams` error. */
+function decodeCursor(cursor: string | undefined): number {
+  if (cursor === undefined) {
+    return 0;
+  }
+  const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+  const offset = Number.parseInt(decoded, 10);
+  if (!Number.isInteger(offset) || offset < 0 || String(offset) !== decoded) {
+    throw new McpError(ErrorCode.InvalidParams, `Invalid pagination cursor "${cursor}"`);
+  }
+  return offset;
+}
+
+/**
  * Name of the meta-tool that returns the skill catalogue. A skill could in
  * theory be named `list_skills` too; the meta-tool wins (that skill stays
  * reachable as a resource and is omitted from the tool list to avoid a dupe).
@@ -431,7 +456,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     return { content: [{ type: 'text', text: renderSkill(skill) }] };
   });
 
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  server.setRequestHandler(ListResourcesRequestSchema, async (req) => {
     const resources = [];
     for (const skill of deps.getSkills()) {
       resources.push({
@@ -462,7 +487,13 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         }
       }
     }
-    return { resources };
+    // Paginate over the fully-built list: slice at the cursor offset and hand back
+    // a nextCursor only while more remain.
+    const offset = decodeCursor(req.params?.cursor);
+    const page = resources.slice(offset, offset + RESOURCE_PAGE_SIZE);
+    const nextOffset = offset + RESOURCE_PAGE_SIZE;
+    const nextCursor = nextOffset < resources.length ? encodeCursor(nextOffset) : undefined;
+    return { resources: page, ...(nextCursor ? { nextCursor } : {}) };
   });
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {

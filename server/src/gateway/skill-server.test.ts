@@ -397,6 +397,35 @@ describe('skill-server resources', () => {
   });
 });
 
+describe('skill-server resource pagination', () => {
+  const many = Array.from({ length: 250 }, (_, i) => skill({ name: `skill-${String(i).padStart(3, '0')}` }));
+
+  it('caps a page at 100 resources and yields a nextCursor until exhausted', async () => {
+    const client = await connect(() => many);
+    const first = await client.listResources();
+    expect(first.resources).toHaveLength(100);
+    expect(first.nextCursor).toBeDefined();
+
+    const second = await client.listResources({ cursor: first.nextCursor });
+    expect(second.resources).toHaveLength(100);
+    expect(second.nextCursor).toBeDefined();
+
+    const third = await client.listResources({ cursor: second.nextCursor });
+    expect(third.resources).toHaveLength(50);
+    expect(third.nextCursor).toBeUndefined();
+
+    // Pages are disjoint and cover the whole set.
+    const uris = new Set([...first.resources, ...second.resources, ...third.resources].map((r) => r.uri));
+    expect(uris.size).toBe(250);
+  });
+
+  it('rejects a malformed cursor with InvalidParams (-32602)', async () => {
+    const client = await connect(() => many);
+    // "Zm9v" is base64url for "foo" — decodes to a non-numeric offset.
+    await expect(client.listResources({ cursor: 'Zm9v' })).rejects.toMatchObject({ code: -32602 });
+  });
+});
+
 describe('skill-server live updates (stdio)', () => {
   const wireReader = {
     readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8' as const, size: 0, binary: false }),
