@@ -80,6 +80,7 @@ p code, li code, td code, h3 code {
 .site-nav { display: flex; align-items: center; gap: 22px; }
 .site-nav a { color: var(--text-muted); font-weight: 500; font-size: 15px; }
 .site-nav a:hover { color: var(--text); text-decoration: none; }
+.site-nav a[aria-current="page"] { color: var(--accent); }
 
 /* Hero */
 .hero {
