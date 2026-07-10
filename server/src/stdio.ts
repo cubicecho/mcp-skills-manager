@@ -55,6 +55,12 @@ async function main(): Promise<void> {
     },
     readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
     onSkillLoaded: (name) => store.recordSkillUse(name),
+    // Long-lived transport: push resources/list_changed + updated when the store
+    // reloads after an on-disk edit. (The stateless HTTP route omits this.)
+    onSkillsChanged: (listener) => {
+      store.on('change', listener);
+      return () => store.off('change', listener);
+    },
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);

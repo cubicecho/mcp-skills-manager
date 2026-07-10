@@ -1,6 +1,10 @@
 import type { Skill } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import {
+  ResourceListChangedNotificationSchema,
+  ResourceUpdatedNotificationSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createSkillServer } from './skill-server.ts';
 
@@ -340,5 +344,90 @@ describe('skill-server resources', () => {
     });
     const listed = (await client.listResources()).resources.find((r) => r.uri === 'skill://assets/LICENSE');
     expect(listed?.mimeType).toBeUndefined();
+  });
+
+  it('annotates the skill resource with audience + lastModified and sizes bundled files', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
+    });
+    const { resources } = await client.listResources();
+    const doc = resources.find((r) => r.uri === 'skill://pdf-forms');
+    expect(doc?.annotations).toMatchObject({ audience: ['assistant'], lastModified: '2026-01-01T00:00:00.000Z' });
+    const file = resources.find((r) => r.uri === 'skill://pdf-forms/reference.md');
+    expect(file?.size).toBe(120);
+    expect(file?.annotations?.audience).toEqual(['assistant']);
+  });
+
+  it('rejects an unknown resource with the spec resource-not-found code (-32002)', async () => {
+    const client = await connect(() => SKILLS);
+    await expect(client.readResource({ uri: 'skill://does-not-exist' })).rejects.toMatchObject({
+      code: -32002,
+    });
+  });
+});
+
+describe('skill-server live updates (stdio)', () => {
+  const wireReader = {
+    readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8' as const, size: 0, binary: false }),
+  };
+
+  it('omits listChanged/subscribe when onSkillsChanged is not wired (stateless HTTP)', async () => {
+    const client = await connect(() => SKILLS);
+    expect(client.getServerCapabilities()?.resources).toEqual({});
+  });
+
+  it('advertises listChanged + subscribe and pushes notifications on change', async () => {
+    let fire = (): void => {};
+    const client = await connect(() => SKILLS, {
+      ...wireReader,
+      onSkillsChanged: (listener) => {
+        fire = listener;
+        return () => {};
+      },
+    });
+    expect(client.getServerCapabilities()?.resources).toMatchObject({ listChanged: true, subscribe: true });
+
+    let listChanged = 0;
+    const updated: string[] = [];
+    client.setNotificationHandler(ResourceListChangedNotificationSchema, async () => {
+      listChanged += 1;
+    });
+    client.setNotificationHandler(ResourceUpdatedNotificationSchema, async (n) => {
+      updated.push(n.params.uri);
+    });
+
+    await client.subscribeResource({ uri: 'skill://commit.messages' });
+    fire();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(listChanged).toBe(1);
+    expect(updated).toEqual(['skill://commit.messages']);
+  });
+
+  it('stops pushing resources/updated after unsubscribe (but still lists changed)', async () => {
+    let fire = (): void => {};
+    const client = await connect(() => SKILLS, {
+      ...wireReader,
+      onSkillsChanged: (listener) => {
+        fire = listener;
+        return () => {};
+      },
+    });
+    let listChanged = 0;
+    const updated: string[] = [];
+    client.setNotificationHandler(ResourceListChangedNotificationSchema, async () => {
+      listChanged += 1;
+    });
+    client.setNotificationHandler(ResourceUpdatedNotificationSchema, async (n) => {
+      updated.push(n.params.uri);
+    });
+
+    await client.subscribeResource({ uri: 'skill://commit.messages' });
+    await client.unsubscribeResource({ uri: 'skill://commit.messages' });
+    fire();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(listChanged).toBe(1);
+    expect(updated).toEqual([]);
   });
 });

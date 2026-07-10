@@ -21,6 +21,17 @@ large. ⭐ marks the highest-leverage picks.
 - [x] **B6 · `search_skills` MCP tool** — full-text search over skill name,
       description, tags, and body (plus a tag filter) for agents, returning the
       body-less catalogue shape.
+- [x] **C1 · `skill://` resource metadata (Tier 1)** — resource listings now
+      carry `size` on bundled files, `annotations.lastModified` (= `updatedAt`)
+      and `annotations.audience: ["assistant"]`, and unknown resources return the
+      spec's `-32002` (resource-not-found) code with the URI in `data` instead of
+      generic `InvalidParams`.
+- [x] **C2 · Live resource updates over stdio (Tier 2)** — the long-lived stdio
+      server advertises `resources.listChanged` + `subscribe` and pushes
+      `notifications/resources/list_changed` (and `resources/updated` for
+      subscribed URIs) when the store reloads after an on-disk edit. Wired via
+      the `ConfigStore` `change` event; the stateless HTTP route omits it (it
+      cannot push and re-lists fresh per request).
 
 ## Theme A — Better management UX
 
@@ -52,3 +63,36 @@ large. ⭐ marks the highest-leverage picks.
       self-authored skills follow good structure (clear description, when-to-use,
       ref-file splitting). Improves the *quality* of self-improvement, not just
       the mechanics.
+
+## Theme C — MCP resource conformance
+
+Gaps between our `skill://` resource surface and the [MCP 2025-06-18 Resources
+spec](https://modelcontextprotocol.io/specification/2025-06-18/server/resources).
+Tier 1 (metadata) and Tier 2 (stdio live updates) shipped above; the rest:
+
+- [ ] **C3 · Live resource updates over HTTP** *(L)* ⭐ — Extend `listChanged` +
+      `subscribe` to the HTTP transport. The MCP Streamable-HTTP transport *does*
+      support server→client push via SSE, but only for **stateful** sessions
+      (`Mcp-Session-Id` + a persisted transport per session). Today `/mcp` runs
+      stateless (`sessionIdGenerator: undefined`, `enableJsonResponse: true`, a
+      fresh `Server` torn down per request), so there is no connection to push
+      over. Work: add an opt-in stateful mode (session store keyed by
+      `Mcp-Session-Id`, SSE responses, lifecycle cleanup), then wire
+      `onSkillsChanged` on those sessions the way stdio already does. Gate behind
+      a setting; keep stateless as the default. Prereq for any HTTP client that
+      wants push instead of re-polling `resources/list`.
+- [ ] **C4 · Resource templates + argument completion** *(M)* — Expose
+      `resources/templates/list` with RFC 6570 templates (`skill://{name}`,
+      `skill://{name}/{path}`) and a completion handler over skill names / file
+      paths, so template-driven clients get autocomplete. Also lets us stop
+      enumerating every bundled file inline if the flat list ever gets unwieldy.
+- [ ] **C5 · `resources/list` pagination** *(S)* — Honor the `cursor` /
+      `nextCursor` protocol on the resource list. Opaque cursors work fine under
+      the stateless transport. Low priority until a library has hundreds of
+      resources.
+- [ ] **C6 · Resource `title` + URI-encoding round-trip fix** *(S)* — Add an
+      optional human-readable `title` (distinct from the slug `name`), and
+      percent-encode the bundled-file path when building the advertised
+      `skill://<name>/<path>` URI so it round-trips through the
+      `decodeURIComponent` read path for filenames containing `%`, spaces, etc.
+      (needs a confirming test first).

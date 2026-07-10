@@ -7,16 +7,45 @@ import {
   ListToolsRequestSchema,
   McpError,
   ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { errorMessage } from '../errors.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
 
-const SKILL_CAPABILITIES = { capabilities: { tools: {}, resources: {} } };
+/**
+ * Server capabilities. `liveUpdates` toggles the two resource sub-capabilities
+ * that only make sense on a long-lived transport (stdio): `listChanged` (the
+ * served skill set changed on disk) and `subscribe` (per-resource change
+ * notifications). The stateless HTTP path leaves them off — it cannot push and
+ * re-lists fresh on every request anyway.
+ */
+function skillCapabilities(liveUpdates: boolean) {
+  return {
+    capabilities: {
+      tools: {},
+      resources: liveUpdates ? { listChanged: true, subscribe: true } : {},
+    },
+  };
+}
 
 /** URI scheme under which skills are exposed as MCP resources. */
 const RESOURCE_SCHEME = 'skill';
+
+/**
+ * MCP's spec-defined "resource not found" JSON-RPC error code. It is absent from
+ * the SDK's `ErrorCode` enum, so we spell it out; the spec asks servers to return
+ * it (with the offending URI in `data`) for unknown resources rather than the
+ * generic `InvalidParams`.
+ */
+const RESOURCE_NOT_FOUND = -32002;
+
+/** A spec-compliant resource-not-found error carrying the offending URI in `data`. */
+function resourceNotFound(uri: string): McpError {
+  return new McpError(RESOURCE_NOT_FOUND, `Unknown skill resource "${uri}"`, { uri });
+}
 
 /**
  * Name of the meta-tool that returns the skill catalogue. A skill could in
@@ -226,6 +255,14 @@ export interface SkillServerDeps {
    * tool or `load_skill`), for usage analytics. Best-effort — must not throw.
    */
   onSkillLoaded?: (skillName: string) => void;
+  /**
+   * Register a listener fired whenever the served skill set changes on disk, and
+   * return an unsubscribe fn (called when the server closes). When present, the
+   * server advertises `resources.listChanged` + `subscribe` and pushes
+   * notifications. Only wire this on a long-lived transport (stdio) — the
+   * stateless HTTP path cannot push and must omit it.
+   */
+  onSkillsChanged?: (listener: () => void) => () => void;
 }
 
 /**
@@ -235,7 +272,11 @@ export interface SkillServerDeps {
  * mechanism can reach every skill.
  */
 export function createSkillServer(deps: SkillServerDeps): Server {
-  const server = new Server({ name: `mcp-skills/${deps.label}`, version: SERVER_VERSION }, SKILL_CAPABILITIES);
+  const liveUpdates = Boolean(deps.onSkillsChanged);
+  const server = new Server(
+    { name: `mcp-skills/${deps.label}`, version: SERVER_VERSION },
+    skillCapabilities(liveUpdates),
+  );
 
   const findByToolName = (name: string): Skill | undefined => deps.getSkills().find((s) => toolName(s) === name);
   const findByName = (name: string): Skill | undefined => deps.getSkills().find((s) => s.name === name);
@@ -376,6 +417,8 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         name: skill.name,
         description: skill.description || undefined,
         mimeType: 'text/markdown',
+        // Skills are context authored for the model; `lastModified` lets clients sort by recency.
+        annotations: { audience: ['assistant'], lastModified: skill.updatedAt },
       });
       // Expose each bundled supporting file as its own resource — but only when
       // we can actually read file contents, so we never advertise a dead URI.
@@ -388,6 +431,9 @@ export function createSkillServer(deps: SkillServerDeps): Server {
             // Omit rather than guess when the extension is unknown — the read
             // path stays consistent by computing mimeType the same way.
             mimeType: fileMimeType(file.path),
+            // Byte size is known from disk metadata, so clients can gauge a file before reading it.
+            size: file.size,
+            annotations: { audience: ['assistant'] },
           });
         }
       }
@@ -399,7 +445,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     const { uri } = req.params;
     const prefix = `${RESOURCE_SCHEME}://`;
     if (!uri.startsWith(prefix)) {
-      throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
+      throw resourceNotFound(uri);
     }
     // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
     // delimits them (a literal `?`/`#` in a filename would be percent-encoded).
@@ -412,7 +458,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       const name = decodeResourcePart(rest, uri);
       const skill = name ? findByName(name) : undefined;
       if (!skill) {
-        throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
+        throw resourceNotFound(uri);
       }
       return { contents: [{ uri, mimeType: 'text/markdown', text: renderSkill(skill) }] };
     }
@@ -422,7 +468,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/profile) are reachable.
     if (!findByName(skillName) || !deps.readSupportingFile) {
-      throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
+      throw resourceNotFound(uri);
     }
     let file: SkillFileRead;
     try {
@@ -435,6 +481,41 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       contents: [file.binary ? { uri, mimeType, blob: file.content } : { uri, mimeType, text: file.content }],
     };
   });
+
+  // Live updates (stdio only): advertise `listChanged` + `subscribe`, and push
+  // notifications when the served skill set changes on disk.
+  if (deps.onSkillsChanged) {
+    const subscriptions = new Set<string>();
+
+    server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+      subscriptions.add(req.params.uri);
+      return {};
+    });
+    server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
+      subscriptions.delete(req.params.uri);
+      return {};
+    });
+
+    // A disk change may add/remove/edit any skill, so tell clients the list moved
+    // and nudge every subscribed URI to re-read. We over-notify rather than diff —
+    // the client simply re-reads and the content is authoritative either way.
+    const unsubscribe = deps.onSkillsChanged(() => {
+      server.sendResourceListChanged().catch((err: unknown) => {
+        console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
+      });
+      for (const uri of subscriptions) {
+        server.sendResourceUpdated({ uri }).catch((err: unknown) => {
+          console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
+        });
+      }
+    });
+
+    const prevOnClose = server.onclose;
+    server.onclose = () => {
+      unsubscribe();
+      prevOnClose?.();
+    };
+  }
 
   return server;
 }
