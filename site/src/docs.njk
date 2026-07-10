@@ -18,6 +18,7 @@ permalink: /docs/
           <a href="#api">REST API</a>
           <a href="#mcp">MCP endpoints</a>
           <a href="#tool-modes">Tool modes</a>
+          <a href="#resources">Resources</a>
           <a href="#authoring">Authoring over MCP</a>
           <a href="#security">Security notes</a>
         </nav>
@@ -87,7 +88,7 @@ description: Write clear, conventional git commit messages.
   http://localhost:3000/api/reload</code></pre>
         <pre class="code"><code>data/
 ├── config/
-│   ├── settings.json          <span class="cmt"># port, auth token, auth/authoring toggles, tool mode</span>
+│   ├── settings.json          <span class="cmt"># port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates</span>
 │   └── profiles/
 │       └── &lt;slug&gt;.json        <span class="cmt"># one file per profile</span>
 └── skills/
@@ -119,8 +120,8 @@ description: Write clear, conventional git commit messages.
             <thead><tr><th>Method &amp; path</th><th>Purpose</th></tr></thead>
             <tbody>
               <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/profile counts, auth mode, port</td></tr>
-              <tr><td><code>GET /api/settings</code></td><td>Read auth/authoring toggles and tool mode</td></tr>
-              <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>skillToolMode</code></td></tr>
+              <tr><td><code>GET /api/settings</code></td><td>Read auth/authoring toggles, tool mode, live updates</td></tr>
+              <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>skillToolMode</code> / <code>httpLiveUpdates</code></td></tr>
               <tr><td><code>GET /api/skills</code></td><td>List skills (summaries)</td></tr>
               <tr><td><code>POST /api/skills</code></td><td>Create a skill</td></tr>
               <tr><td><code>POST /api/skills/import</code></td><td>Import an uploaded <code>.md</code> / directory / zip</td></tr>
@@ -172,6 +173,20 @@ description: Write clear, conventional git commit messages.
           <li><strong><code>loader</code></strong> — a single <code>load_skill(name)</code> tool, so the advertised
             tool count stays fixed no matter how many skills the endpoint serves.</li>
         </ul>
+
+        <h3 id="resources">Resources</h3>
+        <p>Every skill is also an MCP resource at <code>skill://&lt;name&gt;</code>, and each bundled supporting file at
+          <code>skill://&lt;name&gt;/&lt;path&gt;</code> (path segments percent-encoded so names with spaces or
+          <code>%</code> round-trip). The endpoint advertises RFC 6570 <strong>resource templates</strong>
+          (<code>skill://{name}</code> and <code>skill://{name}/{+path}</code>) with argument <strong>completion</strong>
+          over skill names and file paths, and <code>resources/list</code> is <strong>paginated</strong> with opaque
+          cursors.</p>
+        <p>Clients that <code>subscribe</code> receive <strong>live updates</strong>
+          (<code>notifications/resources/list_changed</code> and <code>resources/updated</code>) when skills change on
+          disk. This is always on over stdio. Over HTTP it needs <strong>stateful sessions</strong> — enable
+          <code>httpLiveUpdates</code> in settings and the server keeps a session per client (via
+          <code>Mcp-Session-Id</code>) and pushes over SSE; otherwise HTTP stays stateless and clients re-poll
+          <code>resources/list</code>.</p>
 
         <h3 id="authoring">Authoring over MCP</h3>
         <p>When authoring is enabled (the default), every endpoint also exposes tools for agents to write and refine

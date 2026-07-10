@@ -9,7 +9,12 @@ Every skill is exposed two ways at once:
 - as an MCP **tool** — calling it returns the skill's markdown body (plus a note
   listing any bundled supporting files), so an agent can pull a skill on demand;
 - as an MCP **resource** at `skill://<name>` — for clients that browse and
-  attach resources.
+  attach resources. Bundled supporting files are resources too
+  (`skill://<name>/<path>`), the endpoint advertises RFC 6570 **resource
+  templates** with argument **completion** (skill names and file paths), and
+  `resources/list` is **paginated**. Clients that subscribe get **live updates**
+  (`resources/list_changed` + `resources/updated`) when skills change on disk —
+  always over stdio, and over HTTP when `httpLiveUpdates` is enabled.
 
 Every endpoint also serves two meta-tools for **discovery**: `list_skills`
 returns a JSON catalogue of the available skills — name, description, format,
@@ -46,6 +51,8 @@ clients.
 - 📁 **Two skill formats** — a flat `<name>.md` file, or a
   `<name>/SKILL.md` directory (Claude Code convention) with supporting files
 - 🔌 **HTTP and stdio** transports
+- 📡 **Live resource updates** — subscribers are notified when skills change on
+  disk (always over stdio; over HTTP with `httpLiveUpdates`)
 - 🗃️ **Flat-file config** — hand-editable on disk, watched and hot-reloaded
 - 🔐 **Bearer-token auth** guarding the API and MCP endpoints
 
@@ -164,7 +171,7 @@ Everything lives under `DATA_DIR` (default `./data`):
 ```
 data/
 ├── config/
-│   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode
+│   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates
 │   └── profiles/
 │       └── <slug>.json        # one file per profile
 └── skills/
@@ -196,8 +203,8 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/status` | Version, uptime, skill/profile counts, auth mode, port |
-| `GET` | `/api/settings` | Read settings (auth/authoring toggles, tool mode) |
-| `PATCH` | `/api/settings` | Update `authoringEnabled` / `skillToolMode` |
+| `GET` | `/api/settings` | Read settings (auth/authoring toggles, tool mode, live updates) |
+| `PATCH` | `/api/settings` | Update `authoringEnabled` / `skillToolMode` / `httpLiveUpdates` |
 | `GET` | `/api/skills` | List skills (summaries) |
 | `POST` | `/api/skills` | Create a skill |
 | `POST` | `/api/skills/import` | Import an uploaded `.md` / directory / `.zip` |
@@ -227,8 +234,9 @@ Monorepo with npm workspaces:
   config-file shapes and REST DTOs.
 - **`server/`** — Express 5 + the MCP TypeScript SDK. A `ConfigStore` owns the
   flat-file state (atomic writes, chokidar watching); the gateway builds an MCP
-  `Server` exposing skills as tools and resources over HTTP (stateless
-  `StreamableHTTPServerTransport`) or stdio.
+  `Server` exposing skills as tools and resources over HTTP
+  (`StreamableHTTPServerTransport` — stateless by default, or stateful sessions
+  with SSE push when `httpLiveUpdates` is on) or stdio.
 - **`app/`** — React 19 + Vite + shadcn/ui + TanStack Router/Query. The
   markdown editor uses `react-markdown` + `remark-gfm`.
 
