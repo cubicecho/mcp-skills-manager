@@ -255,6 +255,52 @@ img.zoomable { cursor: zoom-in; }
 .shot figcaption { margin-top: 14px; color: var(--text-muted); font-size: 0.95rem; line-height: 1.55; }
 .shot figcaption strong { color: var(--text); }
 
+/* Get started walkthrough */
+.gs-intro { padding: 64px 0 20px; }
+.gs-intro .lede { margin-bottom: 26px; }
+.gs-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.gs-toc a {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 13px;
+  background: var(--surface);
+}
+.gs-toc a:hover { color: var(--text); border-color: var(--accent); text-decoration: none; }
+
+.step { padding: 44px 0; border-top: 1px solid var(--border); }
+.step:first-of-type { border-top: none; }
+.step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.step-num {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+.step-head h2 { font-size: clamp(1.35rem, 2.6vw, 1.7rem); margin: 0; letter-spacing: -0.01em; }
+.step > p { color: var(--text-muted); max-width: 70ch; }
+.step > p code { white-space: nowrap; }
+.step .shot { margin-top: 22px; }
+.step .btn { margin-top: 4px; }
+.callout {
+  margin: 20px 0 0;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--text-muted);
+  font-size: 0.94rem;
+}
+.callout strong { color: var(--text); }
+
 /* Lightbox */
 .lightbox {
   position: fixed;

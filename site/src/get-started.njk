@@ -1,0 +1,180 @@
+---
+layout: base.njk
+title: Get started
+description: A step-by-step walkthrough — install MCP Skills Manager, create your first skill, group skills into a workspace, and connect an agent.
+permalink: /get-started/
+---
+
+<section class="section gs-intro">
+  <div class="wrap">
+    <p class="eyebrow">Get started</p>
+    <h1>From nothing to a working skills server</h1>
+    <p class="lede">
+      This walkthrough takes you from an empty machine to a running MCP Skills Manager with a skill you can call
+      from an agent. Every step has a screenshot of the web UI (in dark mode). It should take about five minutes.
+    </p>
+    <nav class="gs-toc">
+      <a href="#install">1 · Install &amp; run</a>
+      <a href="#open">2 · Open the web UI</a>
+      <a href="#create">3 · Create a skill</a>
+      <a href="#edit">4 · Write it</a>
+      <a href="#workspace">5 · Make a workspace</a>
+      <a href="#connect">6 · Connect an agent</a>
+      <a href="#configure">7 · Configure</a>
+    </nav>
+  </div>
+</section>
+
+<section class="section" style="padding-top: 0;">
+  <div class="wrap">
+
+    <!-- Step 1 -->
+    <div class="step" id="install">
+      <div class="step-head"><span class="step-num">1</span><h2>Install and run</h2></div>
+      <p>The quickest path is Docker — nothing to clone or build. All state lives in <code>./data</code>, mounted
+        into the container, so your skills and config stay on the host.</p>
+      <pre class="code"><code>docker run -d -p 3000:3000 -v ./data:/data \
+  -e MCP_SKILLS_TOKEN=your-secret-token \
+  {{ site.dockerImage }}:latest</code></pre>
+      <p>Prefer to run from source? With Node ≥ 22.18:</p>
+      <pre class="code"><code>git clone {{ site.repo }} &amp;&amp; cd mcp-skills-manager
+npm install
+npm run build
+MCP_SKILLS_TOKEN=your-secret-token npm start</code></pre>
+      <p class="callout"><strong>On first run</strong>, if you don't set <code>MCP_SKILLS_TOKEN</code>, a random
+        bearer token is generated into <code>data/config/settings.json</code> and printed to the logs. The server
+        also seeds a starter <code>getting-started</code> skill so there's something to see right away.</p>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step" id="open">
+      <div class="step-head"><span class="step-num">2</span><h2>Open the web UI</h2></div>
+      <p>Visit <code>http://localhost:3000</code> and paste your token when prompted. You'll land on the
+        <strong>Skills</strong> page — every skill served by the root <code>/mcp</code> endpoint, each of which is
+        both a callable tool and a <code>skill://</code> resource. The connect card at the bottom shows the exact URL
+        to hand a client.</p>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/skills-list.png' | url }}"
+            alt="The Skills page listing four skills with search and filters" />
+        </div>
+        <figcaption>Search and filter by scope, format, or tag. The header shows a live skill and workspace count.</figcaption>
+      </figure>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step" id="create">
+      <div class="step-head"><span class="step-num">3</span><h2>Create your first skill</h2></div>
+      <p>Click <strong>New skill</strong>. Give it a title (which becomes its slug) and a one-line description that
+        tells an agent when to use it. Pick a layout: a single <code>&lt;name&gt;.md</code> file, or a
+        <code>&lt;name&gt;/SKILL.md</code> directory that can hold supporting files. The second tab lets you upload an
+        existing <code>.md</code>, folder, or <code>.zip</code> instead.</p>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>New skill</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/new-skill-dialog.png' | url }}"
+            alt="The New skill dialog with Create and Upload tabs, title, description, and layout options" />
+        </div>
+        <figcaption>The tabbed <strong>New skill</strong> dialog — create from scratch, or upload an existing skill.</figcaption>
+      </figure>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step" id="edit">
+      <div class="step-head"><span class="step-num">4</span><h2>Write it in the editor</h2></div>
+      <p>Creating a skill drops you into the editor. Write markdown on the left and watch the rendered preview on the
+        right (or switch to full Edit / Preview). Set the <strong>description</strong> and <strong>tags</strong>, and
+        use the <strong>Serve on root <code>/mcp</code></strong> toggle to decide whether every client sees this skill
+        or only the workspaces that list it. For directory skills, the file tree above lets you add, upload, rename,
+        and export supporting files.</p>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000/skills/code-review</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/skill-editor.png' | url }}"
+            alt="Split-pane markdown editor showing source and rendered preview side by side" />
+        </div>
+        <figcaption>The split-pane editor. Everything you write is a flat markdown file on disk — edit it here or in your own tools.</figcaption>
+      </figure>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step" id="workspace">
+      <div class="step-head"><span class="step-num">5</span><h2>Group skills into a workspace</h2></div>
+      <p>A <strong>workspace</strong> is a named subset of skills served at its own <code>/mcp/w/&lt;slug&gt;</code>
+        endpoint — so you can hand each agent exactly the skills it needs. Open the <strong>Workspaces</strong> page,
+        click <strong>New workspace</strong>, name it, and check the skills to include. You can override the tool-exposure
+        mode per workspace, or disable it to make its endpoint return 404.</p>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>New workspace</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/new-workspace-dialog.png' | url }}"
+            alt="The New workspace dialog with name, description, and a checklist of skills to include" />
+        </div>
+        <figcaption>Name the workspace and tick the skills it should serve. The slug becomes its URL and filename.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000/workspaces</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/workspaces.png' | url }}"
+            alt="Workspaces list with copyable /mcp/w/ URLs and skill counts" />
+        </div>
+        <figcaption>Each workspace gets a copyable <code>/mcp/w/&lt;slug&gt;</code> URL, also reachable over stdio with <code>--workspace &lt;slug&gt;</code>.</figcaption>
+      </figure>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step" id="connect">
+      <div class="step-head"><span class="step-num">6</span><h2>Connect an agent</h2></div>
+      <p>Point an MCP client at your server. For <strong>Claude Code</strong> over streamable HTTP:</p>
+      <pre class="code"><code><span class="cmt"># all skills</span>
+claude mcp add --transport http skills http://localhost:3000/mcp \
+  --header "Authorization: Bearer &lt;token&gt;"
+
+<span class="cmt"># just one workspace</span>
+claude mcp add --transport http backend http://localhost:3000/mcp/w/backend \
+  --header "Authorization: Bearer &lt;token&gt;"</code></pre>
+      <p>Or run it locally over <strong>stdio</strong> with the packaged binary — scope it to a workspace with
+        <code>--workspace</code>:</p>
+      <pre class="code"><code>{
+  "mcpServers": {
+    "skills": {
+      "command": "mcp-skills-stdio",
+      "args": ["--data-dir", "/path/to/data", "--workspace", "backend"]
+    }
+  }
+}</code></pre>
+      <p>Your agent now sees each skill as a tool (call it to load the body) and as a <code>skill://</code> resource.
+        It can also discover skills first with the <code>list_skills</code> and <code>search_skills</code> meta-tools,
+        then load only what's relevant.</p>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step" id="configure">
+      <div class="step-head"><span class="step-num">7</span><h2>Configure to taste</h2></div>
+      <p>The <strong>Settings</strong> page shows server status and the main switches: <strong>MCP tool exposure</strong>
+        (one tool per skill, or a single <code>load_skill</code> loader), <strong>agent authoring</strong> (let agents
+        create and refine skills over MCP), and <strong>HTTP live updates</strong> (push resource-change notifications
+        over SSE). Everything here is also editable directly in <code>settings.json</code>.</p>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000/settings</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/settings.png' | url }}"
+            alt="The Settings page showing status, MCP tool exposure, and agent authoring toggles" />
+        </div>
+        <figcaption>Status plus the exposure, authoring, and live-update toggles — the same values that live in <code>settings.json</code>.</figcaption>
+      </figure>
+    </div>
+
+    <div class="step" style="text-align: center;">
+      <h2 style="margin: 0 0 10px;">That's it — you're serving skills.</h2>
+      <p style="margin: 0 auto 22px; max-width: 60ch;">Add more skills, split them across workspaces, and let agents
+        author their own. For the full reference — frontmatter, the REST API, resources, and security notes — read the docs.</p>
+      <div class="cta-row" style="justify-content: center;">
+        <a class="btn btn-primary" href="{{ '/docs/' | url }}">Read the docs</a>
+        <a class="btn btn-ghost" href="{{ site.repo }}">GitHub ↗</a>
+      </div>
+    </div>
+
+  </div>
+</section>

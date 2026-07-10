@@ -11,10 +11,11 @@ title: false
       Write reusable skills — instructions, playbooks, references — as markdown, and serve them to agents over
       <a href="https://modelcontextprotocol.io">MCP</a>. Every skill is both a callable <strong>tool</strong> and a
       <code>skill://</code> <strong>resource</strong>. Point a client at one endpoint for all of them, or a
-      <strong>profile</strong> for just the subset an agent should see.
+      <strong>workspace</strong> for just the subset an agent should see.
     </p>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#quickstart">Get started</a>
+      <a class="btn btn-primary" href="{{ '/get-started/' | url }}">Get started →</a>
+      <a class="btn btn-ghost" href="#quickstart">Quickstart</a>
       <a class="btn btn-ghost" href="{{ site.repo }}">View on GitHub ↗</a>
     </div>
 
@@ -26,9 +27,50 @@ title: false
       </div>
       <div class="endpoint-row">
         <span class="method">ALL</span>
-        <code>http://host:3000/mcp/p/&lt;slug&gt;</code>
-        <span class="endpoint-note">one profile</span>
+        <code>http://host:3000/mcp/w/&lt;slug&gt;</code>
+        <span class="endpoint-note">one workspace</span>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>See it</h2>
+    <p class="section-lede">
+      A React web UI for authoring skills and grouping them into workspaces — a live split-pane markdown editor,
+      full CRUD, and a file manager for directory-format skills. Shown here in dark mode.
+    </p>
+
+    <figure class="shot shot-wide">
+      <div class="browser">
+        <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000/skills/code-review</em></div>
+        <img class="zoomable" src="{{ '/assets/screenshots/skill-editor.png' | url }}"
+          alt="Split-pane markdown editor with source on the left and rendered preview on the right" />
+      </div>
+      <figcaption><strong>The editor.</strong> Edit, split, or preview a skill's markdown; set its description and
+        tags, and toggle whether it's served on the root <code>/mcp</code> endpoint.</figcaption>
+    </figure>
+
+    <div class="shot-grid">
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/skills-list.png' | url }}"
+            alt="Skills list with search, scope, format and tag filters" />
+        </div>
+        <figcaption><strong>Every skill in one place.</strong> Search and filter by scope, format, or tag. Each row
+          is a tool and a <code>skill://</code> resource.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="browser">
+          <div class="browser-bar"><span></span><span></span><span></span><em>localhost:3000/workspaces</em></div>
+          <img class="zoomable" src="{{ '/assets/screenshots/workspaces.png' | url }}"
+            alt="Workspaces list showing filtered /mcp/w/ endpoints" />
+        </div>
+        <figcaption><strong>Workspaces.</strong> Group a subset of skills into a filtered endpoint at
+          <code>/mcp/w/&lt;slug&gt;</code> — one URL per agent.</figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -54,7 +96,7 @@ title: false
         <div class="feature-icon">🤖</div>
         <h3>Self-authoring</h3>
         <p>Agents can create and refine their own skills over MCP — <code>create_skill</code>,
-          <code>update_skill</code>, and file tools, gated on a setting. Skills authored via a profile scope to it.</p>
+          <code>update_skill</code>, and file tools, gated on a setting. Skills authored via a workspace scope to it.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🔗</div>
@@ -65,9 +107,9 @@ title: false
       </div>
       <div class="feature">
         <div class="feature-icon">🧩</div>
-        <h3>Profiles</h3>
-        <p>Group a chosen subset of skills into a <strong>profile</strong> at its own
-          <code>/mcp/p/&lt;slug&gt;</code> URL. Hand each agent exactly the skills it needs — nothing more.</p>
+        <h3>Workspaces</h3>
+        <p>Group a chosen subset of skills into a <strong>workspace</strong> at its own
+          <code>/mcp/w/&lt;slug&gt;</code> URL. Hand each agent exactly the skills it needs — nothing more.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">📝</div>
@@ -85,12 +127,12 @@ title: false
         <div class="feature-icon">🔌</div>
         <h3>HTTP &amp; stdio</h3>
         <p>Serve over streamable HTTP for networked clients, or over stdio for local ones with the
-          <code>mcp-skills-stdio</code> binary — optionally scoped to a single profile.</p>
+          <code>mcp-skills-stdio</code> binary — optionally scoped to a single workspace.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🗃️</div>
         <h3>Flat-file config</h3>
-        <p>Skills and profiles are plain files on disk under <code>DATA_DIR</code> — hand-editable, watched, and
+        <p>Skills and workspaces are plain files on disk under <code>DATA_DIR</code> — hand-editable, watched, and
           hot-reloaded. The web UI and the filesystem are two views of the same source of truth.</p>
       </div>
       <div class="feature">
@@ -114,7 +156,7 @@ title: false
       <div class="flow-arrow">→ <code>/mcp</code> →</div>
       <div class="flow-node flow-router">
         <strong>MCP Skills Manager</strong>
-        <span>auth · profiles · tools + resources</span>
+        <span>auth · workspaces · tools + resources</span>
       </div>
       <div class="flow-arrow">→</div>
       <div class="flow-node flow-servers">
@@ -123,7 +165,7 @@ title: false
       </div>
     </div>
     <p class="flow-caption">
-      The server validates the bearer token, then exposes every skill (or a profile's subset) as an MCP tool and a
+      The server validates the bearer token, then exposes every skill (or a workspace's subset) as an MCP tool and a
       <code>skill://</code> resource. Calling a skill's tool returns its markdown body; directory-format skills also
       list their bundled supporting files so the agent knows they exist.
     </p>
@@ -171,8 +213,8 @@ MCP_SKILLS_TOKEN=your-secret-token npm start</code></pre>
     <pre class="code"><code>claude mcp add --transport http skills http://localhost:3000/mcp \
   --header "Authorization: Bearer &lt;token&gt;"</code></pre>
 
-    <p>Or a <strong>profile</strong> — just the skills that client should see:</p>
-    <pre class="code"><code>claude mcp add --transport http backend http://localhost:3000/mcp/p/backend \
+    <p>Or a <strong>workspace</strong> — just the skills that client should see:</p>
+    <pre class="code"><code>claude mcp add --transport http backend http://localhost:3000/mcp/w/backend \
   --header "Authorization: Bearer &lt;token&gt;"</code></pre>
 
     <p>Or run it locally over <strong>stdio</strong> with the packaged binary:</p>
@@ -180,7 +222,7 @@ MCP_SKILLS_TOKEN=your-secret-token npm start</code></pre>
   "mcpServers": {
     "skills": {
       "command": "mcp-skills-stdio",
-      "args": ["--data-dir", "/path/to/data", "--profile", "backend"]
+      "args": ["--data-dir", "/path/to/data", "--workspace", "backend"]
     }
   }
 }</code></pre>

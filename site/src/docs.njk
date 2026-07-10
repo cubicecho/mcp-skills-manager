@@ -1,7 +1,7 @@
 ---
 layout: base.njk
 title: Docs
-description: MCP Skills Manager documentation — skill formats, profiles, configuration, REST API, and MCP endpoints.
+description: MCP Skills Manager documentation — skill formats, workspaces, configuration, REST API, and MCP endpoints.
 permalink: /docs/
 ---
 
@@ -13,7 +13,7 @@ permalink: /docs/
         <nav>
           <a href="#skills">Skills on disk</a>
           <a href="#frontmatter">Frontmatter</a>
-          <a href="#profiles">Profiles</a>
+          <a href="#workspaces">Workspaces</a>
           <a href="#config">Configuration</a>
           <a href="#api">REST API</a>
           <a href="#mcp">MCP endpoints</a>
@@ -65,19 +65,19 @@ description: Write clear, conventional git commit messages.
           organises skills and feeds the <code>search_skills</code> filter. Unknown frontmatter keys are preserved
           across round-trips.</p>
 
-        <h2 id="profiles">Profiles</h2>
-        <p>A <strong>profile</strong> is a named subset of skills served at its own <code>/mcp/p/&lt;slug&gt;</code>
-          endpoint. It is a JSON file at <code>DATA_DIR/config/profiles/&lt;slug&gt;.json</code>:</p>
+        <h2 id="workspaces">Workspaces</h2>
+        <p>A <strong>workspace</strong> is a named subset of skills served at its own <code>/mcp/w/&lt;slug&gt;</code>
+          endpoint. It is a JSON file at <code>DATA_DIR/config/workspaces/&lt;slug&gt;.json</code>:</p>
         <pre class="code"><code>{
   "name": "Backend",
   "slug": "backend",
-  "enabled": true,               <span class="cmt">// false = the /mcp/p/&lt;slug&gt; endpoint 404s</span>
+  "enabled": true,               <span class="cmt">// false = the /mcp/w/&lt;slug&gt; endpoint 404s</span>
   "description": "Skills for backend work.",
   "skills": ["commit-messages", "pdf-forms"]
 }</code></pre>
-        <p>Served at <code>/mcp/p/backend</code> over HTTP and via <code>--profile backend</code> over stdio.
-          The slug is derived from the name and doubles as the filename. Manage profiles from the
-          <strong>Profiles</strong> page in the web UI, or edit the files directly — changes are picked up
+        <p>Served at <code>/mcp/w/backend</code> over HTTP and via <code>--workspace backend</code> over stdio.
+          The slug is derived from the name and doubles as the filename. Manage workspaces from the
+          <strong>Workspaces</strong> page in the web UI, or edit the files directly — changes are picked up
           automatically.</p>
 
         <h2 id="config">Configuration</h2>
@@ -89,8 +89,8 @@ description: Write clear, conventional git commit messages.
         <pre class="code"><code>data/
 ├── config/
 │   ├── settings.json          <span class="cmt"># port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates</span>
-│   └── profiles/
-│       └── &lt;slug&gt;.json        <span class="cmt"># one file per profile</span>
+│   └── workspaces/
+│       └── &lt;slug&gt;.json        <span class="cmt"># one file per workspace</span>
 └── skills/
     ├── &lt;name&gt;.md              <span class="cmt"># flat-file skill</span>
     └── &lt;name&gt;/                <span class="cmt"># directory-format skill</span>
@@ -119,7 +119,7 @@ description: Write clear, conventional git commit messages.
           <table>
             <thead><tr><th>Method &amp; path</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/profile counts, auth mode, port</td></tr>
+              <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/workspace counts, auth mode, port</td></tr>
               <tr><td><code>GET /api/settings</code></td><td>Read auth/authoring toggles, tool mode, live updates</td></tr>
               <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>skillToolMode</code> / <code>httpLiveUpdates</code></td></tr>
               <tr><td><code>GET /api/skills</code></td><td>List skills (summaries)</td></tr>
@@ -134,8 +134,8 @@ description: Write clear, conventional git commit messages.
               <tr><td><code>POST /api/skills/:name/folders</code></td><td>Create an empty sub-folder</td></tr>
               <tr><td><code>POST /api/skills/:name/files/move</code></td><td>Rename / move a file or folder</td></tr>
               <tr><td><code>DELETE /api/skills/:name/files?path=</code></td><td>Delete a file or folder</td></tr>
-              <tr><td><code>GET/POST /api/profiles</code></td><td>List / create profiles</td></tr>
-              <tr><td><code>GET/PATCH/DELETE /api/profiles/:slug</code></td><td>Get / update / delete a profile</td></tr>
+              <tr><td><code>GET/POST /api/workspaces</code></td><td>List / create workspaces</td></tr>
+              <tr><td><code>GET/PATCH/DELETE /api/workspaces/:slug</code></td><td>Get / update / delete a workspace</td></tr>
               <tr><td><code>POST /api/reload</code></td><td>Re-read all config from disk</td></tr>
             </tbody>
           </table>
@@ -147,13 +147,13 @@ description: Write clear, conventional git commit messages.
             <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
             <tbody>
               <tr><td><code>ALL /mcp</code></td><td>Every skill — each as a tool and a <code>skill://</code> resource</td></tr>
-              <tr><td><code>ALL /mcp/p/&lt;slug&gt;</code></td><td>A profile's skills only</td></tr>
-              <tr><td><code>mcp-skills-stdio</code></td><td>stdio transport; <code>--data-dir</code>, optional <code>--profile &lt;slug&gt;</code></td></tr>
+              <tr><td><code>ALL /mcp/w/&lt;slug&gt;</code></td><td>A workspace's skills only</td></tr>
+              <tr><td><code>mcp-skills-stdio</code></td><td>stdio transport; <code>--data-dir</code>, optional <code>--workspace &lt;slug&gt;</code></td></tr>
             </tbody>
           </table>
         </div>
         <p>The HTTP endpoints speak streamable HTTP and require the bearer token (unless <code>authEnabled</code> is
-          false). Disabled profiles return 404; auth failures return 401 before any MCP handling.</p>
+          false). Disabled workspaces return 404; auth failures return 401 before any MCP handling.</p>
 
         <h3 id="list-skills">Discovering skills</h3>
         <p>Every endpoint exposes two discovery meta-tools. <code>list_skills</code> returns a JSON catalogue of the
@@ -165,7 +165,7 @@ description: Write clear, conventional git commit messages.
           <code>skill://&lt;name&gt;</code> resource) to pull the full contents.</p>
 
         <h3 id="tool-modes">Tool modes</h3>
-        <p>How skills are advertised as tools is set globally (and overridable per profile) via
+        <p>How skills are advertised as tools is set globally (and overridable per workspace) via
           <code>skillToolMode</code>:</p>
         <ul class="notes">
           <li><strong><code>per-skill</code></strong> (default) — one no-arg tool per skill; calling it returns that
@@ -193,7 +193,7 @@ description: Write clear, conventional git commit messages.
           their own skills — <code>create_skill</code>, <code>update_skill</code>, <code>rename_skill</code>,
           <code>delete_skill</code>, and supporting-file tools (<code>write_skill_file</code>,
           <code>read_skill_file</code>, <code>create_skill_folder</code>, <code>move_skill_file</code>,
-          <code>delete_skill_file</code>). A skill authored through a profile endpoint is scoped to that profile by
+          <code>delete_skill_file</code>). A skill authored through a workspace endpoint is scoped to that workspace by
           default; skills authored at the root <code>/mcp</code> are global. Toggle the whole feature with
           <code>authoringEnabled</code> in settings.</p>
 
