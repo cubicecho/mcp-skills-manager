@@ -47,6 +47,22 @@ function resourceNotFound(uri: string): McpError {
   return new McpError(RESOURCE_NOT_FOUND, `Unknown skill resource "${uri}"`, { uri });
 }
 
+/** The `skill://<name>` resource URI for a skill's primary document. Names are slugs, already URI-safe. */
+function skillResourceUri(name: string): string {
+  return `${RESOURCE_SCHEME}://${name}`;
+}
+
+/**
+ * The `skill://<name>/<path>` URI for a bundled supporting file, percent-encoding
+ * each path segment (but not the `/` separators) so the advertised URI round-trips
+ * cleanly through the read handler's `decodeURIComponent` — filenames with spaces,
+ * `%`, `#`, etc. survive intact.
+ */
+function fileResourceUri(name: string, relPath: string): string {
+  const encoded = relPath.split('/').map(encodeURIComponent).join('/');
+  return `${skillResourceUri(name)}/${encoded}`;
+}
+
 /**
  * Name of the meta-tool that returns the skill catalogue. A skill could in
  * theory be named `list_skills` too; the meta-tool wins (that skill stays
@@ -153,6 +169,12 @@ function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } 
   return meta;
 }
 
+/** Optional human-readable display title, from frontmatter `title` when authored (never fabricated from the slug). */
+function skillTitle(skill: Skill): string | undefined {
+  const title = skill.frontmatter.title;
+  return typeof title === 'string' && title.trim().length > 0 ? title.trim() : undefined;
+}
+
 /** The text handed to an agent when it loads a skill: the Markdown body, plus footers for metadata and bundled files. */
 function renderSkill(skill: Skill): string {
   const sections = [skill.body];
@@ -171,7 +193,7 @@ function renderSkill(skill: Skill): string {
 
   const files = skill.files.filter((f) => f.type === 'file');
   if (files.length > 0) {
-    const list = files.map((f) => `- ${f.path} — resource \`${RESOURCE_SCHEME}://${skill.name}/${f.path}\``).join('\n');
+    const list = files.map((f) => `- ${f.path} — resource \`${fileResourceUri(skill.name, f.path)}\``).join('\n');
     sections.push(
       `---\nBundled supporting files (in the skill directory \`${skill.name}/\`), readable as MCP resources:\n${list}`,
     );
@@ -413,8 +435,10 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     const resources = [];
     for (const skill of deps.getSkills()) {
       resources.push({
-        uri: `${RESOURCE_SCHEME}://${skill.name}`,
+        uri: skillResourceUri(skill.name),
         name: skill.name,
+        // Optional display name, only when the author set a frontmatter `title`.
+        title: skillTitle(skill),
         description: skill.description || undefined,
         mimeType: 'text/markdown',
         // Skills are context authored for the model; `lastModified` lets clients sort by recency.
@@ -425,7 +449,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       if (deps.readSupportingFile) {
         for (const file of skill.files.filter((f) => f.type === 'file')) {
           resources.push({
-            uri: `${RESOURCE_SCHEME}://${skill.name}/${file.path}`,
+            uri: fileResourceUri(skill.name, file.path),
             name: `${skill.name}/${file.path}`,
             description: `Supporting file for the "${skill.name}" skill.`,
             // Omit rather than guess when the extension is unknown — the read

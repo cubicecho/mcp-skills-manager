@@ -364,6 +364,37 @@ describe('skill-server resources', () => {
       code: -32002,
     });
   });
+
+  it('surfaces a frontmatter `title` as the resource title, and omits it otherwise', async () => {
+    const titled = skill({ name: 'titled', frontmatter: { title: 'My Nice Skill' } });
+    const client = await connect(() => [titled, ...SKILLS]);
+    const { resources } = await client.listResources();
+    expect(resources.find((r) => r.uri === 'skill://titled')?.title).toBe('My Nice Skill');
+    expect(resources.find((r) => r.uri === 'skill://pdf-forms')?.title).toBeUndefined();
+  });
+
+  it('percent-encodes bundled-file URIs so special characters round-trip through read', async () => {
+    const spaced = skill({
+      name: 'spaced',
+      format: 'dir',
+      path: 'spaced/SKILL.md',
+      files: [{ path: 'notes/read me.md', type: 'file', size: 5 }],
+    });
+    const client = await connect(() => [spaced], {
+      readSupportingFile: async (name, relPath) => ({
+        path: relPath,
+        content: `contents of ${name}/${relPath}`,
+        encoding: 'utf8',
+        size: 10,
+        binary: false,
+      }),
+    });
+    const listed = (await client.listResources()).resources.find((r) => r.name === 'spaced/notes/read me.md');
+    expect(listed?.uri).toBe('skill://spaced/notes/read%20me.md');
+    // The advertised (encoded) URI must resolve back to the raw path on read.
+    const res = await client.readResource({ uri: 'skill://spaced/notes/read%20me.md' });
+    expect(firstContent(res).text).toBe('contents of spaced/notes/read me.md');
+  });
 });
 
 describe('skill-server live updates (stdio)', () => {
