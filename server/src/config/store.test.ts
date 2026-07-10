@@ -497,6 +497,24 @@ describe('ConfigStore legacy profiles → workspaces migration', () => {
     expect(store.getWorkspace('backend')).toBeDefined();
     expect(existsSync(legacyDir)).toBe(false);
   });
+
+  it('survives an unreadable legacy file, moving it under its original name without crashing init', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    await mkdir(legacyDir, { recursive: true });
+    // Corrupt JSON: the slug cannot be parsed, so the target name falls back to the original filename.
+    await writeFile(path.join(legacyDir, 'broken.json'), Buffer.from('{ not valid json'));
+    // A directory named like a .json file — reading it throws EISDIR, which must also fall back.
+    await mkdir(path.join(legacyDir, 'weird.json'), { recursive: true });
+
+    store = new ConfigStore(dir);
+    await expect(store.init()).resolves.toBeUndefined();
+
+    // Both entries were moved to config/workspaces under their original names (neither is a valid
+    // workspace, so neither loads, but init must not throw and the legacy dir must be emptied).
+    expect(existsSync(path.join(dir, 'config', 'workspaces', 'broken.json'))).toBe(true);
+    expect(existsSync(path.join(dir, 'config', 'workspaces', 'weird.json'))).toBe(true);
+    expect(existsSync(legacyDir)).toBe(false);
+  });
 });
 
 describe('ConfigStore skill tags', () => {

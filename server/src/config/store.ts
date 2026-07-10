@@ -150,17 +150,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const files = (await readdir(legacyDir)).filter((f) => f.endsWith('.json'));
     let moved = 0;
-    for (const file of files) {
+    // Sort for a deterministic winner when two legacy files resolve to the same slug.
+    for (const file of files.sort()) {
       const source = path.join(legacyDir, file);
       // Migrate to the file's canonical `<slug>.json` name so the collision check
       // is by workspace identity (slug), not by a possibly hand-edited filename —
       // loadWorkspaces keys by the declared slug, so a mismatched filename could
-      // otherwise slip past and overwrite an existing workspace on load. Fall back
-      // to the original name for a legacy file we can't parse, so it isn't lost.
-      const target = path.join(
-        this.workspacesDir,
-        this.legacyWorkspaceTargetName(await readFile(source, 'utf8'), file),
-      );
+      // otherwise slip past and overwrite an existing workspace on load.
+      const target = path.join(this.workspacesDir, await this.legacyWorkspaceTargetName(source, file));
       if (existsSync(target)) {
         continue; // a workspace with this slug already exists; leave the legacy copy in place
       }
@@ -178,15 +175,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /** Canonical `<slug>.json` destination for a legacy profile file, or its original
-   * filename when the contents can't be parsed for a slug (so nothing is lost). */
-  private legacyWorkspaceTargetName(raw: string, fallback: string): string {
+   * filename when the file can't be read or parsed for a slug — so a bad entry (an
+   * unreadable file, or a `.json`-named directory) is never lost and never aborts
+   * startup, matching the old rename-only behavior. */
+  private async legacyWorkspaceTargetName(source: string, fallback: string): Promise<string> {
     try {
-      const parsed = workspaceConfigSchema.safeParse(JSON.parse(raw));
+      const parsed = workspaceConfigSchema.safeParse(JSON.parse(await readFile(source, 'utf8')));
       if (parsed.success) {
         return `${parsed.data.slug}.json`;
       }
     } catch {
-      // Unparseable JSON — fall through to the original filename.
+      // Unreadable (EISDIR/EACCES) or invalid JSON — fall through to the original filename.
     }
     return fallback;
   }
