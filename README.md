@@ -11,10 +11,21 @@ Every skill is exposed two ways at once:
 - as an MCP **resource** at `skill://<name>` — for clients that browse and
   attach resources.
 
-A `list_skills` tool on every endpoint returns a JSON catalogue of the available
-skills — name, description, format, supporting files, and the tool name to call
-to load each — with no bodies, so an agent can discover what's on offer and
-decide which skills are worth loading.
+Every endpoint also serves two meta-tools for **discovery**: `list_skills`
+returns a JSON catalogue of the available skills — name, description, format,
+tags, supporting files, and the tool name to call to load each — with no bodies,
+and `search_skills` filters that catalogue by a free-text query and/or tags, so
+an agent can find what's relevant by intent before loading anything.
+
+Skills are advertised as tools in one of two modes (a global default, optionally
+overridden per profile): **per-skill** (the default — one no-arg tool per skill)
+or **loader** (a single `load_skill(name)` tool that keeps the tool footprint
+fixed no matter how many skills exist).
+
+Agents can also **author skills over MCP**: every endpoint exposes authoring
+tools (`create_skill`, `update_skill`, `rename_skill`, `delete_skill`, plus
+supporting-file tools) so an agent can write and refine its own skills. These
+are gated on a setting (on by default).
 
 The root endpoint `/mcp` serves **all** skills. **Profiles** are named subsets
 served at their own endpoint `/mcp/p/<slug>`, so you can hand a specific agent
@@ -24,8 +35,14 @@ clients.
 ## Features
 
 - 📝 **Markdown editor** in the web UI with live split-pane preview
-- 🗂️ **Skill CRUD** — create, rename, edit, and delete skills
+- 🗂️ **Skill CRUD** — create, rename, edit, delete, import (`.md`/dir/`.zip`),
+  and export skills; drag-and-drop supporting files for directory-format skills
 - 🧩 **Profiles** — group skills into filtered endpoints
+- 🔍 **Discovery meta-tools** — `list_skills` and `search_skills` on every
+  endpoint, plus `tags` on skills for organising and filtering
+- 🤖 **MCP authoring** — agents can create and refine their own skills over MCP
+- 🔧 **Tool modes** — advertise skills as one tool each (`per-skill`) or a
+  single `load_skill` loader, globally or per profile
 - 📁 **Two skill formats** — a flat `<name>.md` file, or a
   `<name>/SKILL.md` directory (Claude Code convention) with supporting files
 - 🔌 **HTTP and stdio** transports
@@ -116,6 +133,9 @@ knows they exist.
 
 The frontmatter `name` must be a slug: lowercase letters, digits, `.`, `_`, `-`
 (max 64 chars). `description` is surfaced as the MCP tool/resource description.
+An optional `tags` key (a comma-separated string or a YAML list) organises
+skills and feeds the `search_skills` filter. Unknown frontmatter keys are
+preserved across round-trips.
 
 ## Profiles
 
@@ -132,8 +152,10 @@ A profile is a JSON file at `DATA_DIR/config/profiles/<slug>.json`:
 ```
 
 It is served at `/mcp/p/backend` (HTTP) and via `--profile backend` (stdio).
-Disabled profiles return 404. Manage profiles from the **Profiles** page in the
-web UI, or edit the files directly — changes are picked up automatically.
+Disabled profiles return 404. An optional `skillToolMode` (`per-skill` or
+`loader`) overrides the global default for this profile only. Manage profiles
+from the **Profiles** page in the web UI, or edit the files directly — changes
+are picked up automatically.
 
 ## Configuration
 
@@ -142,7 +164,7 @@ Everything lives under `DATA_DIR` (default `./data`):
 ```
 data/
 ├── config/
-│   ├── settings.json          # port, auth token, auth toggle
+│   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode
 │   └── profiles/
 │       └── <slug>.json        # one file per profile
 └── skills/
@@ -173,12 +195,21 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/status` | Version, uptime, skill/profile counts |
+| `GET` | `/api/status` | Version, uptime, skill/profile counts, auth mode, port |
+| `GET` | `/api/settings` | Read settings (auth/authoring toggles, tool mode) |
+| `PATCH` | `/api/settings` | Update `authoringEnabled` / `skillToolMode` |
 | `GET` | `/api/skills` | List skills (summaries) |
 | `POST` | `/api/skills` | Create a skill |
+| `POST` | `/api/skills/import` | Import an uploaded `.md` / directory / `.zip` |
 | `GET` | `/api/skills/:name` | Get a skill (with body) |
-| `PATCH` | `/api/skills/:name` | Update body/description, or rename |
+| `PATCH` | `/api/skills/:name` | Update body/description/tags/global, or rename |
 | `DELETE` | `/api/skills/:name` | Delete a skill |
+| `GET` | `/api/skills/:name/export` | Download the skill as a `.zip` |
+| `GET` | `/api/skills/:name/files/content?path=` | Read one supporting file |
+| `PUT` | `/api/skills/:name/files` | Add/overwrite a supporting file (promotes to a dir) |
+| `POST` | `/api/skills/:name/folders` | Create an empty sub-folder |
+| `POST` | `/api/skills/:name/files/move` | Rename / move a file or folder |
+| `DELETE` | `/api/skills/:name/files?path=` | Delete a file or folder |
 | `GET` | `/api/profiles` | List profiles |
 | `POST` | `/api/profiles` | Create a profile |
 | `GET` | `/api/profiles/:slug` | Get a profile |

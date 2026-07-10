@@ -41,7 +41,20 @@ title: false
         <div class="feature-icon">🔧</div>
         <h3>Skills as tools</h3>
         <p>Each skill is exposed as an MCP tool — calling it returns the skill's markdown body, plus a note listing
-          any bundled supporting files. Agents pull a skill on demand, only when they need it.</p>
+          any bundled supporting files. Or switch to <strong>loader</strong> mode for a single
+          <code>load_skill</code> tool that keeps the footprint fixed. Agents pull a skill on demand.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔍</div>
+        <h3>Discovery meta-tools</h3>
+        <p>Every endpoint exposes <code>list_skills</code> and <code>search_skills</code> — a JSON catalogue an agent
+          can browse or filter by intent and <code>tags</code> to decide what to load, without pulling any bodies.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <h3>Self-authoring</h3>
+        <p>Agents can create and refine their own skills over MCP — <code>create_skill</code>,
+          <code>update_skill</code>, and file tools, gated on a setting. Skills authored via a profile scope to it.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🔗</div>

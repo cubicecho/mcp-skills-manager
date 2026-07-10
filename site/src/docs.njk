@@ -17,6 +17,8 @@ permalink: /docs/
           <a href="#config">Configuration</a>
           <a href="#api">REST API</a>
           <a href="#mcp">MCP endpoints</a>
+          <a href="#tool-modes">Tool modes</a>
+          <a href="#authoring">Authoring over MCP</a>
           <a href="#security">Security notes</a>
         </nav>
         <p class="toc-foot"><a href="{{ site.repo }}/blob/main/README.md">Full README ↗</a></p>
@@ -58,7 +60,9 @@ description: Write clear, conventional git commit messages.
         <p>The <code>name</code> must be a slug: lowercase letters, digits, <code>.</code>, <code>_</code>,
           <code>-</code> (max 64 chars). It doubles as the MCP tool name (dots sanitized to <code>_</code>) and the
           resource URI (<code>skill://&lt;name&gt;</code>). <code>description</code> is surfaced as the MCP
-          tool/resource description. Unknown frontmatter keys are preserved across round-trips.</p>
+          tool/resource description. An optional <code>tags</code> key (a comma-separated string or a YAML list)
+          organises skills and feeds the <code>search_skills</code> filter. Unknown frontmatter keys are preserved
+          across round-trips.</p>
 
         <h2 id="profiles">Profiles</h2>
         <p>A <strong>profile</strong> is a named subset of skills served at its own <code>/mcp/p/&lt;slug&gt;</code>
@@ -83,7 +87,7 @@ description: Write clear, conventional git commit messages.
   http://localhost:3000/api/reload</code></pre>
         <pre class="code"><code>data/
 ├── config/
-│   ├── settings.json          <span class="cmt"># port, auth token, auth toggle</span>
+│   ├── settings.json          <span class="cmt"># port, auth token, auth/authoring toggles, tool mode</span>
 │   └── profiles/
 │       └── &lt;slug&gt;.json        <span class="cmt"># one file per profile</span>
 └── skills/
@@ -114,7 +118,9 @@ description: Write clear, conventional git commit messages.
           <table>
             <thead><tr><th>Method &amp; path</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/profile counts, auth mode</td></tr>
+              <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/profile counts, auth mode, port</td></tr>
+              <tr><td><code>GET /api/settings</code></td><td>Read auth/authoring toggles and tool mode</td></tr>
+              <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>skillToolMode</code></td></tr>
               <tr><td><code>GET /api/skills</code></td><td>List skills (summaries)</td></tr>
               <tr><td><code>POST /api/skills</code></td><td>Create a skill</td></tr>
               <tr><td><code>POST /api/skills/import</code></td><td>Import an uploaded <code>.md</code> / directory / zip</td></tr>
@@ -149,11 +155,32 @@ description: Write clear, conventional git commit messages.
           false). Disabled profiles return 404; auth failures return 401 before any MCP handling.</p>
 
         <h3 id="list-skills">Discovering skills</h3>
-        <p>Every endpoint also exposes a <code>list_skills</code> tool. Calling it returns a JSON catalogue of the
-          available skills — <code>name</code>, <code>description</code>, <code>format</code>, supporting
-          <code>files</code>, <code>updatedAt</code>, and the <code>tool</code> name to call to load each — without
-          any skill bodies. An agent can call it first to decide which skill(s) are worth loading, then call the
-          named tool (or read the matching <code>skill://&lt;name&gt;</code> resource) to pull the full contents.</p>
+        <p>Every endpoint exposes two discovery meta-tools. <code>list_skills</code> returns a JSON catalogue of the
+          available skills — <code>name</code>, <code>description</code>, <code>format</code>, <code>tags</code>,
+          supporting <code>files</code>, <code>updatedAt</code>, and the <code>tool</code> name to call to load each
+          — without any skill bodies. <code>search_skills</code> returns the same shape, filtered by a free-text
+          <code>query</code> (matched against name, description, tags, and body) and/or a <code>tags</code> filter.
+          An agent discovers what's on offer first, then calls the named tool (or reads the matching
+          <code>skill://&lt;name&gt;</code> resource) to pull the full contents.</p>
+
+        <h3 id="tool-modes">Tool modes</h3>
+        <p>How skills are advertised as tools is set globally (and overridable per profile) via
+          <code>skillToolMode</code>:</p>
+        <ul class="notes">
+          <li><strong><code>per-skill</code></strong> (default) — one no-arg tool per skill; calling it returns that
+            skill's body.</li>
+          <li><strong><code>loader</code></strong> — a single <code>load_skill(name)</code> tool, so the advertised
+            tool count stays fixed no matter how many skills the endpoint serves.</li>
+        </ul>
+
+        <h3 id="authoring">Authoring over MCP</h3>
+        <p>When authoring is enabled (the default), every endpoint also exposes tools for agents to write and refine
+          their own skills — <code>create_skill</code>, <code>update_skill</code>, <code>rename_skill</code>,
+          <code>delete_skill</code>, and supporting-file tools (<code>write_skill_file</code>,
+          <code>read_skill_file</code>, <code>create_skill_folder</code>, <code>move_skill_file</code>,
+          <code>delete_skill_file</code>). A skill authored through a profile endpoint is scoped to that profile by
+          default; skills authored at the root <code>/mcp</code> are global. Toggle the whole feature with
+          <code>authoringEnabled</code> in settings.</p>
 
         <h2 id="security">Security notes</h2>
         <ul class="notes">
