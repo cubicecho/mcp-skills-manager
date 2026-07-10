@@ -242,6 +242,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.settings.skillToolMode;
   }
 
+  /** Whether the HTTP `/mcp` endpoints run stateful so they can push live resource updates (settings.httpLiveUpdates). */
+  isHttpLiveUpdates(): boolean {
+    return this.settings.httpLiveUpdates;
+  }
+
   /** The effective skill-tool mode for a profile endpoint: its override if set, else the global default. */
   getSkillToolModeForProfile(profile: ProfileConfig): SettingsFile['skillToolMode'] {
     return profile.skillToolMode ?? this.settings.skillToolMode;
@@ -253,6 +258,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       authEnabled: this.settings.authEnabled,
       authoringEnabled: this.settings.authoringEnabled,
       skillToolMode: this.settings.skillToolMode,
+      httpLiveUpdates: this.settings.httpLiveUpdates,
     };
   }
 

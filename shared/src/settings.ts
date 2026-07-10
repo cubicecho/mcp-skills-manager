@@ -37,6 +37,16 @@ export const settingsFileSchema = z
     authoringEnabled: z.boolean().default(true),
     /** Default for how skills are advertised as MCP tools; a profile may override it. See skillToolModeSchema. */
     skillToolMode: skillToolModeSchema.default('per-skill'),
+    /**
+     * Serve the HTTP `/mcp` endpoints in **stateful** mode so the server can push
+     * live resource updates (`notifications/resources/list_changed` and
+     * `resources/updated`) to connected clients over SSE — the HTTP analog of the
+     * stdio live-updates already on by default there. Off by default: stateful
+     * mode keeps a session (and its `Mcp-Session-Id`) alive per client, so only
+     * enable it when a client actually subscribes instead of re-polling. When off,
+     * `/mcp` stays stateless (a fresh server per request, no push).
+     */
+    httpLiveUpdates: z.boolean().default(false),
   })
   .passthrough();
 
@@ -50,6 +60,7 @@ export const settingsViewSchema = z.object({
   authEnabled: z.boolean(),
   authoringEnabled: z.boolean(),
   skillToolMode: skillToolModeSchema,
+  httpLiveUpdates: z.boolean(),
 });
 export type SettingsView = z.infer<typeof settingsViewSchema>;
 
@@ -58,6 +69,7 @@ export const updateSettingsRequestSchema = z
   .object({
     authoringEnabled: z.boolean().optional(),
     skillToolMode: skillToolModeSchema.optional(),
+    httpLiveUpdates: z.boolean().optional(),
   })
   .strict();
 export type UpdateSettingsRequest = z.infer<typeof updateSettingsRequestSchema>;

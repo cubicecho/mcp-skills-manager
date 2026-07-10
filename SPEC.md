@@ -30,8 +30,9 @@ large. ⭐ marks the highest-leverage picks.
       server advertises `resources.listChanged` + `subscribe` and pushes
       `notifications/resources/list_changed` (and `resources/updated` for
       subscribed URIs) when the store reloads after an on-disk edit. Wired via
-      the `ConfigStore` `change` event; the stateless HTTP route omits it (it
-      cannot push and re-lists fresh per request).
+      the `ConfigStore` `change` event. The HTTP route omits it by default (a
+      stateless server can't push); C3 below extends the same push to HTTP behind
+      an opt-in stateful mode.
 
 ## Theme A — Better management UX
 
@@ -70,17 +71,14 @@ Gaps between our `skill://` resource surface and the [MCP 2025-06-18 Resources
 spec](https://modelcontextprotocol.io/specification/2025-06-18/server/resources).
 Tier 1 (metadata) and Tier 2 (stdio live updates) shipped above; the rest:
 
-- [ ] **C3 · Live resource updates over HTTP** *(L)* ⭐ — Extend `listChanged` +
-      `subscribe` to the HTTP transport. The MCP Streamable-HTTP transport *does*
-      support server→client push via SSE, but only for **stateful** sessions
-      (`Mcp-Session-Id` + a persisted transport per session). Today `/mcp` runs
-      stateless (`sessionIdGenerator: undefined`, `enableJsonResponse: true`, a
-      fresh `Server` torn down per request), so there is no connection to push
-      over. Work: add an opt-in stateful mode (session store keyed by
-      `Mcp-Session-Id`, SSE responses, lifecycle cleanup), then wire
-      `onSkillsChanged` on those sessions the way stdio already does. Gate behind
-      a setting; keep stateless as the default. Prereq for any HTTP client that
-      wants push instead of re-polling `resources/list`.
+- [x] **C3 · Live resource updates over HTTP** — an opt-in **stateful** mode for
+      the HTTP `/mcp` endpoints (`settings.httpLiveUpdates`, default off): an
+      `McpSessionManager` keeps a persistent `Server` + transport per
+      `Mcp-Session-Id` (minted on initialize), wires `onSkillsChanged` the way
+      stdio does, and pushes `notifications/resources/list_changed` +
+      `resources/updated` over the client's SSE stream. Stateless (a fresh server
+      per request) stays the default; the mode is read fresh per request so the
+      toggle needs no restart. Sessions are torn down on client disconnect/DELETE.
 - [x] **C4 · Resource templates + argument completion** — `resources/templates/list`
       advertises two RFC 6570 templates (`skill://{name}` and, when file reads are
       wired, `skill://{name}/{+path}` — reserved expansion so nested paths keep their
