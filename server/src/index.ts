@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   await store.init();
 
   store.on('change', (state) => {
-    console.log(`Config changed on disk: ${state.skills.length} skills, ${state.profiles.length} profiles`);
+    console.log(`Config changed on disk: ${state.skills.length} skills, ${state.workspaces.length} workspaces`);
   });
   store.startWatching();
 

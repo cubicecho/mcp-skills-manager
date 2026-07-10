@@ -10,9 +10,9 @@ import { errorDetailMessage, HttpError } from '../errors.ts';
  * existing ConfigStore mutators, so validation, atomic writes, frontmatter
  * serialization and path-traversal defenses are shared with the REST layer.
  *
- * When these tools are served from a profile endpoint (`profileSlug` set), a
- * newly created skill is scoped to that profile: written with `global: false`
- * (hidden from the root `/mcp` aggregate) and appended to the profile's member
+ * When these tools are served from a workspace endpoint (`workspaceSlug` set), a
+ * newly created skill is scoped to that workspace: written with `global: false`
+ * (hidden from the root `/mcp` aggregate) and appended to the workspace's member
  * list. Authored from the root endpoint, skills are global as usual.
  */
 
@@ -41,8 +41,8 @@ export interface AuthoringTool {
 
 export interface AuthoringDeps {
   store: ConfigStore;
-  /** Set when serving a profile endpoint — new skills are scoped to this profile. */
-  profileSlug?: string;
+  /** Set when serving a workspace endpoint — new skills are scoped to this workspace. */
+  workspaceSlug?: string;
 }
 
 /**
@@ -73,14 +73,14 @@ function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
   return result.data;
 }
 
-/** How to load a skill after authoring it, plus where it is visible (root aggregate and/or a profile). */
-function whereVisible(skill: Skill, profileSlug: string | undefined): string {
+/** How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace). */
+function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
   const load = `Load it by calling the tool named "${toToolName(skill.name)}".`;
   const parts = [
     skill.global ? 'served globally on the root /mcp endpoint' : 'hidden from the root /mcp endpoint (global:false)',
   ];
-  if (profileSlug) {
-    parts.push(`included in profile "${profileSlug}"`);
+  if (workspaceSlug) {
+    parts.push(`included in workspace "${workspaceSlug}"`);
   }
   return `It is ${parts.join(' and ')}. ${load}`;
 }
@@ -129,10 +129,10 @@ const moveArgs = z.object({
 });
 const deleteFileArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
 
-/** Build the authoring tool set for an endpoint (root or a single profile). */
+/** Build the authoring tool set for an endpoint (root or a single workspace). */
 export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
-  const { store, profileSlug } = deps;
-  const scope = profileSlug ? ` (scoped to profile "${profileSlug}")` : '';
+  const { store, workspaceSlug } = deps;
+  const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
   return [
     {
@@ -143,7 +143,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           'Provide either `name` (a slug) or `title` (a slug is derived from it), plus a one-line ' +
           '`description` and the Markdown `body`. Defaults to the directory layout (`<name>/SKILL.md`) ' +
           'so you can attach supporting files later with write_skill_file. Skills authored on the root ' +
-          'endpoint are global; skills authored via a profile are scoped to it by default — pass ' +
+          'endpoint are global; skills authored via a workspace are scoped to it by default — pass ' +
           '`global` to override.',
         inputSchema: {
           type: 'object',
@@ -164,7 +164,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
               type: 'boolean',
               description:
                 'Serve on the root /mcp aggregate. Defaults to true on the root endpoint and false ' +
-                '(profile-scoped only) on a profile endpoint. Set true from a profile to also serve globally.',
+                '(workspace-scoped only) on a workspace endpoint. Set true from a workspace to also serve globally.',
             },
             tags: {
               ...JSON_STRING_ARRAY,
@@ -188,8 +188,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           );
         }
         const name = parsedName.data;
-        // Default visibility follows the endpoint (global on root, scoped on a profile); `global` overrides it.
-        const global = input.global ?? !profileSlug;
+        // Default visibility follows the endpoint (global on root, scoped on a workspace); `global` overrides it.
+        const global = input.global ?? !workspaceSlug;
         const skill = await guard(() =>
           store.createSkill({
             name,
@@ -200,10 +200,10 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
             tags: input.tags,
           }),
         );
-        if (profileSlug) {
-          await guard(() => store.addSkillToProfile(profileSlug, name));
+        if (workspaceSlug) {
+          await guard(() => store.addSkillToWorkspace(workspaceSlug, name));
         }
-        return `Created skill "${skill.name}" (${skill.format}). ${whereVisible(skill, profileSlug)}`;
+        return `Created skill "${skill.name}" (${skill.format}). ${whereVisible(skill, workspaceSlug)}`;
       },
     },
     {
@@ -223,7 +223,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
             global: {
               type: 'boolean',
               description:
-                'Serve on the root /mcp aggregate. Set false to hide from root (profile-scoped only), true to ' +
+                'Serve on the root /mcp aggregate. Set false to hide from root (workspace-scoped only), true to ' +
                 'promote a scoped skill to global. Omit to leave unchanged.',
             },
             tags: {
@@ -245,7 +245,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
             tags: input.tags,
           }),
         );
-        return `Updated skill "${skill.name}". ${whereVisible(skill, profileSlug)} ${fileSummary(skill)}`;
+        return `Updated skill "${skill.name}". ${whereVisible(skill, workspaceSlug)} ${fileSummary(skill)}`;
       },
     },
     {
@@ -269,12 +269,12 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           throw new Error(`Invalid skill name "${input.new_name}"`);
         }
         const skill = await guard(() => store.renameSkill(input.name, target.data));
-        if (profileSlug) {
-          // Keep the active profile's member list pointing at the renamed skill.
-          await guard(() => store.removeSkillFromProfile(profileSlug, input.name));
-          await guard(() => store.addSkillToProfile(profileSlug, skill.name));
+        if (workspaceSlug) {
+          // Keep the active workspace's member list pointing at the renamed skill.
+          await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
+          await guard(() => store.addSkillToWorkspace(workspaceSlug, skill.name));
         }
-        return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, profileSlug)}`;
+        return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, workspaceSlug)}`;
       },
     },
     {
@@ -291,8 +291,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       run: async (args) => {
         const input = parseArgs(deleteArgs, args);
         await guard(() => store.deleteSkill(input.name));
-        if (profileSlug) {
-          await guard(() => store.removeSkillFromProfile(profileSlug, input.name));
+        if (workspaceSlug) {
+          await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
         }
         return `Deleted skill "${input.name}".`;
       },

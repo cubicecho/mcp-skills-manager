@@ -10,7 +10,7 @@ import { isDark, setDark } from '@/lib/theme';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Skills', icon: BookMarkedIcon },
-  { to: '/profiles', label: 'Profiles', icon: LayersIcon },
+  { to: '/workspaces', label: 'Workspaces', icon: LayersIcon },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
 
@@ -71,7 +71,7 @@ function HeaderStatus() {
   return (
     <span className="text-sm text-muted-foreground">
       <span className="font-medium text-foreground">{data.skillCount}</span> skills ·{' '}
-      <span className="font-medium text-foreground">{data.profileCount}</span> profiles
+      <span className="font-medium text-foreground">{data.workspaceCount}</span> workspaces
     </span>
   );
 }

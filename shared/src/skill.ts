@@ -33,9 +33,9 @@ export const skillFrontmatterSchema = z
     /**
      * Whether the skill is served on the root `/mcp` aggregate. Absent or `true`
      * → global (the default; every hand-authored skill stays visible). Set to
-     * `false` to hide it from root while still serving it on any profile that
-     * lists it — this is how agent-authored, profile-scoped skills stay
-     * private to their profile.
+     * `false` to hide it from root while still serving it on any workspace that
+     * lists it — this is how agent-authored, workspace-scoped skills stay
+     * private to their workspace.
      */
     global: z.boolean().optional(),
     /**

@@ -52,7 +52,7 @@ COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/app/dist ./app/dist
 
 ENV NODE_ENV=production
-# Skills, profiles, and settings all live under /data — mount a volume here to
+# Skills, workspaces, and settings all live under /data — mount a volume here to
 # persist them (and to hand-edit skill markdown on the host).
 ENV DATA_DIR=/data
 

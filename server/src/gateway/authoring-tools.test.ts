@@ -14,15 +14,15 @@ function firstText(res: unknown): string {
   return block.text;
 }
 
-/** Wire a Client to a skill server for the given endpoint (root, or a profile). */
-async function connect(store: ConfigStore, profileSlug?: string): Promise<Client> {
-  const getSkills = profileSlug
+/** Wire a Client to a skill server for the given endpoint (root, or a workspace). */
+async function connect(store: ConfigStore, workspaceSlug?: string): Promise<Client> {
+  const getSkills = workspaceSlug
     ? () => {
-        const profile = store.getProfile(profileSlug);
-        return profile ? store.getSkillsForProfile(profile) : [];
+        const workspace = store.getWorkspace(workspaceSlug);
+        return workspace ? store.getSkillsForWorkspace(workspace) : [];
       }
     : () => store.getGlobalSkills();
-  const server = createSkillServer({ label: profileSlug ?? 'all', getSkills, authoring: { store, profileSlug } });
+  const server = createSkillServer({ label: workspaceSlug ?? 'all', getSkills, authoring: { store, workspaceSlug } });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test-client', version: '0.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -36,7 +36,7 @@ describe('MCP authoring tools', () => {
   beforeEach(async () => {
     dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-authoring-'));
     store = new ConfigStore(dir);
-    await store.init(); // seeds getting-started + examples profile
+    await store.init(); // seeds getting-started + examples workspace
   });
 
   afterEach(async () => {
@@ -70,34 +70,34 @@ describe('MCP authoring tools', () => {
     expect(firstText(await client.callTool({ name: 'my-skill' }))).toContain('# Hi');
   });
 
-  it('scopes a skill authored via a profile: hidden from root, present in the profile', async () => {
-    const profileClient = await connect(store, 'examples');
-    await profileClient.callTool({
+  it('scopes a skill authored via a workspace: hidden from root, present in the workspace', async () => {
+    const workspaceClient = await connect(store, 'examples');
+    await workspaceClient.callTool({
       name: 'create_skill',
-      arguments: { name: 'profile-only', description: 'scoped', body: 'body' },
+      arguments: { name: 'workspace-only', description: 'scoped', body: 'body' },
     });
 
-    const scoped = store.getSkill('profile-only');
+    const scoped = store.getSkill('workspace-only');
     expect(scoped?.global).toBe(false);
-    // Added to the profile's member list.
-    expect(store.getProfile('examples')?.skills).toContain('profile-only');
-    // Served on the profile endpoint...
-    expect((await profileClient.listTools()).tools.map((t) => t.name)).toContain('profile-only');
+    // Added to the workspace's member list.
+    expect(store.getWorkspace('examples')?.skills).toContain('workspace-only');
+    // Served on the workspace endpoint...
+    expect((await workspaceClient.listTools()).tools.map((t) => t.name)).toContain('workspace-only');
     // ...but not on the root endpoint.
     const rootClient = await connect(store);
-    expect((await rootClient.listTools()).tools.map((t) => t.name)).not.toContain('profile-only');
-    expect(store.getGlobalSkills().map((s) => s.name)).not.toContain('profile-only');
+    expect((await rootClient.listTools()).tools.map((t) => t.name)).not.toContain('workspace-only');
+    expect(store.getGlobalSkills().map((s) => s.name)).not.toContain('workspace-only');
   });
 
-  it('lets a profile author opt a skill into global visibility', async () => {
-    const profileClient = await connect(store, 'examples');
-    await profileClient.callTool({
+  it('lets a workspace author opt a skill into global visibility', async () => {
+    const workspaceClient = await connect(store, 'examples');
+    await workspaceClient.callTool({
       name: 'create_skill',
       arguments: { name: 'promoted', body: 'body', global: true },
     });
     expect(store.getSkill('promoted')?.global).toBe(true);
-    // Both in the profile and on the root aggregate.
-    expect(store.getProfile('examples')?.skills).toContain('promoted');
+    // Both in the workspace and on the root aggregate.
+    expect(store.getWorkspace('examples')?.skills).toContain('promoted');
     expect(store.getGlobalSkills().map((s) => s.name)).toContain('promoted');
   });
 

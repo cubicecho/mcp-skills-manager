@@ -9,19 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkspacesRouteImport } from './routes/workspaces'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ProfilesRouteImport } from './routes/profiles'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SkillsNameRouteImport } from './routes/skills.$name'
 
+const WorkspacesRoute = WorkspacesRouteImport.update({
+  id: '/workspaces',
+  path: '/workspaces',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfilesRoute = ProfilesRouteImport.update({
-  id: '/profiles',
-  path: '/profiles',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,52 +37,52 @@ const SkillsNameRoute = SkillsNameRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/profiles': typeof ProfilesRoute
   '/settings': typeof SettingsRoute
+  '/workspaces': typeof WorkspacesRoute
   '/skills/$name': typeof SkillsNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/profiles': typeof ProfilesRoute
   '/settings': typeof SettingsRoute
+  '/workspaces': typeof WorkspacesRoute
   '/skills/$name': typeof SkillsNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/profiles': typeof ProfilesRoute
   '/settings': typeof SettingsRoute
+  '/workspaces': typeof WorkspacesRoute
   '/skills/$name': typeof SkillsNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/profiles' | '/settings' | '/skills/$name'
+  fullPaths: '/' | '/settings' | '/workspaces' | '/skills/$name'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/profiles' | '/settings' | '/skills/$name'
-  id: '__root__' | '/' | '/profiles' | '/settings' | '/skills/$name'
+  to: '/' | '/settings' | '/workspaces' | '/skills/$name'
+  id: '__root__' | '/' | '/settings' | '/workspaces' | '/skills/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ProfilesRoute: typeof ProfilesRoute
   SettingsRoute: typeof SettingsRoute
+  WorkspacesRoute: typeof WorkspacesRoute
   SkillsNameRoute: typeof SkillsNameRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workspaces': {
+      id: '/workspaces'
+      path: '/workspaces'
+      fullPath: '/workspaces'
+      preLoaderRoute: typeof WorkspacesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profiles': {
-      id: '/profiles'
-      path: '/profiles'
-      fullPath: '/profiles'
-      preLoaderRoute: typeof ProfilesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,8 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ProfilesRoute: ProfilesRoute,
   SettingsRoute: SettingsRoute,
+  WorkspacesRoute: WorkspacesRoute,
   SkillsNameRoute: SkillsNameRoute,
 }
 export const routeTree = rootRouteImport

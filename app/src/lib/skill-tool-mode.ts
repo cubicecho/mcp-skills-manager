@@ -1,6 +1,6 @@
 import type { SkillToolMode } from '@mcp-skills/shared';
 
-/** Short labels for each skill-tool mode, shared by the settings page and the profile override select. */
+/** Short labels for each skill-tool mode, shared by the settings page and the workspace override select. */
 export const SKILL_TOOL_MODE_LABELS: Record<SkillToolMode, string> = {
   'per-skill': 'One tool per skill',
   loader: 'Single load_skill tool',

@@ -23,7 +23,7 @@ and `search_skills` filters that catalogue by a free-text query and/or tags, so
 an agent can find what's relevant by intent before loading anything.
 
 Skills are advertised as tools in one of two modes (a global default, optionally
-overridden per profile): **per-skill** (the default — one no-arg tool per skill)
+overridden per workspace): **per-skill** (the default — one no-arg tool per skill)
 or **loader** (a single `load_skill(name)` tool that keeps the tool footprint
 fixed no matter how many skills exist).
 
@@ -32,8 +32,8 @@ tools (`create_skill`, `update_skill`, `rename_skill`, `delete_skill`, plus
 supporting-file tools) so an agent can write and refine its own skills. These
 are gated on a setting (on by default).
 
-The root endpoint `/mcp` serves **all** skills. **Profiles** are named subsets
-served at their own endpoint `/mcp/p/<slug>`, so you can hand a specific agent
+The root endpoint `/mcp` serves **all** skills. **Workspaces** are named subsets
+served at their own endpoint `/mcp/w/<slug>`, so you can hand a specific agent
 just the skills it needs. Everything is also available over **stdio** for local
 clients.
 
@@ -42,12 +42,12 @@ clients.
 - 📝 **Markdown editor** in the web UI with live split-pane preview
 - 🗂️ **Skill CRUD** — create, rename, edit, delete, import (`.md`/dir/`.zip`),
   and export skills; drag-and-drop supporting files for directory-format skills
-- 🧩 **Profiles** — group skills into filtered endpoints
+- 🧩 **Workspaces** — group skills into filtered endpoints
 - 🔍 **Discovery meta-tools** — `list_skills` and `search_skills` on every
   endpoint, plus `tags` on skills for organising and filtering
 - 🤖 **MCP authoring** — agents can create and refine their own skills over MCP
 - 🔧 **Tool modes** — advertise skills as one tool each (`per-skill`) or a
-  single `load_skill` loader, globally or per profile
+  single `load_skill` loader, globally or per workspace
 - 📁 **Two skill formats** — a flat `<name>.md` file, or a
   `<name>/SKILL.md` directory (Claude Code convention) with supporting files
 - 🔌 **HTTP and stdio** transports
@@ -87,7 +87,7 @@ docker compose up --build      # mounts ./data at /data, serves on :3000
 Point an MCP client at the streamable-HTTP endpoint:
 
 - All skills: `http://localhost:3000/mcp`
-- A profile: `http://localhost:3000/mcp/p/<slug>`
+- A workspace: `http://localhost:3000/mcp/w/<slug>`
 
 Send the bearer token as `Authorization: Bearer <token>`.
 
@@ -99,8 +99,8 @@ Run the packaged stdio entry (installed as the `mcp-skills-stdio` bin):
 # all skills
 mcp-skills-stdio --data-dir /path/to/data
 
-# only a profile's skills
-mcp-skills-stdio --data-dir /path/to/data --profile <slug>
+# only a workspace's skills
+mcp-skills-stdio --data-dir /path/to/data --workspace <slug>
 ```
 
 Example Claude Desktop / MCP client config:
@@ -110,7 +110,7 @@ Example Claude Desktop / MCP client config:
   "mcpServers": {
     "skills": {
       "command": "mcp-skills-stdio",
-      "args": ["--data-dir", "/path/to/data", "--profile", "backend"]
+      "args": ["--data-dir", "/path/to/data", "--workspace", "backend"]
     }
   }
 }
@@ -144,9 +144,9 @@ An optional `tags` key (a comma-separated string or a YAML list) organises
 skills and feeds the `search_skills` filter. Unknown frontmatter keys are
 preserved across round-trips.
 
-## Profiles
+## Workspaces
 
-A profile is a JSON file at `DATA_DIR/config/profiles/<slug>.json`:
+A workspace is a JSON file at `DATA_DIR/config/workspaces/<slug>.json`:
 
 ```json
 {
@@ -158,10 +158,10 @@ A profile is a JSON file at `DATA_DIR/config/profiles/<slug>.json`:
 }
 ```
 
-It is served at `/mcp/p/backend` (HTTP) and via `--profile backend` (stdio).
-Disabled profiles return 404. An optional `skillToolMode` (`per-skill` or
-`loader`) overrides the global default for this profile only. Manage profiles
-from the **Profiles** page in the web UI, or edit the files directly — changes
+It is served at `/mcp/w/backend` (HTTP) and via `--workspace backend` (stdio).
+Disabled workspaces return 404. An optional `skillToolMode` (`per-skill` or
+`loader`) overrides the global default for this workspace only. Manage workspaces
+from the **Workspaces** page in the web UI, or edit the files directly — changes
 are picked up automatically.
 
 ## Configuration
@@ -172,8 +172,8 @@ Everything lives under `DATA_DIR` (default `./data`):
 data/
 ├── config/
 │   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates
-│   └── profiles/
-│       └── <slug>.json        # one file per profile
+│   └── workspaces/
+│       └── <slug>.json        # one file per workspace
 └── skills/
     ├── <name>.md              # flat-file skill
     └── <name>/                # directory-format skill
@@ -202,7 +202,7 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/status` | Version, uptime, skill/profile counts, auth mode, port |
+| `GET` | `/api/status` | Version, uptime, skill/workspace counts, auth mode, port |
 | `GET` | `/api/settings` | Read settings (auth/authoring toggles, tool mode, live updates) |
 | `PATCH` | `/api/settings` | Update `authoringEnabled` / `skillToolMode` / `httpLiveUpdates` |
 | `GET` | `/api/skills` | List skills (summaries) |
@@ -217,14 +217,14 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 | `POST` | `/api/skills/:name/folders` | Create an empty sub-folder |
 | `POST` | `/api/skills/:name/files/move` | Rename / move a file or folder |
 | `DELETE` | `/api/skills/:name/files?path=` | Delete a file or folder |
-| `GET` | `/api/profiles` | List profiles |
-| `POST` | `/api/profiles` | Create a profile |
-| `GET` | `/api/profiles/:slug` | Get a profile |
-| `PATCH` | `/api/profiles/:slug` | Update a profile |
-| `DELETE` | `/api/profiles/:slug` | Delete a profile |
+| `GET` | `/api/workspaces` | List workspaces |
+| `POST` | `/api/workspaces` | Create a workspace |
+| `GET` | `/api/workspaces/:slug` | Get a workspace |
+| `PATCH` | `/api/workspaces/:slug` | Update a workspace |
+| `DELETE` | `/api/workspaces/:slug` | Delete a workspace |
 | `POST` | `/api/reload` | Re-read all config from disk |
 | `ALL` | `/mcp` | MCP endpoint — all skills |
-| `ALL` | `/mcp/p/:slug` | MCP endpoint — a profile's skills |
+| `ALL` | `/mcp/w/:slug` | MCP endpoint — a workspace's skills |
 
 ## Architecture
 

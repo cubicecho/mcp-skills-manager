@@ -1,12 +1,12 @@
 import type {
-  CreateProfileRequest,
   CreateSkillFolderRequest,
   CreateSkillRequest,
+  CreateWorkspaceRequest,
   ImportSkillRequest,
   MoveSkillPathRequest,
-  UpdateProfileRequest,
   UpdateSettingsRequest,
   UpdateSkillRequest,
+  UpdateWorkspaceRequest,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,8 +17,8 @@ export const queryKeys = {
   settings: ['settings'] as const,
   skills: ['skills'] as const,
   skill: (name: string) => ['skills', name] as const,
-  profiles: ['profiles'] as const,
-  profile: (slug: string) => ['profiles', slug] as const,
+  workspaces: ['workspaces'] as const,
+  workspace: (slug: string) => ['workspaces', slug] as const,
 };
 
 // --- queries ---
@@ -64,10 +64,10 @@ export function useSkillFileContent(name: string, filePath: string | null) {
   });
 }
 
-export function useProfiles() {
+export function useWorkspaces() {
   return useQuery({
-    queryKey: queryKeys.profiles,
-    queryFn: api.listProfiles,
+    queryKey: queryKeys.workspaces,
+    queryFn: api.listWorkspaces,
     refetchInterval: 10_000,
   });
 }
@@ -174,41 +174,41 @@ export function useDeleteSkill() {
     mutationFn: (name: string) => api.deleteSkill(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
       queryClient.invalidateQueries({ queryKey: queryKeys.status });
     },
   });
 }
 
-// --- profile mutations ---
+// --- workspace mutations ---
 
-export function useCreateProfile() {
+export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateProfileRequest) => api.createProfile(body),
+    mutationFn: (body: CreateWorkspaceRequest) => api.createWorkspace(body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
       queryClient.invalidateQueries({ queryKey: queryKeys.status });
     },
   });
 }
 
-export function useUpdateProfile(slug: string) {
+export function useUpdateWorkspace(slug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: UpdateProfileRequest) => api.updateProfile(slug, body),
+    mutationFn: (body: UpdateWorkspaceRequest) => api.updateWorkspace(slug, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
     },
   });
 }
 
-export function useDeleteProfile() {
+export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (slug: string) => api.deleteProfile(slug),
+    mutationFn: (slug: string) => api.deleteWorkspace(slug),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
       queryClient.invalidateQueries({ queryKey: queryKeys.status });
     },
   });

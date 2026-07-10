@@ -1,18 +1,25 @@
-import type { ProfileConfig, ProfileStatus, ServerStatus, Skill, SkillDetail, SkillSummary } from '@mcp-skills/shared';
+import type {
+  ServerStatus,
+  Skill,
+  SkillDetail,
+  SkillSummary,
+  WorkspaceConfig,
+  WorkspaceStatus,
+} from '@mcp-skills/shared';
 import {
-  createProfileRequestSchema,
   createSkillFolderRequestSchema,
   createSkillRequestSchema,
+  createWorkspaceRequestSchema,
   importSkillRequestSchema,
   moveSkillPathRequestSchema,
-  profileConfigSchema,
-  profileSlugSchema,
   skillNameSchema,
   slugify,
   slugifySkillName,
-  updateProfileRequestSchema,
   updateSettingsRequestSchema,
   updateSkillRequestSchema,
+  updateWorkspaceRequestSchema,
+  workspaceConfigSchema,
+  workspaceSlugSchema,
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
 import { Router } from 'express';
@@ -65,7 +72,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       version: SERVER_VERSION,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       skillCount: store.getSkills().length,
-      profileCount: store.getProfiles().length,
+      workspaceCount: store.getWorkspaces().length,
       // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
       // matching the auth middleware in app.ts.
       authEnabled: store.getSettings().authEnabled && !authDisabledByEnv(),
@@ -217,42 +224,42 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.json(toDetail(store, skill));
   });
 
-  // --- profiles ---
+  // --- workspaces ---
 
-  const profilePath = (slug: string): string => `/mcp/p/${slug}`;
-  const toProfileStatus = (profile: ProfileConfig): ProfileStatus => ({
-    ...profile,
-    path: profilePath(profile.slug),
-    resolvedCount: store.getSkillsForProfile(profile).length,
+  const workspacePath = (slug: string): string => `/mcp/w/${slug}`;
+  const toWorkspaceStatus = (workspace: WorkspaceConfig): WorkspaceStatus => ({
+    ...workspace,
+    path: workspacePath(workspace.slug),
+    resolvedCount: store.getSkillsForWorkspace(workspace).length,
   });
 
-  const requireProfile = (slug: string): ProfileConfig => {
-    const profile = store.getProfile(slug);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profile "${slug}"`);
+  const requireWorkspace = (slug: string): WorkspaceConfig => {
+    const workspace = store.getWorkspace(slug);
+    if (!workspace) {
+      throw new HttpError(404, `Unknown workspace "${slug}"`);
     }
-    return profile;
+    return workspace;
   };
 
   const requireValidSlug = (slug: string): string => {
-    const parsed = profileSlugSchema.safeParse(slug);
+    const parsed = workspaceSlugSchema.safeParse(slug);
     if (!parsed.success) {
-      throw new HttpError(400, `Invalid profile slug "${slug}"`, 'derive a name that yields a valid URL slug');
+      throw new HttpError(400, `Invalid workspace slug "${slug}"`, 'derive a name that yields a valid URL slug');
     }
     return parsed.data;
   };
 
-  router.get('/profiles', (_req, res) => {
-    res.json(store.getProfiles().map(toProfileStatus));
+  router.get('/workspaces', (_req, res) => {
+    res.json(store.getWorkspaces().map(toWorkspaceStatus));
   });
 
-  router.post('/profiles', async (req, res) => {
-    const request = createProfileRequestSchema.parse(req.body);
+  router.post('/workspaces', async (req, res) => {
+    const request = createWorkspaceRequestSchema.parse(req.body);
     const slug = requireValidSlug(request.slug ?? slugify(request.name));
-    if (store.getProfile(slug)) {
-      throw new HttpError(409, `Profile "${slug}" already exists`);
+    if (store.getWorkspace(slug)) {
+      throw new HttpError(409, `Workspace "${slug}" already exists`);
     }
-    const config = profileConfigSchema.parse({
+    const config = workspaceConfigSchema.parse({
       name: request.name,
       slug,
       enabled: request.enabled ?? true,
@@ -260,28 +267,28 @@ export function createApiRouter(deps: ApiDeps): Router {
       skills: request.skills ?? [],
       skillToolMode: request.skillToolMode,
     });
-    const saved = await store.saveProfile(config);
-    res.status(201).json(toProfileStatus(saved));
+    const saved = await store.saveWorkspace(config);
+    res.status(201).json(toWorkspaceStatus(saved));
   });
 
-  router.get('/profiles/:slug', (req, res) => {
-    res.json(toProfileStatus(requireProfile(req.params.slug)));
+  router.get('/workspaces/:slug', (req, res) => {
+    res.json(toWorkspaceStatus(requireWorkspace(req.params.slug)));
   });
 
-  router.patch('/profiles/:slug', async (req, res) => {
-    const existing = requireProfile(req.params.slug);
-    const update = updateProfileRequestSchema.parse(req.body);
+  router.patch('/workspaces/:slug', async (req, res) => {
+    const existing = requireWorkspace(req.params.slug);
+    const update = updateWorkspaceRequestSchema.parse(req.body);
     // Auto-slug: renaming re-derives the slug (and thus the URL). Keep the old
     // slug when the name is unchanged so member-only edits never move the URL.
     const name = update.name ?? existing.name;
     const slug = update.name !== undefined ? requireValidSlug(slugify(name)) : existing.slug;
-    if (slug !== existing.slug && store.getProfile(slug)) {
-      throw new HttpError(409, `Profile "${slug}" already exists`);
+    if (slug !== existing.slug && store.getWorkspace(slug)) {
+      throw new HttpError(409, `Workspace "${slug}" already exists`);
     }
     // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.
     const skillToolMode =
       update.skillToolMode === undefined ? existing.skillToolMode : (update.skillToolMode ?? undefined);
-    const next = profileConfigSchema.parse({
+    const next = workspaceConfigSchema.parse({
       ...existing,
       name,
       slug,
@@ -290,16 +297,16 @@ export function createApiRouter(deps: ApiDeps): Router {
       skills: update.skills ?? existing.skills,
       skillToolMode,
     });
-    const saved = await store.saveProfile(next);
+    const saved = await store.saveWorkspace(next);
     if (slug !== existing.slug) {
-      await store.deleteProfile(existing.slug);
+      await store.deleteWorkspace(existing.slug);
     }
-    res.json(toProfileStatus(saved));
+    res.json(toWorkspaceStatus(saved));
   });
 
-  router.delete('/profiles/:slug', async (req, res) => {
-    requireProfile(req.params.slug);
-    await store.deleteProfile(req.params.slug);
+  router.delete('/workspaces/:slug', async (req, res) => {
+    requireWorkspace(req.params.slug);
+    await store.deleteWorkspace(req.params.slug);
     res.status(204).end();
   });
 
@@ -307,7 +314,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.post('/reload', async (_req, res) => {
     const state = await store.reload();
-    res.json({ reloaded: true, skillCount: state.skills.length, profileCount: state.profiles.length });
+    res.json({ reloaded: true, skillCount: state.skills.length, workspaceCount: state.workspaces.length });
   });
 
   return router;

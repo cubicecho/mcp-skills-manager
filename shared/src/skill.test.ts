@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { slugify } from './profile.ts';
 import { skillNameSchema, skillSchema, slugifySkillName } from './skill.ts';
+import { slugify } from './workspace.ts';
 
 describe('slugifySkillName', () => {
   it('lowercases and dashes free-form titles', () => {
@@ -31,7 +31,7 @@ describe('slugifySkillName', () => {
   });
 });
 
-describe('slugify (profiles) matches slugifySkillName behaviour', () => {
+describe('slugify (workspaces) matches slugifySkillName behaviour', () => {
   it('produces the same slug for the same input', () => {
     expect(slugify('Back End Team')).toBe(slugifySkillName('Back End Team'));
   });

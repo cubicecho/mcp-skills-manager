@@ -324,19 +324,19 @@ describe('ConfigStore skillToolMode resolution', () => {
     expect(store.getSettingsView().skillToolMode).toBe('loader');
   });
 
-  it('inherits the global mode for a profile with no override, and overrides when set', async () => {
+  it('inherits the global mode for a workspace with no override, and overrides when set', async () => {
     await store.updateSettings({ skillToolMode: 'loader' });
-    const inheriting = await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: [] });
-    expect(store.getSkillToolModeForProfile(inheriting)).toBe('loader'); // inherits global
+    const inheriting = await store.saveWorkspace({ name: 'A', slug: 'a', enabled: true, skills: [] });
+    expect(store.getSkillToolModeForWorkspace(inheriting)).toBe('loader'); // inherits global
 
-    const pinned = await store.saveProfile({
+    const pinned = await store.saveWorkspace({
       name: 'B',
       slug: 'b',
       enabled: true,
       skills: [],
       skillToolMode: 'per-skill',
     });
-    expect(store.getSkillToolModeForProfile(pinned)).toBe('per-skill'); // override wins over global
+    expect(store.getSkillToolModeForWorkspace(pinned)).toBe('per-skill'); // override wins over global
   });
 
   it('omits the auth token from the settings view', async () => {
@@ -346,7 +346,7 @@ describe('ConfigStore skillToolMode resolution', () => {
   });
 });
 
-describe('ConfigStore profile membership integrity', () => {
+describe('ConfigStore workspace membership integrity', () => {
   let dir: string;
   let store: ConfigStore;
 
@@ -361,38 +361,91 @@ describe('ConfigStore profile membership integrity', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('drops a deleted skill from every profile that referenced it', async () => {
+  it('drops a deleted skill from every workspace that referenced it', async () => {
     await store.createSkill({ name: 'keep', description: 'k', body: '# keep' });
     await store.createSkill({ name: 'gone', description: 'g', body: '# gone' });
-    await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: ['keep', 'gone'] });
-    await store.saveProfile({ name: 'B', slug: 'b', enabled: true, skills: ['gone'] });
+    await store.saveWorkspace({ name: 'A', slug: 'a', enabled: true, skills: ['keep', 'gone'] });
+    await store.saveWorkspace({ name: 'B', slug: 'b', enabled: true, skills: ['gone'] });
 
     await store.deleteSkill('gone');
 
-    expect(store.getProfile('a')?.skills).toEqual(['keep']);
-    expect(store.getProfile('b')?.skills).toEqual([]);
+    expect(store.getWorkspace('a')?.skills).toEqual(['keep']);
+    expect(store.getWorkspace('b')?.skills).toEqual([]);
   });
 
-  it('retargets profile references to the new name when a skill is renamed', async () => {
+  it('retargets workspace references to the new name when a skill is renamed', async () => {
     await store.createSkill({ name: 'before', description: 'b', body: '# before' });
     await store.createSkill({ name: 'other', description: 'o', body: '# other' });
-    await store.saveProfile({ name: 'A', slug: 'a', enabled: true, skills: ['other', 'before'] });
+    await store.saveWorkspace({ name: 'A', slug: 'a', enabled: true, skills: ['other', 'before'] });
 
     await store.renameSkill('before', 'after');
 
-    expect(store.getProfile('a')?.skills).toEqual(['other', 'after']);
+    expect(store.getWorkspace('a')?.skills).toEqual(['other', 'after']);
   });
 
-  it('silently prunes members that no longer exist when a profile is saved', async () => {
+  it('silently prunes members that no longer exist when a workspace is saved', async () => {
     await store.createSkill({ name: 'real', description: 'r', body: '# real' });
-    const saved = await store.saveProfile({
+    const saved = await store.saveWorkspace({
       name: 'A',
       slug: 'a',
       enabled: true,
       skills: ['real', 'ghost'],
     });
     expect(saved.skills).toEqual(['real']);
-    expect(store.getProfile('a')?.skills).toEqual(['real']);
+    expect(store.getWorkspace('a')?.skills).toEqual(['real']);
+  });
+});
+
+describe('ConfigStore legacy profiles → workspaces migration', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-migrate-'));
+  });
+
+  afterEach(async () => {
+    await store?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const legacyWorkspace = (slug: string) =>
+    Buffer.from(JSON.stringify({ name: slug, slug, enabled: true, skills: [] }));
+
+  it('moves config/profiles/*.json into config/workspaces on init and removes the legacy dir', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(path.join(legacyDir, 'backend.json'), legacyWorkspace('backend'));
+
+    store = new ConfigStore(dir);
+    await store.init();
+
+    expect(store.getWorkspace('backend')).toBeDefined();
+    expect(existsSync(path.join(dir, 'config', 'workspaces', 'backend.json'))).toBe(true);
+    expect(existsSync(legacyDir)).toBe(false);
+  });
+
+  it('does not clobber an existing workspace of the same slug and keeps the legacy file', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    const workspacesDir = path.join(dir, 'config', 'workspaces');
+    await mkdir(legacyDir, { recursive: true });
+    await mkdir(workspacesDir, { recursive: true });
+    // Same slug in both places, differing content — the workspaces copy must win.
+    await writeFile(
+      path.join(workspacesDir, 'dup.json'),
+      Buffer.from(JSON.stringify({ name: 'new', slug: 'dup', enabled: true, skills: [] })),
+    );
+    await writeFile(
+      path.join(legacyDir, 'dup.json'),
+      Buffer.from(JSON.stringify({ name: 'old', slug: 'dup', enabled: true, skills: [] })),
+    );
+
+    store = new ConfigStore(dir);
+    await store.init();
+
+    expect(store.getWorkspace('dup')?.name).toBe('new');
+    // The un-migratable legacy file is left in place (dir not removed).
+    expect(existsSync(path.join(legacyDir, 'dup.json'))).toBe(true);
   });
 });
 

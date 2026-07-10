@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  ProfileConfig,
   SettingsFile,
   SettingsView,
   Skill,
@@ -12,14 +11,15 @@ import type {
   SkillFileRead,
   SkillFrontmatter,
   SkillUsage,
+  WorkspaceConfig,
 } from '@mcp-skills/shared';
 import {
   normalizeTags,
-  profileConfigSchema,
   settingsFileSchema,
   skillNameSchema,
   skillSchema,
   skillUsageSchema,
+  workspaceConfigSchema,
 } from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
@@ -30,7 +30,7 @@ import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 export interface ConfigState {
   settings: SettingsFile;
   skills: Skill[];
-  profiles: ProfileConfig[];
+  workspaces: WorkspaceConfig[];
 }
 
 const WATCH_DEBOUNCE_MS = 300;
@@ -80,15 +80,15 @@ Both start with YAML frontmatter carrying \`name\` and \`description\`, followed
 the Markdown body. Edit them here in the web UI, or on disk — changes are picked
 up automatically.
 
-## Profiles
+## Workspaces
 
-Group a subset of skills into a **profile** to serve them at their own endpoint,
-\`/mcp/p/<slug>\`. This skill belongs to the seeded "Examples" profile.
+Group a subset of skills into a **workspace** to serve them at their own endpoint,
+\`/mcp/w/<slug>\`. This skill belongs to the seeded "Examples" workspace.
 `;
 
 /**
  * Owns the flat, hand-editable state under DATA_DIR:
- *  - config/settings.json and config/profiles/<slug>.json (JSON)
+ *  - config/settings.json and config/workspaces/<slug>.json (JSON)
  *  - skills/<name>.md or skills/<name>/SKILL.md (Markdown + YAML frontmatter)
  * All writes are atomic (tmp file + rename). Emits a typed 'change' event when
  * anything changes on disk (debounced chokidar watcher over both trees).
@@ -96,12 +96,12 @@ Group a subset of skills into a **profile** to serve them at their own endpoint,
 export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   readonly dataDir: string;
   readonly configDir: string;
-  readonly profilesDir: string;
+  readonly workspacesDir: string;
   readonly skillsDir: string;
 
   private settings: SettingsFile = settingsFileSchema.parse({});
   private skills = new Map<string, Skill>();
-  private profiles = new Map<string, ProfileConfig>();
+  private workspaces = new Map<string, WorkspaceConfig>();
   private watcher: FSWatcher | null = null;
   private watchDebounce: NodeJS.Timeout | null = null;
   /** In-memory usage stats, authoritative once loaded; flushed to usage.json (unwatched) after each record. */
@@ -119,15 +119,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.setMaxListeners(0);
     this.dataDir = dataDir;
     this.configDir = path.join(dataDir, 'config');
-    this.profilesDir = path.join(this.configDir, 'profiles');
+    this.workspacesDir = path.join(this.configDir, 'workspaces');
     this.skillsDir = path.join(dataDir, 'skills');
     this.usageFile = path.join(dataDir, 'usage.json');
   }
 
   /** Create directories, seed defaults on first run and load everything. */
   async init(): Promise<void> {
-    await mkdir(this.profilesDir, { recursive: true });
+    await mkdir(this.workspacesDir, { recursive: true });
     await mkdir(this.skillsDir, { recursive: true });
+    await this.migrateLegacyWorkspaces();
     await this.loadAll();
     // Usage lives outside the watched dirs and stays authoritative in memory, so it is loaded
     // once here rather than in loadAll() (which reruns on every disk-change reload).
@@ -136,27 +137,58 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * On a fresh install — no skills and no profiles on disk — write a starter
-   * skill and a profile that references it, so the server, web UI, and MCP
+   * One-time migration: "profiles" were renamed to "workspaces", including their
+   * on-disk config directory (`config/profiles` → `config/workspaces`). If an
+   * install still has the legacy `config/profiles` dir, move each `*.json` into
+   * `config/workspaces` (without clobbering a file already there) and remove the
+   * emptied legacy dir. Safe to run every startup — it no-ops once migrated.
+   */
+  private async migrateLegacyWorkspaces(): Promise<void> {
+    const legacyDir = path.join(this.configDir, 'profiles');
+    if (!existsSync(legacyDir)) {
+      return;
+    }
+    const files = (await readdir(legacyDir)).filter((f) => f.endsWith('.json'));
+    let moved = 0;
+    for (const file of files) {
+      const target = path.join(this.workspacesDir, file);
+      if (existsSync(target)) {
+        continue; // a workspace of the same slug already exists; leave the legacy copy in place
+      }
+      await rename(path.join(legacyDir, file), target);
+      moved += 1;
+    }
+    // Drop the legacy dir only once it holds nothing we'd lose.
+    if ((await readdir(legacyDir)).length === 0) {
+      await rm(legacyDir, { recursive: true, force: true });
+    }
+    if (moved > 0) {
+      console.log(`Migrated ${moved} profile config file(s) to config/workspaces.`);
+    }
+  }
+
+  /**
+   * On a fresh install — no skills and no workspaces on disk — write a starter
+   * skill and a workspace that references it, so the server, web UI, and MCP
    * endpoints all have working content to show immediately. Once anything
    * exists (even if the user later deletes it all), this never runs again for
    * that state, so it won't fight a deliberately emptied setup mid-session.
    */
   private async seedDefaults(): Promise<void> {
-    if (this.skills.size > 0 || this.profiles.size > 0) {
+    if (this.skills.size > 0 || this.workspaces.size > 0) {
       return;
     }
-    console.log('No skills or profiles found; seeding a starter skill and profile.');
+    console.log('No skills or workspaces found; seeding a starter skill and workspace.');
     await this.createSkill({
       name: 'getting-started',
       description: 'How MCP Skills Manager works and how to author your own skills.',
       body: GETTING_STARTED_BODY,
     });
-    await this.saveProfile(
-      profileConfigSchema.parse({
+    await this.saveWorkspace(
+      workspaceConfigSchema.parse({
         name: 'Examples',
         slug: 'examples',
-        description: 'A starter profile. Edit or delete it once you add your own skills.',
+        description: 'A starter workspace. Edit or delete it once you add your own skills.',
         skills: ['getting-started'],
       }),
     );
@@ -210,7 +242,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return {
       settings: this.settings,
       skills: this.getSkills(),
-      profiles: this.getProfiles(),
+      workspaces: this.getWorkspaces(),
     };
   }
 
@@ -252,9 +284,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.settings.httpLiveUpdates;
   }
 
-  /** The effective skill-tool mode for a profile endpoint: its override if set, else the global default. */
-  getSkillToolModeForProfile(profile: ProfileConfig): SettingsFile['skillToolMode'] {
-    return profile.skillToolMode ?? this.settings.skillToolMode;
+  /** The effective skill-tool mode for a workspace endpoint: its override if set, else the global default. */
+  getSkillToolModeForWorkspace(workspace: WorkspaceConfig): SettingsFile['skillToolMode'] {
+    return workspace.skillToolMode ?? this.settings.skillToolMode;
   }
 
   /** The token-free subset of settings exposed over the management API. */
@@ -271,11 +303,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.skills.get(name);
   }
 
-  /** The skills belonging to a profile, in the profile's declared order, skipping any that no longer exist. */
-  getSkillsForProfile(profile: ProfileConfig): Skill[] {
+  /** The skills belonging to a workspace, in the workspace's declared order, skipping any that no longer exist. */
+  getSkillsForWorkspace(workspace: WorkspaceConfig): Skill[] {
     const seen = new Set<string>();
     const result: Skill[] = [];
-    for (const name of profile.skills) {
+    for (const name of workspace.skills) {
       if (seen.has(name)) {
         continue;
       }
@@ -430,7 +462,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       this.skills.delete(name);
       const reloaded = await this.reloadSkill(relPath, 'dir');
       this.retargetUsage(name, target);
-      await this.retargetProfileSkill(name, target);
+      await this.retargetWorkspaceSkill(name, target);
       return reloaded;
     }
     const relPath = `${target}.md`;
@@ -442,7 +474,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.skills.delete(name);
     const reloaded = await this.reloadSkill(relPath, 'file');
     this.retargetUsage(name, target);
-    await this.retargetProfileSkill(name, target);
+    await this.retargetWorkspaceSkill(name, target);
     return reloaded;
   }
 
@@ -456,11 +488,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
-  /** Point every profile that listed `from` at `to`, preserving position (used when a skill is renamed). */
-  private async retargetProfileSkill(from: string, to: string): Promise<void> {
-    for (const profile of this.getProfiles()) {
-      if (profile.skills.includes(from)) {
-        await this.saveProfile({ ...profile, skills: profile.skills.map((s) => (s === from ? to : s)) });
+  /** Point every workspace that listed `from` at `to`, preserving position (used when a skill is renamed). */
+  private async retargetWorkspaceSkill(from: string, to: string): Promise<void> {
+    for (const workspace of this.getWorkspaces()) {
+      if (workspace.skills.includes(from)) {
+        await this.saveWorkspace({ ...workspace, skills: workspace.skills.map((s) => (s === from ? to : s)) });
       }
     }
   }
@@ -479,10 +511,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     } else {
       await rm(path.join(this.skillsDir, existing.path), { force: true });
     }
-    // Drop the deleted skill from any profile that referenced it (saveProfile prunes it now that it is gone).
-    for (const profile of this.getProfiles()) {
-      if (profile.skills.includes(name)) {
-        await this.saveProfile(profile);
+    // Drop the deleted skill from any workspace that referenced it (saveWorkspace prunes it now that it is gone).
+    for (const workspace of this.getWorkspaces()) {
+      if (workspace.skills.includes(name)) {
+        await this.saveWorkspace(workspace);
       }
     }
   }
@@ -721,55 +753,55 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
-  // --- profiles ---
+  // --- workspaces ---
 
-  getProfiles(): ProfileConfig[] {
-    return [...this.profiles.values()].sort((a, b) => a.name.localeCompare(b.name));
+  getWorkspaces(): WorkspaceConfig[] {
+    return [...this.workspaces.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  getProfile(slug: string): ProfileConfig | undefined {
-    return this.profiles.get(slug);
+  getWorkspace(slug: string): WorkspaceConfig | undefined {
+    return this.workspaces.get(slug);
   }
 
-  async saveProfile(config: ProfileConfig): Promise<ProfileConfig> {
-    const parsed = profileConfigSchema.parse(config);
-    // A profile only lists live skills: silently drop any member that no longer exists.
-    const pruned: ProfileConfig = { ...parsed, skills: parsed.skills.filter((name) => this.skills.has(name)) };
-    this.profiles.set(pruned.slug, pruned);
-    await this.writeJsonAtomic(this.profileFile(pruned.slug), pruned);
+  async saveWorkspace(config: WorkspaceConfig): Promise<WorkspaceConfig> {
+    const parsed = workspaceConfigSchema.parse(config);
+    // A workspace only lists live skills: silently drop any member that no longer exists.
+    const pruned: WorkspaceConfig = { ...parsed, skills: parsed.skills.filter((name) => this.skills.has(name)) };
+    this.workspaces.set(pruned.slug, pruned);
+    await this.writeJsonAtomic(this.workspaceFile(pruned.slug), pruned);
     return pruned;
   }
 
-  async deleteProfile(slug: string): Promise<void> {
-    this.profiles.delete(slug);
-    await rm(this.profileFile(slug), { force: true });
+  async deleteWorkspace(slug: string): Promise<void> {
+    this.workspaces.delete(slug);
+    await rm(this.workspaceFile(slug), { force: true });
   }
 
-  /** Append a skill to a profile's member list (idempotent). Used when an agent authors a skill via a profile endpoint. */
-  async addSkillToProfile(slug: string, name: string): Promise<ProfileConfig> {
-    const profile = this.profiles.get(slug);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profile "${slug}"`);
+  /** Append a skill to a workspace's member list (idempotent). Used when an agent authors a skill via a workspace endpoint. */
+  async addSkillToWorkspace(slug: string, name: string): Promise<WorkspaceConfig> {
+    const workspace = this.workspaces.get(slug);
+    if (!workspace) {
+      throw new HttpError(404, `Unknown workspace "${slug}"`);
     }
-    if (profile.skills.includes(name)) {
-      return profile;
+    if (workspace.skills.includes(name)) {
+      return workspace;
     }
-    return this.saveProfile({ ...profile, skills: [...profile.skills, name] });
+    return this.saveWorkspace({ ...workspace, skills: [...workspace.skills, name] });
   }
 
-  /** Remove a skill from a profile's member list (no-op if absent or the profile is gone). */
-  async removeSkillFromProfile(slug: string, name: string): Promise<void> {
-    const profile = this.profiles.get(slug);
-    if (!profile || !profile.skills.includes(name)) {
+  /** Remove a skill from a workspace's member list (no-op if absent or the workspace is gone). */
+  async removeSkillFromWorkspace(slug: string, name: string): Promise<void> {
+    const workspace = this.workspaces.get(slug);
+    if (!workspace || !workspace.skills.includes(name)) {
       return;
     }
-    await this.saveProfile({ ...profile, skills: profile.skills.filter((s) => s !== name) });
+    await this.saveWorkspace({ ...workspace, skills: workspace.skills.filter((s) => s !== name) });
   }
 
   // --- internals ---
 
-  private profileFile(slug: string): string {
-    return path.join(this.profilesDir, `${slug}.json`);
+  private workspaceFile(slug: string): string {
+    return path.join(this.workspacesDir, `${slug}.json`);
   }
 
   private async reloadSkill(relPath: string, format: Skill['format']): Promise<Skill> {
@@ -798,7 +830,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private async loadAll(): Promise<void> {
     this.settings = await this.loadSettings();
     this.skills = await this.loadSkills();
-    this.profiles = await this.loadProfiles();
+    this.workspaces = await this.loadWorkspaces();
   }
 
   private async loadSettings(): Promise<SettingsFile> {
@@ -919,29 +951,29 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return out.sort((a, b) => a.path.localeCompare(b.path));
   }
 
-  private async loadProfiles(): Promise<Map<string, ProfileConfig>> {
-    const profiles = new Map<string, ProfileConfig>();
-    if (!existsSync(this.profilesDir)) {
-      return profiles;
+  private async loadWorkspaces(): Promise<Map<string, WorkspaceConfig>> {
+    const workspaces = new Map<string, WorkspaceConfig>();
+    if (!existsSync(this.workspacesDir)) {
+      return workspaces;
     }
-    const files = (await readdir(this.profilesDir)).filter((f) => f.endsWith('.json'));
+    const files = (await readdir(this.workspacesDir)).filter((f) => f.endsWith('.json'));
     for (const file of files.sort()) {
-      const fullPath = path.join(this.profilesDir, file);
+      const fullPath = path.join(this.workspacesDir, file);
       try {
         const config = this.parseJson(
           fullPath,
           await readFile(fullPath, 'utf8'),
-          profileConfigSchema.parse.bind(profileConfigSchema),
+          workspaceConfigSchema.parse.bind(workspaceConfigSchema),
         );
         if (`${config.slug}.json` !== file) {
-          console.warn(`Profile config ${fullPath} has slug "${config.slug}" that does not match its filename`);
+          console.warn(`Workspace config ${fullPath} has slug "${config.slug}" that does not match its filename`);
         }
-        profiles.set(config.slug, config);
+        workspaces.set(config.slug, config);
       } catch (err) {
-        console.error(`Ignoring invalid profile config ${fullPath}: ${errorMessage(err)}`);
+        console.error(`Ignoring invalid workspace config ${fullPath}: ${errorMessage(err)}`);
       }
     }
-    return profiles;
+    return workspaces;
   }
 
   private parseJson<T>(file: string, raw: string, parse: (value: unknown) => T): T {

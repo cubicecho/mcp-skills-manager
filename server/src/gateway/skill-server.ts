@@ -304,7 +304,7 @@ function completeFrom(candidates: string[], value: string) {
 export interface SkillServerDeps {
   /** Resolved fresh per request so config edits take effect without a restart. */
   getSkills: () => Skill[];
-  /** Endpoint label used in the MCP server info (e.g. "all skills" or a profile slug). */
+  /** Endpoint label used in the MCP server info (e.g. "all skills" or a workspace slug). */
   label: string;
   /**
    * When set, this endpoint also exposes skill-authoring tools (create/update/…),
@@ -548,7 +548,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     // Bundled supporting file.
     const skillName = decodeResourcePart(rest.slice(0, slash), uri);
     const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
-    // Guard visibility: only skills served by *this* endpoint (root/profile) are reachable.
+    // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
     if (!findByName(skillName) || !deps.readSupportingFile) {
       throw resourceNotFound(uri);
     }

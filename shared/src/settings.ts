@@ -35,7 +35,7 @@ export const settingsFileSchema = z
      * behind the same bearer auth as the rest of `/mcp`.
      */
     authoringEnabled: z.boolean().default(true),
-    /** Default for how skills are advertised as MCP tools; a profile may override it. See skillToolModeSchema. */
+    /** Default for how skills are advertised as MCP tools; a workspace may override it. See skillToolModeSchema. */
     skillToolMode: skillToolModeSchema.default('per-skill'),
     /**
      * Serve the HTTP `/mcp` endpoints in **stateful** mode so the server can push

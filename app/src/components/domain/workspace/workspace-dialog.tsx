@@ -1,4 +1,4 @@
-import type { ProfileStatus, SkillToolMode } from '@mcp-skills/shared';
+import type { SkillToolMode, WorkspaceStatus } from '@mcp-skills/shared';
 import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateProfile, useSkills, useUpdateProfile } from '@/lib/queries';
+import { useCreateWorkspace, useSkills, useUpdateWorkspace } from '@/lib/queries';
 import { SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
 
@@ -24,24 +24,24 @@ const INHERIT = 'inherit';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Provided when editing an existing profile; omitted when creating. */
-  profile?: ProfileStatus;
+  /** Provided when editing an existing workspace; omitted when creating. */
+  workspace?: WorkspaceStatus;
 }
 
-/** Create or edit a profile: name, description, enabled flag, and the member skill set. */
-export function ProfileDialog({ open, onOpenChange, profile }: Props) {
-  const isEdit = Boolean(profile);
+/** Create or edit a workspace: name, description, enabled flag, and the member skill set. */
+export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
+  const isEdit = Boolean(workspace);
   const { data: skills } = useSkills();
-  const createProfile = useCreateProfile();
-  const updateProfile = useUpdateProfile(profile?.slug ?? '');
-  const pending = createProfile.isPending || updateProfile.isPending;
+  const createWorkspace = useCreateWorkspace();
+  const updateWorkspace = useUpdateWorkspace(workspace?.slug ?? '');
+  const pending = createWorkspace.isPending || updateWorkspace.isPending;
 
-  const [name, setName] = useState(profile?.name ?? '');
-  const [description, setDescription] = useState(profile?.description ?? '');
-  const [enabled, setEnabled] = useState(profile?.enabled ?? true);
-  const [members, setMembers] = useState<Set<string>>(new Set(profile?.skills ?? []));
-  // `inherit` (no override) vs a concrete skill-tool mode for this profile's endpoint.
-  const [toolMode, setToolMode] = useState<SkillToolMode | typeof INHERIT>(profile?.skillToolMode ?? INHERIT);
+  const [name, setName] = useState(workspace?.name ?? '');
+  const [description, setDescription] = useState(workspace?.description ?? '');
+  const [enabled, setEnabled] = useState(workspace?.enabled ?? true);
+  const [members, setMembers] = useState<Set<string>>(new Set(workspace?.skills ?? []));
+  // `inherit` (no override) vs a concrete skill-tool mode for this workspace's endpoint.
+  const [toolMode, setToolMode] = useState<SkillToolMode | typeof INHERIT>(workspace?.skillToolMode ?? INHERIT);
 
   const toggle = (skill: string) => {
     setMembers((prev) => {
@@ -62,16 +62,16 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
     }
     const skillList = [...members];
     const onSuccess = () => onOpenChange(false);
-    if (isEdit && profile) {
+    if (isEdit && workspace) {
       // null clears the override (inherit); a value sets it.
       const skillToolMode = toolMode === INHERIT ? null : toolMode;
-      updateProfile.mutate(
+      updateWorkspace.mutate(
         { name, description, enabled, skills: skillList, skillToolMode },
         { onSuccess, onError: toastApiError },
       );
     } else {
       const skillToolMode = toolMode === INHERIT ? undefined : toolMode;
-      createProfile.mutate(
+      createWorkspace.mutate(
         { name, description, enabled, skills: skillList, skillToolMode },
         { onSuccess, onError: toastApiError },
       );
@@ -83,17 +83,17 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? `Edit profile "${profile?.name}"` : 'New profile'}</DialogTitle>
+            <DialogTitle>{isEdit ? `Edit workspace "${workspace?.name}"` : 'New workspace'}</DialogTitle>
             <DialogDescription>
-              A profile serves a chosen subset of skills at its own endpoint <code>/mcp/p/&lt;slug&gt;</code>.
+              A workspace serves a chosen subset of skills at its own endpoint <code>/mcp/w/&lt;slug&gt;</code>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex min-w-0 flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="profile-name">Name</Label>
+              <Label htmlFor="workspace-name">Name</Label>
               <Input
-                id="profile-name"
+                id="workspace-name"
                 autoFocus
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -101,34 +101,34 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
               />
               {isEdit && (
                 <p className="text-xs text-muted-foreground">
-                  URL: <code className="font-mono">{profile?.path}</code> (renaming re-derives the slug)
+                  URL: <code className="font-mono">{workspace?.path}</code> (renaming re-derives the slug)
                 </p>
               )}
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="profile-description">Description</Label>
+              <Label htmlFor="workspace-description">Description</Label>
               <Textarea
-                id="profile-description"
+                id="workspace-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Optional summary of what this profile is for."
+                placeholder="Optional summary of what this workspace is for."
                 rows={2}
               />
             </div>
 
             <div className="flex items-center justify-between rounded-md border px-3 py-2">
               <div>
-                <Label htmlFor="profile-enabled">Enabled</Label>
-                <p className="text-xs text-muted-foreground">Disabled profiles 404 their endpoint.</p>
+                <Label htmlFor="workspace-enabled">Enabled</Label>
+                <p className="text-xs text-muted-foreground">Disabled workspaces 404 their endpoint.</p>
               </div>
-              <Switch id="profile-enabled" checked={enabled} onCheckedChange={setEnabled} />
+              <Switch id="workspace-enabled" checked={enabled} onCheckedChange={setEnabled} />
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="profile-tool-mode">MCP tool exposure</Label>
+              <Label htmlFor="workspace-tool-mode">MCP tool exposure</Label>
               <Select value={toolMode} onValueChange={(value) => setToolMode(value as SkillToolMode | typeof INHERIT)}>
-                <SelectTrigger id="profile-tool-mode" className="w-full">
+                <SelectTrigger id="workspace-tool-mode" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -141,7 +141,7 @@ export function ProfileDialog({ open, onOpenChange, profile }: Props) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                How this profile’s endpoint advertises skills as tools. Inherit uses the global default from Settings.
+                How this workspace’s endpoint advertises skills as tools. Inherit uses the global default from Settings.
               </p>
             </div>
 

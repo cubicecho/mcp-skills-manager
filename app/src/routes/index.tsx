@@ -85,7 +85,7 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
           <AlertDialogTitle>Delete skill "{skill.name}"?</AlertDialogTitle>
           <AlertDialogDescription>
             This permanently removes the skill file{skill.format === 'dir' ? ' and its directory' : ''}. It will also be
-            dropped from any profile that references it.
+            dropped from any workspace that references it.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -102,7 +102,7 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   );
 }
 
-/** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its profiles (scoped). */
+/** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its workspaces (scoped). */
 function GlobalToggle({ skill }: { skill: SkillSummary }) {
   const update = useUpdateSkill(skill.name);
   return (
@@ -112,8 +112,8 @@ function GlobalToggle({ skill }: { skill: SkillSummary }) {
       aria-label={`Serve "${skill.name}" on the root /mcp endpoint`}
       title={
         skill.global
-          ? 'Served on the root /mcp endpoint. Turn off to make it profile-scoped.'
-          : 'Hidden from the root /mcp endpoint; served only on profiles that list it. Turn on to serve globally.'
+          ? 'Served on the root /mcp endpoint. Turn off to make it workspace-scoped.'
+          : 'Hidden from the root /mcp endpoint; served only on workspaces that list it. Turn on to serve globally.'
       }
       onCheckedChange={(next) =>
         update.mutate(
@@ -121,7 +121,7 @@ function GlobalToggle({ skill }: { skill: SkillSummary }) {
           {
             onSuccess: () =>
               toast.success(
-                next ? 'Now served on the root /mcp endpoint' : 'Now profile-scoped — hidden from root /mcp',
+                next ? 'Now served on the root /mcp endpoint' : 'Now workspace-scoped — hidden from root /mcp',
               ),
             onError: toastApiError,
           },
@@ -209,7 +209,7 @@ function SkillsPage() {
               <SelectContent>
                 <SelectItem value="all">All scopes</SelectItem>
                 <SelectItem value="global">Global</SelectItem>
-                <SelectItem value="scoped">Profile-scoped</SelectItem>
+                <SelectItem value="scoped">Workspace-scoped</SelectItem>
               </SelectContent>
             </Select>
             <Select value={format} onValueChange={(value) => setFormat(value as FormatFilter)}>
@@ -324,7 +324,7 @@ function SkillsPage() {
           <ConnectCard
             endpoint={`${mcpOrigin(status?.port)}/mcp`}
             label="all skills"
-            description="Point an MCP client at this endpoint to get every skill as a tool and a resource. Use a profile endpoint (/mcp/p/<slug>) to serve a filtered subset."
+            description="Point an MCP client at this endpoint to get every skill as a tool and a resource. Use a workspace endpoint (/mcp/w/<slug>) to serve a filtered subset."
           />
         </>
       )}

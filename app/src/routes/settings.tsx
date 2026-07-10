@@ -44,7 +44,7 @@ function SkillToolModeCard() {
       <CardHeader>
         <CardTitle className="text-base">MCP tool exposure</CardTitle>
         <CardDescription>
-          How skills are advertised as tools on the root <code>/mcp</code> endpoint. Profiles can override this per
+          How skills are advertised as tools on the root <code>/mcp</code> endpoint. Workspaces can override this per
           endpoint. Skills are always reachable as <code>skill://</code> resources regardless.
         </CardDescription>
       </CardHeader>
@@ -184,7 +184,7 @@ function SettingsPage() {
   const reload = async () => {
     try {
       const result = await reloadConfig();
-      toast.success(`Reloaded: ${result.skillCount} skills, ${result.profileCount} profiles`);
+      toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
     } catch (error) {
       toastApiError(error);
     }
@@ -209,7 +209,7 @@ function SettingsPage() {
               <Row label="Port" value={String(data.port)} />
               <Row label="Uptime" value={`${data.uptimeSeconds}s`} />
               <Row label="Skills" value={String(data.skillCount)} />
-              <Row label="Profiles" value={String(data.profileCount)} />
+              <Row label="Workspaces" value={String(data.workspaceCount)} />
               <Row label="Auth" value={data.authEnabled ? 'bearer token' : 'disabled'} />
             </div>
           )}
@@ -226,7 +226,7 @@ function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Reload from disk</CardTitle>
           <CardDescription>
-            Skills and profiles are hand-editable flat files under <code>DATA_DIR</code>. Edits are picked up
+            Skills and workspaces are hand-editable flat files under <code>DATA_DIR</code>. Edits are picked up
             automatically, but you can force an immediate re-read here.
           </CardDescription>
         </CardHeader>
@@ -244,7 +244,7 @@ function SettingsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 text-xs">
-            <code>{`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a profile's skills\nmcp-skills-stdio --data-dir /path/to/data --profile backend`}</code>
+            <code>{`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a workspace's skills\nmcp-skills-stdio --data-dir /path/to/data --workspace backend`}</code>
           </pre>
         </CardContent>
       </Card>

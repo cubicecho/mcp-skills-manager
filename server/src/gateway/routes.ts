@@ -15,7 +15,7 @@ export interface McpRouterDeps {
  * Streamable-HTTP MCP endpoints:
  *
  *  - `/`            → every skill
- *  - `/p/:slug`     → only the skills in that profile
+ *  - `/w/:slug`     → only the skills in that workspace
  *
  * Stateless by default (a fresh skill `Server` + transport per request, torn
  * down on response close). When `settings.httpLiveUpdates` is on, requests are
@@ -62,7 +62,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     }
   };
 
-  // Root aggregate: every globally-visible skill (skills flagged `global: false` are profile-only).
+  // Root aggregate: every globally-visible skill (skills flagged `global: false` are workspace-only).
   router.all('/', async (req, res) => {
     await handle(req, res, (live) =>
       createSkillServer({
@@ -77,28 +77,28 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     );
   });
 
-  // Profile-filtered aggregate. Registered before nothing else is needed here,
-  // but kept distinct from the root so `/mcp` and `/mcp/p/<slug>` never collide.
-  router.all('/p/:slug', async (req, res) => {
+  // Workspace-filtered aggregate. Registered before nothing else is needed here,
+  // but kept distinct from the root so `/mcp` and `/mcp/w/<slug>` never collide.
+  router.all('/w/:slug', async (req, res) => {
     const slug = req.params.slug;
-    const profile = store.getProfile(slug);
-    if (!profile || !profile.enabled) {
-      res.status(404).json({ error: `Unknown profile "${slug}"` });
+    const workspace = store.getWorkspace(slug);
+    if (!workspace || !workspace.enabled) {
+      res.status(404).json({ error: `Unknown workspace "${slug}"` });
       return;
     }
     await handle(req, res, (live) =>
       createSkillServer({
         label: slug,
         getSkills: () => {
-          const current = store.getProfile(slug);
-          return current ? store.getSkillsForProfile(current) : [];
+          const current = store.getWorkspace(slug);
+          return current ? store.getSkillsForWorkspace(current) : [];
         },
-        // Skills authored via this endpoint are scoped to the profile (global:false + added to it).
-        authoring: { store, profileSlug: slug },
-        // Resolve the profile's own mode override (falling back to the global default) fresh per request.
+        // Skills authored via this endpoint are scoped to the workspace (global:false + added to it).
+        authoring: { store, workspaceSlug: slug },
+        // Resolve the workspace's own mode override (falling back to the global default) fresh per request.
         getSkillToolMode: () => {
-          const current = store.getProfile(slug);
-          return current ? store.getSkillToolModeForProfile(current) : store.getSkillToolMode();
+          const current = store.getWorkspace(slug);
+          return current ? store.getSkillToolModeForWorkspace(current) : store.getSkillToolMode();
         },
         readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
         onSkillLoaded: (name) => store.recordSkillUse(name),

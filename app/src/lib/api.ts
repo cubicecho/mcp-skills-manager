@@ -1,19 +1,19 @@
 import type {
   ApiError,
-  CreateProfileRequest,
   CreateSkillFolderRequest,
   CreateSkillRequest,
+  CreateWorkspaceRequest,
   ImportSkillRequest,
   MoveSkillPathRequest,
-  ProfileStatus,
   ServerStatus,
   SettingsView,
   SkillDetail,
   SkillFileRead,
   SkillSummary,
-  UpdateProfileRequest,
   UpdateSettingsRequest,
   UpdateSkillRequest,
+  UpdateWorkspaceRequest,
+  WorkspaceStatus,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
 import { getToken, requireAuth } from './auth';
@@ -158,30 +158,30 @@ export function deleteSkill(name: string): Promise<void> {
   return request(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
-// --- profiles ---
+// --- workspaces ---
 
-export function listProfiles(): Promise<ProfileStatus[]> {
-  return request('/api/profiles');
+export function listWorkspaces(): Promise<WorkspaceStatus[]> {
+  return request('/api/workspaces');
 }
 
-export function getProfile(slug: string): Promise<ProfileStatus> {
-  return request(`/api/profiles/${encodeURIComponent(slug)}`);
+export function getWorkspace(slug: string): Promise<WorkspaceStatus> {
+  return request(`/api/workspaces/${encodeURIComponent(slug)}`);
 }
 
-export function createProfile(body: CreateProfileRequest): Promise<ProfileStatus> {
-  return request('/api/profiles', { method: 'POST', body });
+export function createWorkspace(body: CreateWorkspaceRequest): Promise<WorkspaceStatus> {
+  return request('/api/workspaces', { method: 'POST', body });
 }
 
-export function updateProfile(slug: string, body: UpdateProfileRequest): Promise<ProfileStatus> {
-  return request(`/api/profiles/${encodeURIComponent(slug)}`, { method: 'PATCH', body });
+export function updateWorkspace(slug: string, body: UpdateWorkspaceRequest): Promise<WorkspaceStatus> {
+  return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body });
 }
 
-export function deleteProfile(slug: string): Promise<void> {
-  return request(`/api/profiles/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+export function deleteWorkspace(slug: string): Promise<void> {
+  return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'DELETE' });
 }
 
 // --- config ---
 
-export function reloadConfig(): Promise<{ reloaded: boolean; skillCount: number; profileCount: number }> {
+export function reloadConfig(): Promise<{ reloaded: boolean; skillCount: number; workspaceCount: number }> {
   return request('/api/reload', { method: 'POST' });
 }

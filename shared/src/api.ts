@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { profileConfigSchema, profileSlugSchema } from './profile.ts';
 import { skillToolModeSchema } from './settings.ts';
 import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
+import { workspaceConfigSchema, workspaceSlugSchema } from './workspace.ts';
 
 /**
  * DTOs for the management REST API (/api/*).
@@ -24,7 +24,7 @@ export const skillSummarySchema = z.object({
   name: skillNameSchema,
   description: z.string(),
   format: z.enum(['file', 'dir']),
-  /** Whether the skill is served on the root `/mcp` aggregate (false → profile-scoped only). */
+  /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
   global: z.boolean().default(true),
   path: z.string(),
   updatedAt: z.string(),
@@ -56,7 +56,7 @@ export const createSkillRequestSchema = z.object({
   body: z.string().default(''),
   /** On-disk layout: `file` → `<name>.md`, `dir` → `<name>/SKILL.md`. Defaults to `file`. */
   format: skillFormatSchema.optional(),
-  /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → profile-scoped only. */
+  /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → workspace-scoped only. */
   global: z.boolean().optional(),
   /** Tags/categories, written to frontmatter. */
   tags: z.array(z.string()).optional(),
@@ -142,30 +142,30 @@ export const updateSkillRequestSchema = z.object({
 });
 export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
 
-// --- /api/profiles ---
+// --- /api/workspaces ---
 
-/** A profile as returned by the API: its stored config plus the derived endpoint path. */
-export const profileStatusSchema = profileConfigSchema.extend({
-  /** Endpoint path of the profile's filtered aggregate, e.g. "/mcp/p/backend". */
+/** A workspace as returned by the API: its stored config plus the derived endpoint path. */
+export const workspaceStatusSchema = workspaceConfigSchema.extend({
+  /** Endpoint path of the workspace's filtered aggregate, e.g. "/mcp/w/backend". */
   path: z.string(),
   /** Number of member skills that currently exist on disk. */
   resolvedCount: z.number().int().nonnegative(),
 });
-export type ProfileStatus = z.infer<typeof profileStatusSchema>;
+export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 
-export const createProfileRequestSchema = z.object({
+export const createWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100),
   /** Slug for the URL; derived from `name` when omitted. */
-  slug: profileSlugSchema.optional(),
+  slug: workspaceSlugSchema.optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   skills: z.array(skillNameSchema).optional(),
-  /** Override the global skill-tool mode for this profile's endpoint (omit to inherit). */
+  /** Override the global skill-tool mode for this workspace's endpoint (omit to inherit). */
   skillToolMode: skillToolModeSchema.optional(),
 });
-export type CreateProfileRequest = z.infer<typeof createProfileRequestSchema>;
+export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
 
-export const updateProfileRequestSchema = z.object({
+export const updateWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
@@ -174,7 +174,7 @@ export const updateProfileRequestSchema = z.object({
   /** Set to override the global skill-tool mode, or `null` to clear the override and inherit. */
   skillToolMode: skillToolModeSchema.nullable().optional(),
 });
-export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
+export type UpdateWorkspaceRequest = z.infer<typeof updateWorkspaceRequestSchema>;
 
 // --- GET /api/status ---
 
@@ -182,7 +182,7 @@ export interface ServerStatus {
   version: string;
   uptimeSeconds: number;
   skillCount: number;
-  profileCount: number;
+  workspaceCount: number;
   authEnabled: boolean;
   /** The port the HTTP server is actually listening on. */
   port: number;

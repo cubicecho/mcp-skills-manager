@@ -1,9 +1,9 @@
-import type { ProfileStatus } from '@mcp-skills/shared';
+import type { WorkspaceStatus } from '@mcp-skills/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { CheckIcon, CopyIcon, LayersIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ProfileDialog } from '@/components/domain/profile/profile-dialog';
+import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,15 +21,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
-import { useDeleteProfile, useProfiles, useServerStatus } from '@/lib/queries';
+import { useDeleteWorkspace, useServerStatus, useWorkspaces } from '@/lib/queries';
 import { toastApiError } from '@/lib/toast';
 
-export const Route = createFileRoute('/profiles')({
-  component: ProfilesPage,
+export const Route = createFileRoute('/workspaces')({
+  component: WorkspacesPage,
 });
 
-/** create → the New button; edit → a specific profile; null → closed. */
-type DialogState = { mode: 'create' } | { mode: 'edit'; profile: ProfileStatus } | null;
+/** create → the New button; edit → a specific workspace; null → closed. */
+type DialogState = { mode: 'create' } | { mode: 'edit'; workspace: WorkspaceStatus } | null;
 
 function CopyUrlButton({ path, origin }: { path: string; origin: string }) {
   const [copied, setCopied] = useState(false);
@@ -49,26 +49,26 @@ function CopyUrlButton({ path, origin }: { path: string; origin: string }) {
   );
 }
 
-function DeleteProfileButton({ profile }: { profile: ProfileStatus }) {
-  const remove = useDeleteProfile();
+function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
+  const remove = useDeleteWorkspace();
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${profile.name}`}>
+        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${workspace.name}`}>
           <Trash2Icon />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete profile "{profile.name}"?</AlertDialogTitle>
+          <AlertDialogTitle>Delete workspace "{workspace.name}"?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the profile and its endpoint. The skills themselves are not deleted.
+            This removes the workspace and its endpoint. The skills themselves are not deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => remove.mutate(profile.slug, { onError: toastApiError })}
+            onClick={() => remove.mutate(workspace.slug, { onError: toastApiError })}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
             Delete
@@ -79,8 +79,8 @@ function DeleteProfileButton({ profile }: { profile: ProfileStatus }) {
   );
 }
 
-function ProfilesPage() {
-  const { data, isPending, error } = useProfiles();
+function WorkspacesPage() {
+  const { data, isPending, error } = useWorkspaces();
   const { data: status } = useServerStatus();
   const [dialog, setDialog] = useState<DialogState>(null);
   const origin = mcpOrigin(status?.port);
@@ -89,31 +89,31 @@ function ProfilesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Profiles</h1>
+          <h1 className="text-2xl font-semibold">Workspaces</h1>
           <p className="text-sm text-muted-foreground">
-            Group a chosen subset of skills into a filtered endpoint at <code>/mcp/p/&lt;slug&gt;</code> (or serve it
-            over stdio with <code>--profile &lt;slug&gt;</code>).
+            Group a chosen subset of skills into a filtered endpoint at <code>/mcp/w/&lt;slug&gt;</code> (or serve it
+            over stdio with <code>--workspace &lt;slug&gt;</code>).
           </p>
         </div>
         <Button onClick={() => setDialog({ mode: 'create' })}>
-          <PlusIcon /> New profile
+          <PlusIcon /> New workspace
         </Button>
       </div>
 
       {isPending && <Skeleton className="h-32 w-full" />}
-      {error && <p className="text-sm text-destructive">Failed to load profiles: {error.message}</p>}
+      {error && <p className="text-sm text-destructive">Failed to load workspaces: {error.message}</p>}
 
       {data && data.length === 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <LayersIcon className="size-5" /> No profiles yet
+              <LayersIcon className="size-5" /> No workspaces yet
             </CardTitle>
-            <CardDescription>Create a profile to serve a tailored set of skills to a specific agent.</CardDescription>
+            <CardDescription>Create a workspace to serve a tailored set of skills to a specific agent.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setDialog({ mode: 'create' })}>
-              <PlusIcon /> New profile
+              <PlusIcon /> New workspace
             </Button>
           </CardContent>
         </Card>
@@ -131,29 +131,29 @@ function ProfilesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((profile) => (
-              <TableRow key={profile.slug}>
+            {data.map((workspace) => (
+              <TableRow key={workspace.slug}>
                 <TableCell className="font-medium">
-                  {profile.name}
-                  {profile.description && (
-                    <span className="block text-xs font-normal text-muted-foreground">{profile.description}</span>
+                  {workspace.name}
+                  {workspace.description && (
+                    <span className="block text-xs font-normal text-muted-foreground">{workspace.description}</span>
                   )}
                 </TableCell>
                 <TableCell>
                   <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
-                    {profile.path}
-                    <CopyUrlButton path={profile.path} origin={origin} />
+                    {workspace.path}
+                    <CopyUrlButton path={workspace.path} origin={origin} />
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {profile.resolvedCount}
-                  {profile.resolvedCount !== profile.skills.length && (
-                    <span className="text-xs"> / {profile.skills.length}</span>
+                  {workspace.resolvedCount}
+                  {workspace.resolvedCount !== workspace.skills.length && (
+                    <span className="text-xs"> / {workspace.skills.length}</span>
                   )}{' '}
-                  {profile.skills.length === 1 ? 'skill' : 'skills'}
+                  {workspace.skills.length === 1 ? 'skill' : 'skills'}
                 </TableCell>
                 <TableCell>
-                  {profile.enabled ? (
+                  {workspace.enabled ? (
                     <Badge variant="outline">Enabled</Badge>
                   ) : (
                     <Badge variant="secondary">Disabled</Badge>
@@ -164,12 +164,12 @@ function ProfilesPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={`Edit ${profile.name}`}
-                      onClick={() => setDialog({ mode: 'edit', profile })}
+                      aria-label={`Edit ${workspace.name}`}
+                      onClick={() => setDialog({ mode: 'edit', workspace })}
                     >
                       <PencilIcon />
                     </Button>
-                    <DeleteProfileButton profile={profile} />
+                    <DeleteWorkspaceButton workspace={workspace} />
                   </div>
                 </TableCell>
               </TableRow>
@@ -178,8 +178,10 @@ function ProfilesPage() {
         </Table>
       )}
 
-      {dialog?.mode === 'create' && <ProfileDialog open onOpenChange={() => setDialog(null)} />}
-      {dialog?.mode === 'edit' && <ProfileDialog open profile={dialog.profile} onOpenChange={() => setDialog(null)} />}
+      {dialog?.mode === 'create' && <WorkspaceDialog open onOpenChange={() => setDialog(null)} />}
+      {dialog?.mode === 'edit' && (
+        <WorkspaceDialog open workspace={dialog.workspace} onOpenChange={() => setDialog(null)} />
+      )}
     </div>
   );
 }

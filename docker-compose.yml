@@ -5,7 +5,7 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      # Skills, profiles, and settings — hand-editable on the host; edits are
+      # Skills, workspaces, and settings — hand-editable on the host; edits are
       # picked up automatically (or force a re-read with POST /api/reload).
       - ./data:/data
     environment:

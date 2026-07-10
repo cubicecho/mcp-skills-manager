@@ -40,10 +40,10 @@ large. ⭐ marks the highest-leverage picks.
       `renderSkill` output (body + metadata footer + bundled-file footer) and
       the `list_skills` catalogue entry in the editor. Demystifies what actually
       reaches the model.
-- [ ] **A4 · Clone a skill + manage profile membership from the skill page**
-      *(S)* — Duplicate-as-starting-point, and a "Profiles" checklist on the
-      skill so it can be added to / removed from profiles without opening each
-      profile.
+- [ ] **A4 · Clone a skill + manage workspace membership from the skill page**
+      *(S)* — Duplicate-as-starting-point, and a "Workspaces" checklist on the
+      skill so it can be added to / removed from workspaces without opening each
+      workspace.
 
 ## Theme B — Better agent self-improvement
 
@@ -55,10 +55,10 @@ large. ⭐ marks the highest-leverage picks.
       (`.history/` or git-backed), with a diff view and one-click revert. Audit
       exactly what an agent changed and undo bad self-edits. Highest effort,
       strongest trust story.
-- [ ] **B4 · Authoring guardrails** *(M)* — Per-profile authoring toggle (today
+- [ ] **B4 · Authoring guardrails** *(M)* — Per-workspace authoring toggle (today
       it's global-only), "protected" skills agents can't edit/delete, and an
-      audit log of who-created/edited-what. (Subsumes the earlier "B7 · profile
-      authoring tools" idea — per-profile control lands here.)
+      audit log of who-created/edited-what. (Subsumes the earlier "B7 · workspace
+      authoring tools" idea — per-workspace control lands here.)
 - [ ] **B5 · An authoring guide the agent actually reads + create-time
       templates** *(S–M)* — A built-in meta-skill / scaffolded template so
       self-authored skills follow good structure (clear description, when-to-use,
