@@ -81,18 +81,19 @@ Tier 1 (metadata) and Tier 2 (stdio live updates) shipped above; the rest:
       `onSkillsChanged` on those sessions the way stdio already does. Gate behind
       a setting; keep stateless as the default. Prereq for any HTTP client that
       wants push instead of re-polling `resources/list`.
-- [ ] **C4 · Resource templates + argument completion** *(M)* — Expose
-      `resources/templates/list` with RFC 6570 templates (`skill://{name}`,
-      `skill://{name}/{path}`) and a completion handler over skill names / file
-      paths, so template-driven clients get autocomplete. Also lets us stop
-      enumerating every bundled file inline if the flat list ever gets unwieldy.
-- [ ] **C5 · `resources/list` pagination** *(S)* — Honor the `cursor` /
-      `nextCursor` protocol on the resource list. Opaque cursors work fine under
-      the stateless transport. Low priority until a library has hundreds of
-      resources.
-- [ ] **C6 · Resource `title` + URI-encoding round-trip fix** *(S)* — Add an
-      optional human-readable `title` (distinct from the slug `name`), and
-      percent-encode the bundled-file path when building the advertised
-      `skill://<name>/<path>` URI so it round-trips through the
-      `decodeURIComponent` read path for filenames containing `%`, spaces, etc.
-      (needs a confirming test first).
+- [x] **C4 · Resource templates + argument completion** — `resources/templates/list`
+      advertises two RFC 6570 templates (`skill://{name}` and, when file reads are
+      wired, `skill://{name}/{+path}` — reserved expansion so nested paths keep their
+      `/`), and a `completion/complete` handler autocompletes skill names for `{name}`
+      and a skill's bundled-file paths for `{+path}` (scoped by the `name` already
+      chosen via completion `context`). The `completions` capability is declared.
+- [x] **C5 · `resources/list` pagination** — the resource list honors the
+      `cursor` / `nextCursor` protocol, paging at 100 resources with opaque
+      base64url offset cursors (stateless-safe); a malformed cursor is a clean
+      `InvalidParams` (-32602).
+- [x] **C6 · Resource `title` + URI-encoding round-trip fix** — an optional
+      human-readable `title` (from frontmatter, distinct from the slug `name`)
+      rides the resource listing, and bundled-file path segments are
+      percent-encoded when building the advertised `skill://<name>/<path>` URI so
+      it round-trips through the `decodeURIComponent` read path for filenames
+      containing `%`, spaces, etc.

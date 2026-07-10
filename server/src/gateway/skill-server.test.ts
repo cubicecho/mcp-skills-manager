@@ -397,6 +397,63 @@ describe('skill-server resources', () => {
   });
 });
 
+describe('skill-server resource templates + completion', () => {
+  it('lists only the skill template when file reads are not wired', async () => {
+    const client = await connect(() => SKILLS);
+    const { resourceTemplates } = await client.listResourceTemplates();
+    expect(resourceTemplates.map((t) => t.uriTemplate)).toEqual(['skill://{name}']);
+  });
+
+  it('adds the bundled-file template when file reads are wired', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
+    });
+    const { resourceTemplates } = await client.listResourceTemplates();
+    expect(resourceTemplates.map((t) => t.uriTemplate)).toEqual(['skill://{name}', 'skill://{name}/{+path}']);
+    // The file template carries no fixed mimeType (bundled files vary).
+    expect(resourceTemplates.find((t) => t.uriTemplate === 'skill://{name}/{+path}')?.mimeType).toBeUndefined();
+  });
+
+  it('completes skill names by prefix for the {name} variable', async () => {
+    const client = await connect(() => SKILLS);
+    const res = await client.complete({
+      ref: { type: 'ref/resource', uri: 'skill://{name}' },
+      argument: { name: 'name', value: 'pdf' },
+    });
+    expect(res.completion.values).toEqual(['pdf-forms']);
+    expect(res.completion.total).toBe(1);
+    expect(res.completion.hasMore).toBe(false);
+  });
+
+  it('completes bundled-file paths for {+path}, scoped to the chosen skill', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
+    });
+    const res = await client.complete({
+      ref: { type: 'ref/resource', uri: 'skill://{name}/{+path}' },
+      argument: { name: 'path', value: 'scripts/' },
+      context: { arguments: { name: 'pdf-forms' } },
+    });
+    expect(res.completion.values).toEqual(['scripts/fill.py']);
+  });
+
+  it('returns no path completions without a chosen skill in context', async () => {
+    const client = await connect(() => SKILLS, {
+      readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
+    });
+    const res = await client.complete({
+      ref: { type: 'ref/resource', uri: 'skill://{name}/{+path}' },
+      argument: { name: 'path', value: '' },
+    });
+    expect(res.completion.values).toEqual([]);
+  });
+
+  it('advertises the completions capability', async () => {
+    const client = await connect(() => SKILLS);
+    expect(client.getServerCapabilities()?.completions).toEqual({});
+  });
+});
+
 describe('skill-server resource pagination', () => {
   const many = Array.from({ length: 250 }, (_, i) => skill({ name: `skill-${String(i).padStart(3, '0')}` }));
 

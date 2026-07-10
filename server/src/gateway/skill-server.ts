@@ -2,8 +2,10 @@ import type { Skill, SkillFileRead, SkillToolMode } from '@mcp-skills/shared';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  CompleteRequestSchema,
   ErrorCode,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   McpError,
   ReadResourceRequestSchema,
@@ -27,12 +29,22 @@ function skillCapabilities(liveUpdates: boolean) {
     capabilities: {
       tools: {},
       resources: liveUpdates ? { listChanged: true, subscribe: true } : {},
+      // Argument autocompletion for the resource templates below (skill names, file paths).
+      completions: {},
     },
   };
 }
 
 /** URI scheme under which skills are exposed as MCP resources. */
 const RESOURCE_SCHEME = 'skill';
+
+/**
+ * RFC 6570 URI templates advertised via `resources/templates/list`. The primary
+ * document is a single variable; a bundled file uses reserved expansion (`{+path}`)
+ * so nested paths with `/` expand literally rather than being percent-encoded.
+ */
+const SKILL_URI_TEMPLATE = `${RESOURCE_SCHEME}://{name}`;
+const SKILL_FILE_URI_TEMPLATE = `${RESOURCE_SCHEME}://{name}/{+path}`;
 
 /**
  * MCP's spec-defined "resource not found" JSON-RPC error code. It is absent from
@@ -272,6 +284,21 @@ function searchSkills(skills: Skill[], query: string, tags: string[]): Skill[] {
     }
     return true;
   });
+}
+
+/** Max completion values the spec allows a single response to carry. */
+const COMPLETION_LIMIT = 100;
+
+/**
+ * Prefix-match `candidates` (case-insensitively) against a partial `value` and
+ * shape them into a `completion/complete` result: the first `COMPLETION_LIMIT`
+ * matches, the true `total`, and `hasMore` when the total exceeds what we return.
+ */
+function completeFrom(candidates: string[], value: string) {
+  const prefix = value.toLowerCase();
+  const matches = candidates.filter((c) => c.toLowerCase().startsWith(prefix));
+  const values = matches.slice(0, COMPLETION_LIMIT);
+  return { completion: { values, total: matches.length, hasMore: matches.length > values.length } };
 }
 
 export interface SkillServerDeps {
@@ -535,6 +562,69 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     return {
       contents: [file.binary ? { uri, mimeType, blob: file.content } : { uri, mimeType, text: file.content }],
     };
+  });
+
+  // Resource templates: advertise the URI shapes a client can construct itself
+  // (`skill://{name}` and, when file resources are served, `skill://{name}/{+path}`).
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+    const templates: Array<{
+      uriTemplate: string;
+      name: string;
+      title: string;
+      description: string;
+      mimeType?: string;
+    }> = [
+      {
+        uriTemplate: SKILL_URI_TEMPLATE,
+        name: 'skill',
+        title: 'Skill document',
+        description: "A skill's Markdown document, addressed by its slug name.",
+        mimeType: 'text/markdown',
+      },
+    ];
+    if (deps.readSupportingFile) {
+      // Bundled files vary in type, so this template carries no fixed mimeType.
+      templates.push({
+        uriTemplate: SKILL_FILE_URI_TEMPLATE,
+        name: 'skill-file',
+        title: 'Skill supporting file',
+        description: 'A bundled supporting file within a directory-format skill.',
+      });
+    }
+    return { resourceTemplates: templates };
+  });
+
+  // Argument autocompletion for those templates: skill names for `{name}`, and a
+  // skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
+  server.setRequestHandler(CompleteRequestSchema, async (req) => {
+    const { ref, argument, context } = req.params;
+    const empty = { completion: { values: [], total: 0, hasMore: false } };
+    if (ref.type !== 'ref/resource') {
+      return empty;
+    }
+    const skills = deps.getSkills();
+    if (ref.uri === SKILL_URI_TEMPLATE && argument.name === 'name') {
+      return completeFrom(
+        skills.map((s) => s.name),
+        argument.value,
+      );
+    }
+    if (ref.uri === SKILL_FILE_URI_TEMPLATE) {
+      if (argument.name === 'name') {
+        return completeFrom(
+          skills.map((s) => s.name),
+          argument.value,
+        );
+      }
+      if (argument.name === 'path') {
+        // Only files of the already-chosen skill are valid completions for its path.
+        const chosen = context?.arguments?.name;
+        const skill = chosen ? skills.find((s) => s.name === chosen) : undefined;
+        const paths = skill ? skill.files.filter((f) => f.type === 'file').map((f) => f.path) : [];
+        return completeFrom(paths, argument.value);
+      }
+    }
+    return empty;
   });
 
   // Live updates (stdio only): advertise `listChanged` + `subscribe`, and push
