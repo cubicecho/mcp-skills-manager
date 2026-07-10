@@ -151,20 +151,44 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const files = (await readdir(legacyDir)).filter((f) => f.endsWith('.json'));
     let moved = 0;
     for (const file of files) {
-      const target = path.join(this.workspacesDir, file);
+      const source = path.join(legacyDir, file);
+      // Migrate to the file's canonical `<slug>.json` name so the collision check
+      // is by workspace identity (slug), not by a possibly hand-edited filename —
+      // loadWorkspaces keys by the declared slug, so a mismatched filename could
+      // otherwise slip past and overwrite an existing workspace on load. Fall back
+      // to the original name for a legacy file we can't parse, so it isn't lost.
+      const target = path.join(
+        this.workspacesDir,
+        this.legacyWorkspaceTargetName(await readFile(source, 'utf8'), file),
+      );
       if (existsSync(target)) {
-        continue; // a workspace of the same slug already exists; leave the legacy copy in place
+        continue; // a workspace with this slug already exists; leave the legacy copy in place
       }
-      await rename(path.join(legacyDir, file), target);
+      await rename(source, target);
       moved += 1;
     }
-    // Drop the legacy dir only once it holds nothing we'd lose.
-    if ((await readdir(legacyDir)).length === 0) {
+    // Drop the legacy dir once no workspace files remain in it; stray non-.json
+    // entries (e.g. .DS_Store) are ours to clear out along with the dir.
+    if ((await readdir(legacyDir)).filter((f) => f.endsWith('.json')).length === 0) {
       await rm(legacyDir, { recursive: true, force: true });
     }
     if (moved > 0) {
       console.log(`Migrated ${moved} profile config file(s) to config/workspaces.`);
     }
+  }
+
+  /** Canonical `<slug>.json` destination for a legacy profile file, or its original
+   * filename when the contents can't be parsed for a slug (so nothing is lost). */
+  private legacyWorkspaceTargetName(raw: string, fallback: string): string {
+    try {
+      const parsed = workspaceConfigSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) {
+        return `${parsed.data.slug}.json`;
+      }
+    } catch {
+      // Unparseable JSON — fall through to the original filename.
+    }
+    return fallback;
   }
 
   /**

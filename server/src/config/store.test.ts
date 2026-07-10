@@ -447,6 +447,56 @@ describe('ConfigStore legacy profiles → workspaces migration', () => {
     // The un-migratable legacy file is left in place (dir not removed).
     expect(existsSync(path.join(legacyDir, 'dup.json'))).toBe(true);
   });
+
+  it('detects a same-slug collision even when the legacy filename differs, and normalizes the destination name', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    const workspacesDir = path.join(dir, 'config', 'workspaces');
+    await mkdir(legacyDir, { recursive: true });
+    await mkdir(workspacesDir, { recursive: true });
+    // Existing workspace with slug "backend"; legacy file has the same slug but a
+    // mismatched filename, so a filename-only guard would let it through.
+    await writeFile(
+      path.join(workspacesDir, 'backend.json'),
+      Buffer.from(JSON.stringify({ name: 'kept', slug: 'backend', enabled: true, skills: [] })),
+    );
+    await writeFile(
+      path.join(legacyDir, 'legacy-backend.json'),
+      Buffer.from(JSON.stringify({ name: 'stale', slug: 'backend', enabled: true, skills: [] })),
+    );
+
+    store = new ConfigStore(dir);
+    await store.init();
+
+    // The real workspace is preserved, not overwritten by the stale legacy copy.
+    expect(store.getWorkspace('backend')?.name).toBe('kept');
+    expect(existsSync(path.join(legacyDir, 'legacy-backend.json'))).toBe(true);
+  });
+
+  it('migrates a legacy file whose filename does not match its slug to its canonical <slug>.json name', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(path.join(legacyDir, 'oldname.json'), legacyWorkspace('frontend'));
+
+    store = new ConfigStore(dir);
+    await store.init();
+
+    expect(store.getWorkspace('frontend')).toBeDefined();
+    expect(existsSync(path.join(dir, 'config', 'workspaces', 'frontend.json'))).toBe(true);
+    expect(existsSync(legacyDir)).toBe(false);
+  });
+
+  it('removes the legacy dir even when a stray non-.json file remains after migration', async () => {
+    const legacyDir = path.join(dir, 'config', 'profiles');
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(path.join(legacyDir, 'backend.json'), legacyWorkspace('backend'));
+    await writeFile(path.join(legacyDir, '.DS_Store'), Buffer.from('junk'));
+
+    store = new ConfigStore(dir);
+    await store.init();
+
+    expect(store.getWorkspace('backend')).toBeDefined();
+    expect(existsSync(legacyDir)).toBe(false);
+  });
 });
 
 describe('ConfigStore skill tags', () => {

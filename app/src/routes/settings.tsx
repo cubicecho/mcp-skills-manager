@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { reloadConfig } from '@/lib/api';
 import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
-import { SKILL_TOOL_MODE_HINTS } from '@/lib/skill-tool-mode';
+import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODE_TOGGLE_ON } from '@/lib/skill-tool-mode';
 import { toastApiError } from '@/lib/toast';
 
 export const Route = createFileRoute('/settings')({
@@ -73,9 +73,9 @@ function McpOptionsCard() {
         {settings && (
           <>
             <ToggleRow
-              label="One tool per skill"
+              label={SKILL_TOOL_MODE_LABELS['per-skill']}
               description={SKILL_TOOL_MODE_HINTS[settings.skillToolMode]}
-              checked={settings.skillToolMode === 'per-skill'}
+              checked={SKILL_TOOL_MODE_TOGGLE_ON[settings.skillToolMode]}
               disabled={updateSettings.isPending}
               onCheckedChange={(checked) =>
                 updateSettings.mutate(
