@@ -112,6 +112,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   constructor(dataDir: string) {
     super();
+    // Each live stateful-HTTP MCP session subscribes a `change` listener (removed
+    // on disconnect), and that count tracks concurrent clients — legitimately
+    // unbounded. Disable the default 10-listener leak warning; our sessions
+    // reliably unsubscribe, so the count is not a leak signal here.
+    this.setMaxListeners(0);
     this.dataDir = dataDir;
     this.configDir = path.join(dataDir, 'config');
     this.profilesDir = path.join(this.configDir, 'profiles');

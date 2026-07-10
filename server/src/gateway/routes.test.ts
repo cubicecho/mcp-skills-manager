@@ -38,6 +38,15 @@ async function boot(store: ConfigStore): Promise<{ url: URL; close: () => Promis
   };
 }
 
+/** Poll a predicate until true (or throw after ~1s) — for observing async server-side teardown. */
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('waitFor timed out');
+}
+
 /** Connect an SDK client over Streamable HTTP and return it plus its transport (for sessionId). */
 async function connect(url: URL): Promise<{ client: Client; transport: StreamableHTTPClientTransport }> {
   const transport = new StreamableHTTPClientTransport(url);
@@ -113,6 +122,35 @@ describe('MCP HTTP router', () => {
       expect(listChanged).toBe(1);
       expect(updated).toEqual([first.uri]);
       await client.close();
+    });
+
+    it('reclaims the session (and its store listener) when the client disconnects', async () => {
+      server = await boot(store);
+      expect(store.listenerCount('change')).toBe(0);
+
+      const { client } = await connect(server.url);
+      // A live session holds exactly one `change` listener (for its SSE push).
+      expect(store.listenerCount('change')).toBe(1);
+
+      // Prove the standalone SSE stream is actually up before we drop it: a pushed
+      // notification can only arrive over that stream. The SDK opens it fire-and-
+      // forget after `initialized`, so it is NOT guaranteed live the instant
+      // connect() resolves — waiting on a real push makes the teardown deterministic.
+      let pushed = false;
+      client.setNotificationHandler(ResourceListChangedNotificationSchema, async () => {
+        pushed = true;
+      });
+      // Nudge repeatedly until a push actually lands: an emit before the SSE stream
+      // is live is simply dropped, so retrying makes the "stream is up" wait robust.
+      await waitFor(() => {
+        store.emit('change', store.snapshot());
+        return pushed;
+      });
+
+      // client.close() aborts that SSE stream WITHOUT sending a DELETE. The server
+      // sees the stream close and reclaims the session — no leaked store listener.
+      await client.close();
+      await waitFor(() => store.listenerCount('change') === 0);
     });
 
     it('rejects a request carrying an unknown session id with 404', async () => {
