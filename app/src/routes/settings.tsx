@@ -124,6 +124,60 @@ function AuthoringCard() {
   );
 }
 
+function LiveUpdatesCard() {
+  const { data: settings, isPending } = useSettings();
+  const updateSettings = useUpdateSettings();
+
+  const onChange = (httpLiveUpdates: boolean) => {
+    updateSettings.mutate(
+      { httpLiveUpdates },
+      {
+        onSuccess: () =>
+          toast.success(
+            httpLiveUpdates
+              ? 'HTTP live updates enabled — /mcp runs stateful sessions'
+              : 'HTTP live updates disabled — /mcp is stateless',
+          ),
+        onError: toastApiError,
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">HTTP live updates</CardTitle>
+        <CardDescription>
+          Push resource change notifications (<code>resources/list_changed</code> and <code>resources/updated</code>) to
+          subscribed HTTP clients over SSE. This runs <code>/mcp</code> in stateful mode, keeping a session per client.
+          Off keeps <code>/mcp</code> stateless (clients re-poll). Live updates over stdio are always on.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isPending && <Skeleton className="h-6 w-40" />}
+        {settings && (
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <span className="text-sm font-medium">Push live updates over HTTP</span>
+              <p className="text-xs text-muted-foreground">
+                {settings.httpLiveUpdates
+                  ? 'Stateful sessions with SSE push are enabled on /mcp.'
+                  : '/mcp is stateless; clients re-poll resources/list.'}
+              </p>
+            </div>
+            <Switch
+              checked={settings.httpLiveUpdates}
+              disabled={updateSettings.isPending}
+              onCheckedChange={onChange}
+              aria-label="Push live updates over HTTP"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SettingsPage() {
   const { data, isPending } = useServerStatus();
 
@@ -165,6 +219,8 @@ function SettingsPage() {
       <SkillToolModeCard />
 
       <AuthoringCard />
+
+      <LiveUpdatesCard />
 
       <Card>
         <CardHeader>
