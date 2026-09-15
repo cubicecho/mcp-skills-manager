@@ -3,25 +3,17 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookMarkedIcon, FileTextIcon, FolderIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { ActionButton } from '@/components/action-button';
+import { CardLayout } from '@/components/card-layout';
+import { ConfirmButton } from '@/components/confirm-button';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { OptionSelect, type SelectEntry } from '@/components/option-select';
+import { PageLayout } from '@/components/page-layout';
+import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
@@ -71,34 +63,37 @@ function collectTags(skills: SkillSummary[]): string[] {
   return [...new Set(skills.flatMap((skill) => skill.tags))].sort((a, b) => a.localeCompare(b));
 }
 
+const SCOPE_OPTIONS: SelectEntry[] = [
+  { value: 'all', label: 'All scopes' },
+  { value: 'global', label: 'Global' },
+  { value: 'scoped', label: 'Workspace-scoped' },
+];
+
+const FORMAT_OPTIONS: SelectEntry[] = [
+  { value: 'all', label: 'All formats' },
+  { value: 'dir', label: 'Directory' },
+  { value: 'file', label: 'File' },
+];
+
+const SORT_OPTIONS: SelectEntry[] = [
+  { value: 'name', label: 'Name (A–Z)' },
+  { value: 'updated', label: 'Recently updated' },
+  { value: 'used', label: 'Most used' },
+];
+
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   const remove = useDeleteSkill();
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${skill.name}`}>
-          <Trash2Icon />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete skill "{skill.name}"?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This permanently removes the skill file{skill.format === 'dir' ? ' and its directory' : ''}. It will also be
-            dropped from any workspace that references it.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => remove.mutate(skill.name, { onError: toastApiError })}
-            className="bg-destructive text-white hover:bg-destructive/90"
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmButton
+      variant="ghost"
+      size="icon-sm"
+      label={`Delete ${skill.name}`}
+      title={`Delete skill "${skill.name}"?`}
+      description={`This permanently removes the skill file${skill.format === 'dir' ? ' and its directory' : ''}. It will also be dropped from any workspace that references it.`}
+      onConfirm={() => remove.mutate(skill.name, { onError: toastApiError })}
+    >
+      <Trash2Icon />
+    </ConfirmButton>
   );
 }
 
@@ -132,7 +127,8 @@ function GlobalToggle({ skill }: { skill: SkillSummary }) {
 }
 
 function SkillsPage() {
-  const { data, isPending, error } = useSkills();
+  const skills = useSkills();
+  const { data } = skills;
   const { data: status } = useServerStatus();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -148,188 +144,171 @@ function SkillsPage() {
     () => (data ? filterAndSort(data, query, scope, format, activeTag, sort) : []),
     [data, query, scope, format, activeTag, sort],
   );
+  const hasSkills = Boolean(data && data.length > 0);
+
+  const newSkillButton = (
+    <Button onClick={() => setNewOpen(true)}>
+      <PlusIcon /> New skill
+    </Button>
+  );
+
+  const filters = hasSkills ? (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative min-w-[12rem] flex-1">
+        <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search name or description…"
+          className="pl-8"
+          aria-label="Search skills"
+        />
+      </div>
+      <OptionSelect
+        className="w-36"
+        aria-label="Filter by scope"
+        options={SCOPE_OPTIONS}
+        value={scope}
+        onValueChange={(value) => setScope(value as ScopeFilter)}
+      />
+      <OptionSelect
+        className="w-32"
+        aria-label="Filter by format"
+        options={FORMAT_OPTIONS}
+        value={format}
+        onValueChange={(value) => setFormat(value as FormatFilter)}
+      />
+      {allTags.length > 0 && (
+        <OptionSelect
+          className="w-36"
+          aria-label="Filter by tag"
+          options={[{ value: 'all', label: 'All tags' }, ...allTags.map((t) => ({ value: t, label: t }))]}
+          value={activeTag}
+          onValueChange={setTag}
+        />
+      )}
+      <OptionSelect
+        className="w-40"
+        aria-label="Sort skills"
+        options={SORT_OPTIONS}
+        value={sort}
+        onValueChange={(value) => setSort(value as SortKey)}
+      />
+    </div>
+  ) : undefined;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Skills</h1>
-          <p className="text-sm text-muted-foreground">
-            Markdown documents served to agents over MCP. Each is exposed as both a tool and a resource.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setNewOpen(true)}>
-            <PlusIcon /> New skill
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageLayout
+        title="Skills"
+        description="Markdown documents served to agents over MCP. Each is exposed as both a tool and a resource."
+        action={newSkillButton}
+        headerContent={filters}
+        content={
+          <div className="flex flex-col gap-6 pb-6">
+            <QueryState
+              query={skills}
+              what="skills"
+              count={visible.length}
+              empty={
+                hasSkills ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">No skills match your filters.</p>
+                ) : (
+                  <CardLayout
+                    contentClassName="flex flex-col items-center gap-3 py-6 text-center"
+                    content={
+                      <>
+                        <BookMarkedIcon className="size-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">No skills yet.</p>
+                        {newSkillButton}
+                      </>
+                    }
+                  />
+                )
+              }
+            />
 
-      {isPending && (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      )}
-
-      {error && <p className="text-sm text-destructive">Failed to load skills: {error.message}</p>}
-
-      {data && data.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-            <BookMarkedIcon className="size-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No skills yet.</p>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => setNewOpen(true)}>
-                <PlusIcon /> New skill
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {data && data.length > 0 && (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[12rem] flex-1">
-              <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search name or description…"
-                className="pl-8"
-                aria-label="Search skills"
-              />
-            </div>
-            <Select value={scope} onValueChange={(value) => setScope(value as ScopeFilter)}>
-              <SelectTrigger className="w-36" aria-label="Filter by scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All scopes</SelectItem>
-                <SelectItem value="global">Global</SelectItem>
-                <SelectItem value="scoped">Workspace-scoped</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={format} onValueChange={(value) => setFormat(value as FormatFilter)}>
-              <SelectTrigger className="w-32" aria-label="Filter by format">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All formats</SelectItem>
-                <SelectItem value="dir">Directory</SelectItem>
-                <SelectItem value="file">File</SelectItem>
-              </SelectContent>
-            </Select>
-            {allTags.length > 0 && (
-              <Select value={activeTag} onValueChange={setTag}>
-                <SelectTrigger className="w-36" aria-label="Filter by tag">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All tags</SelectItem>
-                  {allTags.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-              <SelectTrigger className="w-40" aria-label="Sort skills">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name (A–Z)</SelectItem>
-                <SelectItem value="updated">Recently updated</SelectItem>
-                <SelectItem value="used">Most used</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {visible.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No skills match your filters.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Format</TableHead>
-                  <TableHead className="text-right">Uses</TableHead>
-                  <TableHead>Last used</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="text-center">Global</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((skill) => (
-                  <TableRow key={skill.name}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
-                          {skill.name}
-                        </Link>
-                        {skill.tags.map((t) => (
-                          <Badge key={t} variant="outline" className="font-normal">
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-md truncate text-muted-foreground">
-                      {skill.description || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="gap-1 font-normal">
-                        {skill.format === 'dir' ? (
-                          <FolderIcon className="size-3" />
-                        ) : (
-                          <FileTextIcon className="size-3" />
-                        )}
-                        {skill.format}
-                        {skill.files.length > 0 &&
-                          ` · ${skill.files.length} file${skill.files.length === 1 ? '' : 's'}`}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {skill.usage.count > 0 ? skill.usage.count : '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {skill.usage.lastUsedAt ? formatDate(skill.usage.lastUsedAt) : '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(skill.updatedAt)}</TableCell>
-                    <TableCell className="text-center">
-                      <GlobalToggle skill={skill} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon-sm" asChild aria-label={`Edit ${skill.name}`}>
-                          <Link to="/skills/$name" params={{ name: skill.name }}>
-                            <PencilIcon />
-                          </Link>
-                        </Button>
-                        <DeleteSkillButton skill={skill} />
-                      </div>
-                    </TableCell>
+            {visible.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Format</TableHead>
+                    <TableHead className="text-right">Uses</TableHead>
+                    <TableHead>Last used</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="text-center">Global</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {visible.map((skill) => (
+                    <TableRow key={skill.name}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
+                            {skill.name}
+                          </Link>
+                          {skill.tags.map((t) => (
+                            <Badge key={t} variant="outline" className="font-normal">
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-md truncate text-muted-foreground">
+                        {skill.description || '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="gap-1 font-normal">
+                          {skill.format === 'dir' ? (
+                            <FolderIcon className="size-3" />
+                          ) : (
+                            <FileTextIcon className="size-3" />
+                          )}
+                          {skill.format}
+                          {skill.files.length > 0 &&
+                            ` · ${skill.files.length} file${skill.files.length === 1 ? '' : 's'}`}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {skill.usage.count > 0 ? skill.usage.count : '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {skill.usage.lastUsedAt ? formatDate(skill.usage.lastUsedAt) : '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(skill.updatedAt)}</TableCell>
+                      <TableCell className="text-center">
+                        <GlobalToggle skill={skill} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <ActionButton variant="ghost" size="icon-sm" asChild label={`Edit ${skill.name}`}>
+                            <Link to="/skills/$name" params={{ name: skill.name }}>
+                              <PencilIcon />
+                            </Link>
+                          </ActionButton>
+                          <DeleteSkillButton skill={skill} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
 
-          <ConnectCard
-            endpoint={`${mcpOrigin(status?.port)}/mcp`}
-            label="all skills"
-            description="Point an MCP client at this endpoint to get every skill as a tool and a resource. Use a workspace endpoint (/mcp/w/<slug>) to serve a filtered subset."
-          />
-        </>
-      )}
-
+            {hasSkills && (
+              <ConnectCard
+                endpoint={`${mcpOrigin(status?.port)}/mcp`}
+                label="all skills"
+                description="Point an MCP client at this endpoint to get every skill as a tool and a resource. Use a workspace endpoint (/mcp/w/<slug>) to serve a filtered subset."
+              />
+            )}
+          </div>
+        }
+      />
       {newOpen && <NewSkillDialog open onOpenChange={setNewOpen} />}
-    </div>
+    </>
   );
 }
