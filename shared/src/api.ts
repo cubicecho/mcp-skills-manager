@@ -26,6 +26,8 @@ export const skillSummarySchema = z.object({
   format: z.enum(['file', 'dir']),
   /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
   global: z.boolean().default(true),
+  /** Whether agents are barred from modifying the skill over MCP (the web UI can still edit it). */
+  readOnly: z.boolean().default(false),
   path: z.string(),
   updatedAt: z.string(),
   files: z.array(skillFileSchema),
@@ -137,6 +139,8 @@ export const updateSkillRequestSchema = z.object({
   body: z.string().optional(),
   /** Toggle whether the skill is served on the root `/mcp` aggregate. */
   global: z.boolean().optional(),
+  /** Mark the skill read-only (agents can no longer modify it over MCP) or lift that protection. */
+  readOnly: z.boolean().optional(),
   /** Replace the skill's tags/categories. */
   tags: z.array(z.string()).optional(),
 });

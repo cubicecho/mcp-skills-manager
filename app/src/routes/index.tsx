@@ -1,6 +1,15 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { BookMarkedIcon, FileTextIcon, FolderIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react';
+import {
+  BookMarkedIcon,
+  FileTextIcon,
+  FolderIcon,
+  LockIcon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
@@ -250,6 +259,12 @@ function SkillsPage() {
                           <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
                             {skill.name}
                           </Link>
+                          {skill.readOnly && (
+                            <LockIcon
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                              aria-label="Read-only for agents"
+                            />
+                          )}
                           {skill.tags.map((t) => (
                             <Badge key={t} variant="outline" className="font-normal">
                               {t}

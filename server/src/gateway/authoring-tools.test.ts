@@ -151,6 +151,71 @@ describe('MCP authoring tools', () => {
     expect(store.getSkill('renamed')).toBeUndefined();
   });
 
+  it('refuses every mutating tool on a read-only skill, while still letting it be read', async () => {
+    const client = await connect(store);
+    await client.callTool({ name: 'create_skill', arguments: { name: 'locked', description: 'd', body: 'original' } });
+    await client.callTool({
+      name: 'write_skill_file',
+      arguments: { skill: 'locked', path: 'reference/notes.md', content: 'notes' },
+    });
+    // A human marks it read-only (the REST/UI path).
+    await store.updateSkill('locked', { readOnly: true });
+
+    const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
+      { name: 'update_skill', arguments: { name: 'locked', body: 'hacked' } },
+      { name: 'rename_skill', arguments: { name: 'locked', new_name: 'unlocked' } },
+      { name: 'delete_skill', arguments: { name: 'locked' } },
+      { name: 'write_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md', content: 'hacked' } },
+      { name: 'write_skill_file', arguments: { skill: 'locked', path: 'new.md', content: 'new' } },
+      { name: 'create_skill_folder', arguments: { skill: 'locked', path: 'extra' } },
+      { name: 'move_skill_file', arguments: { skill: 'locked', from: 'reference/notes.md', to: 'moved.md' } },
+      { name: 'delete_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md' } },
+    ];
+    for (const attempt of attempts) {
+      const res = await client.callTool(attempt);
+      expect((res as { isError?: boolean }).isError, attempt.name).toBe(true);
+      expect(firstText(res)).toContain('read-only');
+    }
+
+    // Nothing changed on disk.
+    const skill = store.getSkill('locked');
+    expect(skill?.readOnly).toBe(true);
+    expect(skill?.body.trim()).toBe('original');
+    expect(skill?.files.map((f) => f.path)).toEqual(['reference', 'reference/notes.md']);
+    expect(store.getSkill('unlocked')).toBeUndefined();
+
+    // Loading and reading still work, and the catalogue flags it.
+    expect(firstText(await client.callTool({ name: 'locked' }))).toContain('original');
+    expect(
+      firstText(
+        await client.callTool({ name: 'read_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md' } }),
+      ),
+    ).toBe('notes');
+    const catalogue = JSON.parse(firstText(await client.callTool({ name: 'list_skills' }))) as {
+      skills: Array<{ name: string; readOnly?: boolean }>;
+    };
+    expect(catalogue.skills.find((s) => s.name === 'locked')?.readOnly).toBe(true);
+    expect(catalogue.skills.find((s) => s.name === 'getting-started')).not.toHaveProperty('readOnly');
+  });
+
+  it('gives agents no way to lift the read-only flag, and allows edits again once a human does', async () => {
+    const client = await connect(store);
+    await client.callTool({ name: 'create_skill', arguments: { name: 'locked', body: 'original' } });
+    await store.updateSkill('locked', { readOnly: true });
+
+    // `readOnly` is not an update_skill argument, so smuggling it in changes nothing.
+    await client.callTool({ name: 'update_skill', arguments: { name: 'locked', readOnly: false } });
+    expect(store.getSkill('locked')?.readOnly).toBe(true);
+    // Nor can a same-named skill be created over it.
+    const dupe = await client.callTool({ name: 'create_skill', arguments: { name: 'locked', body: 'replacement' } });
+    expect((dupe as { isError?: boolean }).isError).toBe(true);
+    expect(store.getSkill('locked')?.body.trim()).toBe('original');
+
+    await store.updateSkill('locked', { readOnly: false });
+    await client.callTool({ name: 'update_skill', arguments: { name: 'locked', body: 'edited' } });
+    expect(store.getSkill('locked')?.body.trim()).toBe('edited');
+  });
+
   it('reports a friendly error for a duplicate skill name', async () => {
     const client = await connect(store);
     await client.callTool({ name: 'create_skill', arguments: { name: 'dupe', body: 'b' } });

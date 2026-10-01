@@ -40,6 +40,7 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
     description: skill.description,
     format: skill.format,
     global: skill.global,
+    readOnly: skill.readOnly,
     path: skill.path,
     updatedAt: skill.updatedAt,
     files: skill.files,
@@ -151,6 +152,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       description: update.description,
       body: update.body,
       global: update.global,
+      readOnly: update.readOnly,
       tags: update.tags,
     });
     if (update.name !== undefined && update.name !== name) {

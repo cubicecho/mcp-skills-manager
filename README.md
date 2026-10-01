@@ -30,7 +30,10 @@ fixed no matter how many skills exist).
 Agents can also **author skills over MCP**: every endpoint exposes authoring
 tools (`create_skill`, `update_skill`, `rename_skill`, `delete_skill`, plus
 supporting-file tools) so an agent can write and refine its own skills. These
-are gated on a setting (on by default).
+are gated on a setting (on by default). To protect an individual skill, mark it
+**read-only** (the toggle in the skill editor, or `readonly: true` in its
+frontmatter): agents can still load it, but every authoring tool refuses to
+edit, rename or delete it — or, for a directory skill, anything in its folder.
 
 The root endpoint `/mcp` serves **all** skills. **Workspaces** are named subsets
 served at their own endpoint `/mcp/w/<slug>`, so you can hand a specific agent
@@ -141,8 +144,9 @@ knows they exist.
 The frontmatter `name` must be a slug: lowercase letters, digits, `.`, `_`, `-`
 (max 64 chars). `description` is surfaced as the MCP tool/resource description.
 An optional `tags` key (a comma-separated string or a YAML list) organises
-skills and feeds the `search_skills` filter. Unknown frontmatter keys are
-preserved across round-trips.
+skills and feeds the `search_skills` filter. `readonly: true` stops agents from
+modifying the skill over MCP (the web UI and REST API can still edit it).
+Unknown frontmatter keys are preserved across round-trips.
 
 ## Workspaces
 
@@ -209,7 +213,7 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 | `POST` | `/api/skills` | Create a skill |
 | `POST` | `/api/skills/import` | Import an uploaded `.md` / directory / `.zip` |
 | `GET` | `/api/skills/:name` | Get a skill (with body) |
-| `PATCH` | `/api/skills/:name` | Update body/description/tags/global, or rename |
+| `PATCH` | `/api/skills/:name` | Update body/description/tags/global/readOnly, or rename |
 | `DELETE` | `/api/skills/:name` | Delete a skill |
 | `GET` | `/api/skills/:name/export` | Download the skill as a `.zip` |
 | `GET` | `/api/skills/:name/files/content?path=` | Read one supporting file |

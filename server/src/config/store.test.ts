@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
@@ -631,5 +631,56 @@ describe('ConfigStore usage analytics', () => {
     expect(store.usageFile).toBe(path.join(dir, 'usage.json'));
     expect(store.usageFile.startsWith(store.configDir)).toBe(false);
     expect(store.usageFile.startsWith(store.skillsDir)).toBe(false);
+  });
+});
+
+describe('ConfigStore read-only skills', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-readonly-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('defaults to writable and keeps the frontmatter clean', async () => {
+    const skill = await store.createSkill({ name: 'plain', description: 'd', body: 'b' });
+    expect(skill.readOnly).toBe(false);
+    expect(skill.frontmatter).not.toHaveProperty('readonly');
+  });
+
+  it('persists the flag to frontmatter, survives unrelated edits and a rename, and clears cleanly', async () => {
+    await store.createSkill({ name: 'guarded', description: 'd', body: 'b', format: 'dir' });
+    expect((await store.updateSkill('guarded', { readOnly: true })).readOnly).toBe(true);
+    expect(await readFile(path.join(dir, 'skills', 'guarded', 'SKILL.md'), 'utf8')).toContain('readonly: true');
+
+    // The store itself stays unrestricted: a human edit (REST/UI) goes through and keeps the flag.
+    expect((await store.updateSkill('guarded', { body: 'edited' })).readOnly).toBe(true);
+    expect((await store.renameSkill('guarded', 'guarded-2')).readOnly).toBe(true);
+
+    // Round-trips from disk.
+    await store.reload();
+    expect(store.getSkill('guarded-2')?.readOnly).toBe(true);
+
+    const cleared = await store.updateSkill('guarded-2', { readOnly: false });
+    expect(cleared.readOnly).toBe(false);
+    expect(cleared.frontmatter).not.toHaveProperty('readonly');
+  });
+
+  it('honours a hand-written `readonly: yes` without losing the rest of the frontmatter', async () => {
+    await writeFile(
+      path.join(dir, 'skills', 'hand.md'),
+      '---\nname: hand\ndescription: by hand\nreadonly: yes\n---\n\nbody\n',
+    );
+    await store.reload();
+    const skill = store.getSkill('hand');
+    expect(skill?.readOnly).toBe(true);
+    expect(skill?.description).toBe('by hand');
   });
 });
