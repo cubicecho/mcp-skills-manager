@@ -32,6 +32,13 @@ Root-authored skills are global. `create_skill`/`update_skill` take a `global`
 argument to override either default (e.g. promote a workspace skill to global).
 New skills default to the `dir` layout so ref files can be attached.
 
+A skill can be marked **read-only** (frontmatter `readonly: true` → `Skill.readOnly`,
+toggled from the web UI via `PATCH /api/skills/:name`). Every mutating authoring
+tool then refuses it (`requireWritable` in `authoring-tools.ts`), covering the
+skill and its whole folder. The check lives in the MCP layer only — the
+`ConfigStore` mutators and REST API stay unrestricted so a human can still edit —
+and no authoring tool can set or clear the flag.
+
 Monorepo (npm workspaces): `shared/` (zod schemas + types — the contract),
 `server/` (Express 5 + MCP TS SDK), `app/` (React + Vite + shadcn/ui).
 

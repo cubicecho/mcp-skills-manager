@@ -52,9 +52,29 @@ export const skillFrontmatterSchema = z
      * via {@link normalizeTags}.
      */
     tags: z.union([z.string(), z.array(z.string())]).optional(),
+    /**
+     * Protects the skill (and, for a `dir` skill, its whole folder) from agents:
+     * when set, every MCP authoring tool refuses to change, rename or delete it.
+     * Humans can still edit it in the web UI or on disk. Accepts a string as well
+     * as a boolean so a hand-written `readonly: yes` is honoured rather than
+     * failing validation — see {@link isReadOnlyFlag}.
+     */
+    readonly: z.union([z.boolean(), z.string()]).optional(),
   })
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
+
+/**
+ * Interpret a frontmatter `readonly` value. YAML 1.2 reads a bare `yes`/`on` as
+ * a string, so those spellings count as true too — a protection flag should not
+ * silently fail open on a hand edit.
+ */
+export function isReadOnlyFlag(input: unknown): boolean {
+  if (typeof input === 'string') {
+    return ['true', 'yes', 'on'].includes(input.trim().toLowerCase());
+  }
+  return input === true;
+}
 
 /**
  * Normalize a frontmatter `tags` value (comma-separated string or array) into a
@@ -100,6 +120,8 @@ export const skillSchema = z.object({
   format: skillFormatSchema,
   /** Whether the skill is served on the root `/mcp` aggregate (frontmatter `global`, default true). */
   global: z.boolean().default(true),
+  /** Whether agents are barred from modifying the skill over MCP (frontmatter `readonly`, default false). */
+  readOnly: z.boolean().default(false),
   /** File path relative to the skills dir (`<name>.md` or `<name>/SKILL.md`). */
   path: z.string(),
   /** Last-modified time of the skill's SKILL.md / `.md`, ISO 8601. */

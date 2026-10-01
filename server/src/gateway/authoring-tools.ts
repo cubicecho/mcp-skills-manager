@@ -14,6 +14,11 @@ import { errorDetailMessage, HttpError } from '../errors.ts';
  * newly created skill is scoped to that workspace: written with `global: false`
  * (hidden from the root `/mcp` aggregate) and appended to the workspace's member
  * list. Authored from the root endpoint, skills are global as usual.
+ *
+ * A skill a human has marked read-only (frontmatter `readonly: true`) is off
+ * limits: every tool that would change, rename or delete it — or anything in its
+ * folder — refuses. The flag itself is deliberately not settable from here, so an
+ * agent cannot lift the protection; it is toggled over the REST API / web UI.
  */
 
 /** MCP tool-name → conventional `[A-Za-z0-9_-]` (mirrors skill-server's toolName). */
@@ -134,6 +139,16 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const { store, workspaceSlug } = deps;
   const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
+  /** Refuse to touch a skill a human has marked read-only. An unknown name falls through to the store's 404. */
+  const requireWritable = (name: string): void => {
+    if (store.getSkill(name)?.readOnly) {
+      throw new Error(
+        `Skill "${name}" is read-only and cannot be modified, renamed or deleted over MCP. ` +
+          'Only a human can lift this in the web UI — do not retry; create a new skill instead if you need a variant.',
+      );
+    }
+  };
+
   return [
     {
       definition: {
@@ -213,7 +228,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           'Update an existing skill in place: replace its `description` and/or its Markdown `body`, and/or ' +
           'toggle its `global` visibility on the root /mcp endpoint. Preserves the skill format, supporting ' +
           'files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to ' +
-          'change supporting files.',
+          'change supporting files. Skills marked read-only (`readOnly` in the catalogue) cannot be changed by ' +
+          'this or any other authoring tool.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -237,6 +253,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(updateArgs, args);
+        requireWritable(input.name);
         const skill = await guard(() =>
           store.updateSkill(input.name, {
             description: input.description,
@@ -264,6 +281,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(renameArgs, args);
+        requireWritable(input.name);
         const target = skillNameSchema.safeParse(input.new_name);
         if (!target.success) {
           throw new Error(`Invalid skill name "${input.new_name}"`);
@@ -290,6 +308,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(deleteArgs, args);
+        requireWritable(input.name);
         await guard(() => store.deleteSkill(input.name));
         if (workspaceSlug) {
           await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
@@ -317,6 +336,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(writeFileArgs, args);
+        requireWritable(input.skill);
         const skill = await guard(() =>
           store.writeSupportingFile(input.skill, input.path, Buffer.from(input.content, input.encoding ?? 'utf8')),
         );
@@ -366,6 +386,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(folderArgs, args);
+        requireWritable(input.skill);
         const skill = await guard(() => store.createSupportingFolder(input.skill, input.path));
         return `Created folder "${input.path}" in skill "${skill.name}".`;
       },
@@ -387,6 +408,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(moveArgs, args);
+        requireWritable(input.skill);
         const skill = await guard(() => store.moveSupportingPath(input.skill, input.from, input.to));
         return `Moved "${input.from}" to "${input.to}" in skill "${skill.name}".`;
       },
@@ -407,6 +429,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(deleteFileArgs, args);
+        requireWritable(input.skill);
         const skill = await guard(() => store.deleteSupportingFile(input.skill, input.path));
         return `Deleted "${input.path}" from skill "${skill.name}". ${fileSummary(skill)}`;
       },

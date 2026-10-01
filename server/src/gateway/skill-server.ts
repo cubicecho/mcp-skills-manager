@@ -250,6 +250,8 @@ function indexEntry(skill: Skill) {
     files: skill.files.filter((f) => f.type === 'file').map((f) => f.path),
     updatedAt: skill.updatedAt,
     ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
+    // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill.
+    ...(skill.readOnly ? { readOnly: true } : {}),
     ...skillMeta(skill),
   };
 }

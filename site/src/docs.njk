@@ -62,8 +62,9 @@ description: Write clear, conventional git commit messages.
           <code>-</code> (max 64 chars). It doubles as the MCP tool name (dots sanitized to <code>_</code>) and the
           resource URI (<code>skill://&lt;name&gt;</code>). <code>description</code> is surfaced as the MCP
           tool/resource description. An optional <code>tags</code> key (a comma-separated string or a YAML list)
-          organises skills and feeds the <code>search_skills</code> filter. Unknown frontmatter keys are preserved
-          across round-trips.</p>
+          organises skills and feeds the <code>search_skills</code> filter. <code>readonly: true</code> stops agents
+          from modifying the skill over MCP (the web UI and REST API can still edit it). Unknown frontmatter keys are
+          preserved across round-trips.</p>
 
         <h2 id="workspaces">Workspaces</h2>
         <p>A <strong>workspace</strong> is a named subset of skills served at its own <code>/mcp/w/&lt;slug&gt;</code>
@@ -126,7 +127,7 @@ description: Write clear, conventional git commit messages.
               <tr><td><code>POST /api/skills</code></td><td>Create a skill</td></tr>
               <tr><td><code>POST /api/skills/import</code></td><td>Import an uploaded <code>.md</code> / directory / zip</td></tr>
               <tr><td><code>GET /api/skills/:name</code></td><td>Get a skill (with body)</td></tr>
-              <tr><td><code>PATCH /api/skills/:name</code></td><td>Update body/description, or rename</td></tr>
+              <tr><td><code>PATCH /api/skills/:name</code></td><td>Update body/description/tags/global/readOnly, or rename</td></tr>
               <tr><td><code>DELETE /api/skills/:name</code></td><td>Delete a skill</td></tr>
               <tr><td><code>GET /api/skills/:name/export</code></td><td>Download the skill as a <code>.zip</code></td></tr>
               <tr><td><code>GET /api/skills/:name/files/content?path=</code></td><td>Read one supporting file</td></tr>
@@ -195,7 +196,9 @@ description: Write clear, conventional git commit messages.
           <code>read_skill_file</code>, <code>create_skill_folder</code>, <code>move_skill_file</code>,
           <code>delete_skill_file</code>). A skill authored through a workspace endpoint is scoped to that workspace by
           default; skills authored at the root <code>/mcp</code> are global. Toggle the whole feature with
-          <code>authoringEnabled</code> in settings.</p>
+          <code>authoringEnabled</code> in settings, or protect a single skill by marking it <strong>read-only</strong>
+          (the toggle in the skill editor, or <code>readonly: true</code> in its frontmatter): agents can still load
+          it, but every authoring tool refuses to edit, rename or delete it or anything in its folder.</p>
 
         <h2 id="security">Security notes</h2>
         <ul class="notes">

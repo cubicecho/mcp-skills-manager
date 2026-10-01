@@ -14,6 +14,7 @@ import type {
   WorkspaceConfig,
 } from '@mcp-skills/shared';
 import {
+  isReadOnlyFlag,
   normalizeTags,
   settingsFileSchema,
   skillNameSchema,
@@ -432,16 +433,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(relPath, format);
   }
 
-  /** Update an existing skill's description, body and/or global visibility in place, preserving unknown frontmatter and format. */
+  /** Update an existing skill's description, body, global visibility and/or read-only flag in place, preserving unknown frontmatter and format. */
   async updateSkill(
     name: string,
-    patch: { description?: string; body?: string; global?: boolean; tags?: string[] },
+    patch: { description?: string; body?: string; global?: boolean; readOnly?: boolean; tags?: string[] },
   ): Promise<Skill> {
     const existing = this.skills.get(name);
     if (!existing) {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const nextGlobal = patch.global ?? existing.global;
+    const nextReadOnly = patch.readOnly ?? existing.readOnly;
     // Tags: undefined → keep existing; a list → replace (empty clears the key).
     const nextTags = patch.tags !== undefined ? normalizeTags(patch.tags) : existing.tags;
     const frontmatter: SkillFrontmatter = {
@@ -450,6 +452,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       description: patch.description ?? existing.description,
       // Persist `global: false` only; drop the key entirely when the skill is (back to) global.
       global: nextGlobal ? undefined : false,
+      // Likewise persist `readonly: true` only; drop the key when the skill is writable.
+      readonly: nextReadOnly ? true : undefined,
       tags: nextTags.length > 0 ? nextTags : undefined,
     };
     const body = patch.body ?? existing.body;
@@ -942,6 +946,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       format,
       // Only an explicit `global: false` hides a skill from the root aggregate; anything else is global.
       global: frontmatter.global !== false,
+      readOnly: isReadOnlyFlag(frontmatter.readonly),
       path: relPath,
       updatedAt: stats.mtime.toISOString(),
       files,
