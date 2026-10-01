@@ -2,6 +2,7 @@ import path from 'node:path';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
+import { tuneKeepAlive } from './http-tuning.ts';
 
 async function main(): Promise<void> {
   const dataDir = path.resolve(process.env.DATA_DIR ?? './data');
@@ -28,6 +29,8 @@ async function main(): Promise<void> {
       console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${settings.authToken}`);
     }
   });
+
+  tuneKeepAlive(httpServer);
 
   httpServer.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

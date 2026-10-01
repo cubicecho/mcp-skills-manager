@@ -196,6 +196,7 @@ re-read with the **Reload** button on the Settings page or `POST /api/reload`.
 | `PORT` | `3000` (or `settings.json`) | HTTP listen port |
 | `MCP_SKILLS_TOKEN` | — | Bearer token; overrides the one in `settings.json` |
 | `SECURE_LOCAL_NET` | `false` | Set `true` to disable auth entirely (trusted networks only) |
+| `HTTP_KEEP_ALIVE_TIMEOUT_MS` | `75000` | How long an idle client connection stays open (Node's own default is 5 s). Keep it above the idle timeout of any reverse proxy in front; `0` never closes one |
 
 If no token is configured and `SECURE_LOCAL_NET` is not set, a random token is
 generated into `settings.json` on first run and logged.
