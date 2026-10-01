@@ -1,6 +1,6 @@
 {
   "name": "mcp-skills-manager",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "MCP Skills Manager - author skill.md files and serve them to agents over MCP, grouped into workspaces",
   "type": "module",
