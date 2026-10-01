@@ -1,13 +1,16 @@
 import { skillNameSchema } from '@mcp-skills/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { FileArchiveIcon, FileTextIcon, FolderIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { FileArchive, FileText, Folder } from '@/components/app-icons';
 import { FormField } from '@/components/form-field';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
-import { toastApiError } from '@/lib/toast';
+import { useToasts } from '@/lib/toast';
 
 export const UPLOAD_SKILL_FORM_ID = 'upload-skill-form';
 
@@ -34,6 +37,7 @@ export function UploadSkillForm({
   onStatusChange: (status: UploadStatus) => void;
   onImported: () => void;
 }) {
+  const toast = useToasts();
   const navigate = useNavigate();
   const importSkill = useImportSkill();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +67,7 @@ export function UploadSkillForm({
       setUpload(result);
       setName(result.defaultName);
     } catch (error) {
-      toastApiError(error);
+      toast.apiError(error);
       setUpload(null);
     } finally {
       setReading(false);
@@ -81,7 +85,7 @@ export function UploadSkillForm({
           onImported();
           navigate({ to: '/skills/$name', params: { name: skill.name } });
         },
-        onError: toastApiError,
+        onError: toast.apiError,
       },
     );
   };
@@ -96,15 +100,15 @@ export function UploadSkillForm({
       }}
     >
       <p className="text-sm text-muted-foreground">
-        Import a single <code>.md</code> file, a folder (its <code>SKILL.md</code> plus supporting files), or a{' '}
-        <code>.zip</code> archive that is unpacked into a directory skill.
+        Import a single <Code>.md</Code> file, a folder (its <Code>SKILL.md</Code> plus supporting files), or a{' '}
+        <Code>.zip</Code> archive that is unpacked into a directory skill.
       </p>
       <div className="grid grid-cols-2 gap-2">
         <Button type="button" variant="outline" disabled={reading} onClick={() => fileInputRef.current?.click()}>
-          <FileTextIcon /> Choose .md or .zip
+          <FileText /> Choose .md or .zip
         </Button>
         <Button type="button" variant="outline" disabled={reading} onClick={() => folderInputRef.current?.click()}>
-          <FolderIcon /> Choose folder
+          <Folder /> Choose folder
         </Button>
       </div>
 
@@ -133,9 +137,15 @@ export function UploadSkillForm({
         }}
       />
 
-      {reading && <p className="text-sm text-muted-foreground">Reading files…</p>}
+      {reading && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner label="Reading files" /> Reading files…
+        </p>
+      )}
 
-      {upload?.error && <p className="text-sm text-destructive">{upload.error}</p>}
+      {upload?.error && (
+        <Alert variant="destructive" title="This upload can’t be imported" description={upload.error} />
+      )}
 
       {upload && !upload.error && (
         <>
@@ -148,7 +158,7 @@ export function UploadSkillForm({
 
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-2 text-sm font-medium">
-              {upload.format === 'dir' ? <FileArchiveIcon className="size-4" /> : <FileTextIcon className="size-4" />}
+              {upload.format === 'dir' ? <FileArchive className="size-4" /> : <FileText className="size-4" />}
               {upload.format === 'dir' ? 'Directory skill' : 'File skill'} · {upload.paths.length} file
               {upload.paths.length === 1 ? '' : 's'}
             </span>

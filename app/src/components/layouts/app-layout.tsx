@@ -1,135 +1,115 @@
-import { Link } from '@tanstack/react-router';
-import { BookMarkedIcon, LayersIcon, LockIcon, MoonIcon, SettingsIcon, SunIcon } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { createLink, Link, useLocation } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { BookMarked, Layers, Lock } from '@/components/app-icons';
+import { Sidebar, SidebarNavItem, SidebarSection } from '@/components/sidebar';
+import { SidebarLayout } from '@/components/split-layout';
+import { Settings } from '@/components/ui/icons';
+import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus } from '@/lib/queries';
-import { isDark, setDark } from '@/lib/theme';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Skills', icon: BookMarkedIcon },
-  { to: '/workspaces', label: 'Workspaces', icon: LayersIcon },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
+  { to: '/', label: 'Skills', icon: BookMarked },
+  { to: '/workspaces', label: 'Workspaces', icon: Layers },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ] as const;
 
-function ThemeToggle() {
-  const [dark, setDarkState] = useState(isDark);
+type NavTo = (typeof NAV_ITEMS)[number]['to'];
 
-  const toggle = () => {
-    setDark(!dark);
-    setDarkState(!dark);
-  };
+const SidebarLink = createLink(SidebarNavItem);
 
-  return (
-    <ActionButton
-      variant="ghost"
-      size="icon-sm"
-      label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-      onClick={toggle}
-    >
-      {dark ? <SunIcon /> : <MoonIcon />}
-    </ActionButton>
-  );
+/** Skills owns the editor route too, so its row stays lit while a skill is open. */
+function isActive(to: NavTo, pathname: string): boolean {
+  return to === '/' ? pathname === '/' || pathname.startsWith('/skills/') : pathname.startsWith(to);
 }
 
 /** Clears the stored bearer token and brings the token gate back — for shared machines. */
-function LockButton() {
-  const { data } = useServerStatus();
-
-  if (!data?.authEnabled) {
-    return null;
-  }
-
-  const lock = () => {
-    clearToken();
-    requireAuth();
-  };
-
-  return (
-    <ActionButton variant="ghost" size="icon-sm" label="Lock" hint="Forget the stored token" onClick={lock}>
-      <LockIcon />
-    </ActionButton>
-  );
+function lock() {
+  clearToken();
+  requireAuth();
 }
 
-function HeaderStatus() {
-  const { data, isPending } = useServerStatus();
-
-  if (isPending) {
-    return <Skeleton className="h-4 w-24" />;
-  }
-  if (!data) {
-    return null;
-  }
+/** `compact` keeps the name for screen readers only: the phone bar has no room for it beside the nav. */
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">{data.skillCount}</span> skills ·{' '}
-      <span className="font-medium text-foreground">{data.workspaceCount}</span> workspaces
+    <span className="flex items-center gap-2 px-2 font-semibold">
+      <BookMarked className="size-5" aria-hidden />
+      <span className={compact ? 'sr-only' : undefined}>MCP Skills</span>
     </span>
   );
 }
 
-function MobileNav() {
-  return (
-    <nav className="flex items-center gap-1 md:hidden" aria-label="Main">
-      <BookMarkedIcon className="mr-1 size-5" aria-hidden />
-      {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <Link
-          key={to}
-          to={to}
-          aria-label={label}
-          activeOptions={{ exact: to === '/' }}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          activeProps={{ className: 'rounded-md p-2 bg-accent text-accent-foreground' }}
-        >
-          <Icon className="size-4" />
-        </Link>
-      ))}
-      <LockButton />
-      <ThemeToggle />
-    </nav>
-  );
-}
-
 export function AppLayout({ children }: { children: ReactNode }) {
+  const { data: status } = useServerStatus();
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const counts: Partial<Record<NavTo, number>> = {
+    '/': status?.skillCount,
+    '/workspaces': status?.workspaceCount,
+  };
+
   return (
-    <div className="flex h-dvh">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex items-center gap-2 px-4 py-4 font-semibold">
-          <BookMarkedIcon className="size-5" />
-          MCP Skills
-        </div>
-        <nav className="flex flex-col gap-1 px-2">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              activeOptions={{ exact: to === '/' }}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              activeProps={{
-                className:
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-sidebar-accent text-sidebar-accent-foreground font-medium',
-              }}
-            >
-              <Icon className="size-4" />
-              {label}
-            </Link>
-          ))}
-        </nav>
-        <div className="mt-auto flex items-center justify-end gap-1 px-4 py-3">
-          <LockButton />
-          <ThemeToggle />
-        </div>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-2 border-b px-4 md:justify-end md:px-6">
-          <MobileNav />
-          <HeaderStatus />
-        </header>
-        {/* Pages bring their own inset and scroll their own body (PageLayout), so main only divides the height. */}
-        <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-      </div>
-    </div>
+    <SidebarLayout
+      className="h-dvh"
+      sidebarPosition="start"
+      sidebarWidth="auto"
+      divider="none"
+      sidebarHideBelow="md"
+      sidebar={
+        <Sidebar
+          label="MCP Skills"
+          header={<Brand />}
+          content={
+            <SidebarSection
+              as="nav"
+              label="Main"
+              content={NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+                <SidebarLink
+                  key={to}
+                  to={to}
+                  label={label}
+                  icon={<Icon />}
+                  count={counts[to]}
+                  active={isActive(to, pathname)}
+                />
+              ))}
+            />
+          }
+          footer={
+            <>
+              {status?.authEnabled && <SidebarNavItem label="Lock" icon={<Lock />} onClick={lock} />}
+              <ThemePicker variant="compact" />
+            </>
+          }
+        />
+      }
+      brand={<Brand compact />}
+      nav={NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <ActionButton
+          key={to}
+          asChild
+          variant={isActive(to, pathname) ? 'secondary' : 'ghost'}
+          size="icon-sm"
+          label={label}
+        >
+          <Link to={to}>
+            <Icon />
+          </Link>
+        </ActionButton>
+      ))}
+      navLabel="Main"
+      action={
+        <>
+          {status?.authEnabled && (
+            <ActionButton variant="ghost" size="icon-sm" label="Lock" hint="Forget the stored token" onClick={lock}>
+              <Lock />
+            </ActionButton>
+          )}
+          <ThemePicker variant="compact" />
+        </>
+      }
+      // Pages bring their own inset and scroll their own body (PageLayout), so main only divides the height.
+      content={<main className="h-full min-h-0 overflow-hidden">{children}</main>}
+    />
   );
 }

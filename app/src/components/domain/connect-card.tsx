@@ -1,8 +1,7 @@
-import { CheckIcon, CopyIcon, PlugIcon } from 'lucide-react';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import { ActionButton } from '@/components/action-button';
+import { Plug } from '@/components/app-icons';
 import { CardLayout } from '@/components/card-layout';
+import { CopyButton } from '@/components/ui/copy-button';
+import { useToasts } from '@/lib/toast';
 
 /** Shows an MCP endpoint URL with a copy button and a short explanation. */
 export function ConnectCard({
@@ -14,29 +13,20 @@ export function ConnectCard({
   label: string;
   description: string;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(endpoint);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error('Failed to copy to clipboard');
-    }
-  };
-
+  const toast = useToasts();
   return (
     <CardLayout
-      icon={<PlugIcon />}
+      icon={<Plug />}
       title={`Connect: ${label}`}
       description={description}
       content={
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
           <code className="min-w-0 flex-1 truncate font-mono text-sm">{endpoint}</code>
-          <ActionButton variant="ghost" size="icon-sm" label="Copy endpoint URL" onClick={copy}>
-            {copied ? <CheckIcon /> : <CopyIcon />}
-          </ActionButton>
+          <CopyButton
+            value={endpoint}
+            label="Copy endpoint URL"
+            onError={() => toast.error('Failed to copy to clipboard')}
+          />
         </div>
       }
     />

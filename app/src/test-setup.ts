@@ -13,6 +13,9 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 // jsdom's window.scrollTo throws "Not implemented"; some libraries call it.
 window.scrollTo = () => {};
 
+// jsdom has no Element.scrollIntoView; cmdk (the MultiSelect's list) calls it on the active row.
+Element.prototype.scrollIntoView = () => {};
+
 // Node >=22 exposes an experimental `localStorage` getter on globalThis that returns
 // undefined unless the process runs with --localstorage-file, and vitest's jsdom
 // environment does not override pre-existing globals. Shim a simple in-memory Storage.

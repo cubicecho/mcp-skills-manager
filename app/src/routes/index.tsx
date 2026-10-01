@@ -1,33 +1,24 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import {
-  BookMarkedIcon,
-  FileTextIcon,
-  FolderIcon,
-  LockIcon,
-  PencilIcon,
-  PlusIcon,
-  SearchIcon,
-  Trash2Icon,
-} from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
-import { CardLayout } from '@/components/card-layout';
+import { BookMarked, FileText, Folder, Lock } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
 import { OptionSelect, type SelectEntry } from '@/components/option-select';
+import { EmptyState } from '@/components/page';
 import { PageLayout } from '@/components/page-layout';
 import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Pencil, Plus, Search, Trash2 } from '@/components/ui/icons';
+import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
-import { toastApiError } from '@/lib/toast';
+import { useToasts } from '@/lib/toast';
 
 export const Route = createFileRoute('/')({
   component: SkillsPage,
@@ -91,6 +82,7 @@ const SORT_OPTIONS: SelectEntry[] = [
 ];
 
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
+  const toast = useToasts();
   const remove = useDeleteSkill();
   return (
     <ConfirmButton
@@ -99,15 +91,16 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
       label={`Delete ${skill.name}`}
       title={`Delete skill "${skill.name}"?`}
       description={`This permanently removes the skill file${skill.format === 'dir' ? ' and its directory' : ''}. It will also be dropped from any workspace that references it.`}
-      onConfirm={() => remove.mutate(skill.name, { onError: toastApiError })}
+      onConfirm={() => remove.mutate(skill.name, { onError: toast.apiError })}
     >
-      <Trash2Icon />
+      <Trash2 />
     </ConfirmButton>
   );
 }
 
 /** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its workspaces (scoped). */
 function GlobalToggle({ skill }: { skill: SkillSummary }) {
+  const toast = useToasts();
   const update = useUpdateSkill(skill.name);
   return (
     <Switch
@@ -127,7 +120,7 @@ function GlobalToggle({ skill }: { skill: SkillSummary }) {
               toast.success(
                 next ? 'Now served on the root /mcp endpoint' : 'Now workspace-scoped — hidden from root /mcp',
               ),
-            onError: toastApiError,
+            onError: toast.apiError,
           },
         )
       }
@@ -154,34 +147,37 @@ function SkillsPage() {
     [data, query, scope, format, activeTag, sort],
   );
   const hasSkills = Boolean(data && data.length > 0);
+  const clearFilters = () => {
+    setQuery('');
+    setScope('all');
+    setFormat('all');
+    setTag('all');
+  };
 
   const newSkillButton = (
     <Button onClick={() => setNewOpen(true)}>
-      <PlusIcon /> New skill
+      <Plus /> New skill
     </Button>
   );
 
   const filters = hasSkills ? (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[12rem] flex-1">
-        <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search name or description…"
-          className="pl-8"
-          aria-label="Search skills"
-        />
-      </div>
+      <SearchInput
+        wrapperClassName="w-64"
+        label="Search skills"
+        placeholder="Search name or description…"
+        value={query}
+        onChangeText={setQuery}
+      />
       <OptionSelect
-        className="w-36"
+        className="w-40"
         aria-label="Filter by scope"
         options={SCOPE_OPTIONS}
         value={scope}
         onValueChange={(value) => setScope(value as ScopeFilter)}
       />
       <OptionSelect
-        className="w-32"
+        className="w-40"
         aria-label="Filter by format"
         options={FORMAT_OPTIONS}
         value={format}
@@ -189,7 +185,7 @@ function SkillsPage() {
       />
       {allTags.length > 0 && (
         <OptionSelect
-          className="w-36"
+          className="w-40"
           aria-label="Filter by tag"
           options={[{ value: 'all', label: 'All tags' }, ...allTags.map((t) => ({ value: t, label: t }))]}
           value={activeTag}
@@ -221,17 +217,21 @@ function SkillsPage() {
               count={visible.length}
               empty={
                 hasSkills ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No skills match your filters.</p>
-                ) : (
-                  <CardLayout
-                    contentClassName="flex flex-col items-center gap-3 py-6 text-center"
-                    content={
-                      <>
-                        <BookMarkedIcon className="size-8 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">No skills yet.</p>
-                        {newSkillButton}
-                      </>
+                  <EmptyState
+                    icon={Search}
+                    title="No skills match your filters"
+                    action={
+                      <Button variant="outline" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
                     }
+                  />
+                ) : (
+                  <EmptyState
+                    icon={BookMarked}
+                    title="No skills yet"
+                    description="Create one, or upload a folder or zip you already have."
+                    action={newSkillButton}
                   />
                 )
               }
@@ -239,6 +239,7 @@ function SkillsPage() {
 
             {visible.length > 0 && (
               <Table>
+                <TableCaption className="sr-only">Skills</TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
@@ -254,13 +255,13 @@ function SkillsPage() {
                 <TableBody>
                   {visible.map((skill) => (
                     <TableRow key={skill.name}>
-                      <TableCell className="font-medium">
+                      <TableHead className="font-medium">
                         <div className="flex items-center gap-2">
                           <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
                             {skill.name}
                           </Link>
                           {skill.readOnly && (
-                            <LockIcon
+                            <Lock
                               className="size-3.5 shrink-0 text-muted-foreground"
                               aria-label="Read-only for agents"
                             />
@@ -271,17 +272,13 @@ function SkillsPage() {
                             </Badge>
                           ))}
                         </div>
-                      </TableCell>
+                      </TableHead>
                       <TableCell className="max-w-md truncate text-muted-foreground">
                         {skill.description || '—'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="gap-1 font-normal">
-                          {skill.format === 'dir' ? (
-                            <FolderIcon className="size-3" />
-                          ) : (
-                            <FileTextIcon className="size-3" />
-                          )}
+                          {skill.format === 'dir' ? <Folder className="size-3" /> : <FileText className="size-3" />}
                           {skill.format}
                           {skill.files.length > 0 &&
                             ` · ${skill.files.length} file${skill.files.length === 1 ? '' : 's'}`}
@@ -301,7 +298,7 @@ function SkillsPage() {
                         <div className="flex justify-end gap-1">
                           <ActionButton variant="ghost" size="icon-sm" asChild label={`Edit ${skill.name}`}>
                             <Link to="/skills/$name" params={{ name: skill.name }}>
-                              <PencilIcon />
+                              <Pencil />
                             </Link>
                           </ActionButton>
                           <DeleteSkillButton skill={skill} />

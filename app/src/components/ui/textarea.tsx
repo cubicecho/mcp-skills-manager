@@ -1,18 +1,30 @@
-import type * as React from 'react';
-
+import type { ComponentPropsWithRef } from 'react';
+import { type TextareaProps as SharedTextareaProps, TEXTAREA_CLASS } from '@/components/ui/textarea-base';
 import { cn } from '@/lib/utils';
 
-function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
+/** The shared contract, widened to everything a DOM `<textarea>` takes. */
+export type TextareaProps = Omit<ComponentPropsWithRef<'textarea'>, 'className'> &
+  Omit<SharedTextareaProps, 'onBlur' | 'value'> & {
+    value?: ComponentPropsWithRef<'textarea'>['value'];
+  };
+
+function Textarea({ onChange, onChangeText, className, ...props }: TextareaProps) {
   return (
     <textarea
       data-slot="textarea"
+      onChange={(e) => {
+        onChange?.(e);
+        onChangeText?.(e.target.value);
+      }}
+      {...props}
       className={cn(
-        'flex min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
+        TEXTAREA_CLASS,
+        // `resize-y` is the browser's own affordance and has no native
+        // counterpart; `disabled:` is the DOM attribute doing what the native
+        // half spells out as `disabled && "opacity-50"`.
+        'resize-y disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive',
         className,
       )}
-      {...props}
     />
   );
 }

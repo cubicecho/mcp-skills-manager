@@ -2,13 +2,13 @@ import type { SkillToolMode, WorkspaceStatus } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
 import { InputField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
-import { FormField } from '@/components/form-field';
+import { MultiSelectField } from '@/components/multi-select-field';
 import type { SelectEntry } from '@/components/option-select';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Code } from '@/components/ui/code';
 import { useCreateWorkspace, useSkills, useUpdateWorkspace } from '@/lib/queries';
 import { SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
-import { toastApiError } from '@/lib/toast';
+import { useToasts } from '@/lib/toast';
 
 const WORKSPACE_FORM_ID = 'workspace-form';
 
@@ -33,6 +33,7 @@ export function requireWorkspaceName({ value }: { value: string }): string | und
 
 /** Create or edit a workspace: name, description, enabled flag, and the member skill set. */
 export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
+  const toast = useToasts();
   const isEdit = Boolean(workspace);
   const { data: skills } = useSkills();
   const createWorkspace = useCreateWorkspace();
@@ -59,7 +60,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
         }
         onOpenChange(false);
       } catch (error) {
-        toastApiError(error);
+        toast.apiError(error);
       }
     },
   });
@@ -73,7 +74,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
         title={isEdit ? `Edit workspace "${workspace?.name}"` : 'New workspace'}
         description={
           <>
-            A workspace serves a chosen subset of skills at its own endpoint <code>/mcp/w/&lt;slug&gt;</code>.
+            A workspace serves a chosen subset of skills at its own endpoint <Code>/mcp/w/&lt;slug&gt;</Code>.
           </>
         }
         hasUnsavedChanges={isDirty}
@@ -97,7 +98,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
               description={
                 isEdit ? (
                   <>
-                    URL: <code className="font-mono">{workspace?.path}</code> (renaming re-derives the slug)
+                    URL: <Code>{workspace?.path}</Code> (renaming re-derives the slug)
                   </>
                 ) : undefined
               }
@@ -122,57 +123,22 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
               options={TOOL_MODE_OPTIONS}
               description="How this workspace’s endpoint advertises skills as tools. Inherit uses the global default from Settings."
             />
-            <form.Field name="skills">
-              {(field) => (
-                <FormField
-                  asGroup
-                  label={`Skills (${field.state.value.length} selected)`}
-                  control={(wired) => (
-                    <fieldset
-                      {...wired}
-                      className="flex max-h-56 min-w-0 flex-col gap-1 overflow-y-auto rounded-md border p-1"
-                    >
-                      {skills && skills.length > 0 ? (
-                        skills.map((skill) => {
-                          const checked = field.state.value.includes(skill.name);
-                          const checkboxId = `workspace-skill-${skill.name}`;
-                          return (
-                            <label
-                              key={skill.name}
-                              htmlFor={checkboxId}
-                              className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
-                            >
-                              <Checkbox
-                                id={checkboxId}
-                                className="mt-0.5"
-                                checked={checked}
-                                onCheckedChange={(next) =>
-                                  field.handleChange(
-                                    next === true
-                                      ? [...field.state.value, skill.name]
-                                      : field.state.value.filter((member) => member !== skill.name),
-                                  )
-                                }
-                              />
-                              <span className="min-w-0">
-                                <span className="block text-sm font-medium">{skill.name}</span>
-                                {skill.description && (
-                                  <span className="block break-words text-xs text-muted-foreground">
-                                    {skill.description}
-                                  </span>
-                                )}
-                              </span>
-                            </label>
-                          );
-                        })
-                      ) : (
-                        <p className="px-2 py-4 text-center text-sm text-muted-foreground">No skills to add yet.</p>
-                      )}
-                    </fieldset>
-                  )}
-                />
-              )}
-            </form.Field>
+            <MultiSelectField
+              form={form}
+              name="skills"
+              label="Skills"
+              description="The skills this workspace’s endpoint serves."
+              placeholder="Select skills…"
+              searchPlaceholder="Search skills…"
+              searchLabel="Search skills"
+              popoverLabel="Skills"
+              emptyMessage="No skills to add yet."
+              options={(skills ?? []).map((skill) => ({
+                value: skill.name,
+                label: skill.name,
+                hint: skill.description || undefined,
+              }))}
+            />
           </form>
         }
         footerActions={(close) => (

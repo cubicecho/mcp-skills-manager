@@ -1,20 +1,22 @@
 import type { WorkspaceStatus } from '@mcp-skills/shared';
 import { createFileRoute } from '@tanstack/react-router';
-import { CheckIcon, CopyIcon, LayersIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
-import { CardLayout } from '@/components/card-layout';
+import { Layers } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
 import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
+import { EmptyState } from '@/components/page';
 import { PageLayout } from '@/components/page-layout';
 import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Code } from '@/components/ui/code';
+import { CopyButton } from '@/components/ui/copy-button';
+import { Pencil, Plus, Trash2 } from '@/components/ui/icons';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteWorkspace, useServerStatus, useWorkspaces } from '@/lib/queries';
-import { toastApiError } from '@/lib/toast';
+import { useToasts } from '@/lib/toast';
 
 export const Route = createFileRoute('/workspaces')({
   component: WorkspacesPage,
@@ -23,25 +25,8 @@ export const Route = createFileRoute('/workspaces')({
 /** create → the New button; edit → a specific workspace; null → closed. */
 type DialogState = { mode: 'create' } | { mode: 'edit'; workspace: WorkspaceStatus } | null;
 
-function CopyUrlButton({ path, origin }: { path: string; origin: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(`${origin}${path}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error('Failed to copy to clipboard');
-    }
-  };
-  return (
-    <ActionButton variant="ghost" size="icon-sm" label={`Copy URL for ${path}`} onClick={copy}>
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </ActionButton>
-  );
-}
-
 function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
+  const toast = useToasts();
   const remove = useDeleteWorkspace();
   return (
     <ConfirmButton
@@ -50,14 +35,15 @@ function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
       label={`Delete ${workspace.name}`}
       title={`Delete workspace "${workspace.name}"?`}
       description="This removes the workspace and its endpoint. The skills themselves are not deleted."
-      onConfirm={() => remove.mutate(workspace.slug, { onError: toastApiError })}
+      onConfirm={() => remove.mutate(workspace.slug, { onError: toast.apiError })}
     >
-      <Trash2Icon />
+      <Trash2 />
     </ConfirmButton>
   );
 }
 
 function WorkspacesPage() {
+  const toast = useToasts();
   const workspaces = useWorkspaces();
   const { data } = workspaces;
   const { data: status } = useServerStatus();
@@ -66,7 +52,7 @@ function WorkspacesPage() {
 
   const newWorkspaceButton = (
     <Button onClick={() => setDialog({ mode: 'create' })}>
-      <PlusIcon /> New workspace
+      <Plus /> New workspace
     </Button>
   );
 
@@ -76,8 +62,8 @@ function WorkspacesPage() {
         title="Workspaces"
         description={
           <>
-            Group a chosen subset of skills into a filtered endpoint at <code>/mcp/w/&lt;slug&gt;</code> (or serve it
-            over stdio with <code>--workspace &lt;slug&gt;</code>).
+            Group a chosen subset of skills into a filtered endpoint at <Code>/mcp/w/&lt;slug&gt;</Code> (or serve it
+            over stdio with <Code>--workspace &lt;slug&gt;</Code>).
           </>
         }
         action={newWorkspaceButton}
@@ -88,17 +74,18 @@ function WorkspacesPage() {
               what="workspaces"
               count={data?.length ?? 0}
               empty={
-                <CardLayout
-                  icon={<LayersIcon />}
+                <EmptyState
+                  icon={Layers}
                   title="No workspaces yet"
                   description="Create a workspace to serve a tailored set of skills to a specific agent."
-                  content={newWorkspaceButton}
+                  action={newWorkspaceButton}
                 />
               }
             />
 
             {data && data.length > 0 && (
               <Table>
+                <TableCaption className="sr-only">Workspaces</TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
@@ -111,18 +98,22 @@ function WorkspacesPage() {
                 <TableBody>
                   {data.map((workspace) => (
                     <TableRow key={workspace.slug}>
-                      <TableCell className="font-medium">
+                      <TableHead className="font-medium">
                         {workspace.name}
                         {workspace.description && (
                           <span className="block text-xs font-normal text-muted-foreground">
                             {workspace.description}
                           </span>
                         )}
-                      </TableCell>
+                      </TableHead>
                       <TableCell>
                         <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
                           {workspace.path}
-                          <CopyUrlButton path={workspace.path} origin={origin} />
+                          <CopyButton
+                            value={`${origin}${workspace.path}`}
+                            label={`Copy URL for ${workspace.path}`}
+                            onError={() => toast.error('Failed to copy to clipboard')}
+                          />
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -147,7 +138,7 @@ function WorkspacesPage() {
                             label={`Edit ${workspace.name}`}
                             onClick={() => setDialog({ mode: 'edit', workspace })}
                           >
-                            <PencilIcon />
+                            <Pencil />
                           </ActionButton>
                           <DeleteWorkspaceButton workspace={workspace} />
                         </div>

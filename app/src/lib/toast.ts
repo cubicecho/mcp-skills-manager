@@ -1,11 +1,24 @@
-import { toast } from 'sonner';
+import { useMemo } from 'react';
+import { useToast } from '@/components/ui/toast';
 import { ApiRequestError } from './api';
 
-/** Standard error toast for failed mutations — includes the API detail when present. */
-export function toastApiError(error: unknown): void {
+/** A toast is one line, so the API's detail follows the message rather than sitting under it. */
+function apiErrorMessage(error: unknown): string {
   if (error instanceof ApiRequestError) {
-    toast.error(error.message, { description: error.detail });
-    return;
+    return error.detail ? `${error.message}: ${error.detail}` : error.message;
   }
-  toast.error(error instanceof Error ? error.message : String(error));
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The app's toasts: a confirmation, a plain failure, and a failed request with the API detail when present. */
+export function useToasts() {
+  const show = useToast();
+  return useMemo(
+    () => ({
+      success: (message: string) => show(message, 'success'),
+      error: (message: string) => show(message),
+      apiError: (error: unknown) => show(apiErrorMessage(error)),
+    }),
+    [show],
+  );
 }

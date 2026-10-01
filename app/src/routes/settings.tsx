@@ -1,30 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { toast } from 'sonner';
 import { CardLayout } from '@/components/card-layout';
+import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { PageLayout } from '@/components/page-layout';
+import { SettingRow } from '@/components/setting-row';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
+import { RefreshCw } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
 import { reloadConfig } from '@/lib/api';
 import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
-import { toastApiError } from '@/lib/toast';
+import { useToasts } from '@/lib/toast';
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 });
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between border-b py-2 last:border-b-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-mono text-sm">{value}</span>
-    </div>
-  );
-}
-
-/** One toggle option — the shared inner row used by every switch on this page. */
+/** One toggle option — the shared row used by every switch on this page. */
 function ToggleRow({
   label,
   description,
@@ -39,17 +32,24 @@ function ToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-md border px-3 py-2">
-      <div className="pr-3">
-        <span className="text-sm font-medium">{label}</span>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} aria-label={label} />
-    </div>
+    <SettingRow
+      title={label}
+      description={description}
+      action={({ titleId, descriptionId }) => (
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={onCheckedChange}
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+        />
+      )}
+    />
   );
 }
 
 function McpOptionsCard() {
+  const toast = useToasts();
   const { data: settings, isPending } = useSettings();
   const updateSettings = useUpdateSettings();
 
@@ -58,12 +58,12 @@ function McpOptionsCard() {
       title="MCP options"
       description={
         <>
-          How the <code>/mcp</code> endpoints behave. Workspaces can override tool exposure per endpoint, and every
+          How the <Code>/mcp</Code> endpoints behave. Workspaces can override tool exposure per endpoint, and every
           setting stays behind the same bearer auth.
         </>
       }
       loading={isPending}
-      contentClassName="flex flex-col gap-3"
+      contentClassName="flex flex-col gap-4"
       content={
         settings && (
           <>
@@ -75,7 +75,7 @@ function McpOptionsCard() {
               onCheckedChange={(checked) =>
                 updateSettings.mutate(
                   { skillToolMode: checked ? 'per-skill' : 'loader' },
-                  { onSuccess: () => toast.success('MCP tool exposure updated'), onError: toastApiError },
+                  { onSuccess: () => toast.success('MCP tool exposure updated'), onError: toast.apiError },
                 )
               }
             />
@@ -96,7 +96,7 @@ function McpOptionsCard() {
                       toast.success(
                         authoringEnabled ? 'Agent authoring enabled' : 'Agent authoring disabled — endpoints read-only',
                       ),
-                    onError: toastApiError,
+                    onError: toast.apiError,
                   },
                 )
               }
@@ -120,7 +120,7 @@ function McpOptionsCard() {
                           ? 'HTTP live updates enabled — /mcp runs stateful sessions'
                           : 'HTTP live updates disabled — /mcp is stateless',
                       ),
-                    onError: toastApiError,
+                    onError: toast.apiError,
                   },
                 )
               }
@@ -133,6 +133,7 @@ function McpOptionsCard() {
 }
 
 function SettingsPage() {
+  const toast = useToasts();
   const { data, isPending } = useServerStatus();
 
   const reload = async () => {
@@ -140,7 +141,7 @@ function SettingsPage() {
       const result = await reloadConfig();
       toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
     } catch (error) {
-      toastApiError(error);
+      toast.apiError(error);
     }
   };
 
@@ -156,14 +157,16 @@ function SettingsPage() {
             loading={isPending}
             content={
               data && (
-                <div className="flex flex-col">
-                  <Row label="Version" value={data.version} />
-                  <Row label="Port" value={String(data.port)} />
-                  <Row label="Uptime" value={`${data.uptimeSeconds}s`} />
-                  <Row label="Skills" value={String(data.skillCount)} />
-                  <Row label="Workspaces" value={String(data.workspaceCount)} />
-                  <Row label="Auth" value={data.authEnabled ? 'bearer token' : 'disabled'} />
-                </div>
+                <DescriptionList
+                  content={[
+                    <PropertyRow key="version" label="Version" value={data.version} />,
+                    <PropertyRow key="port" label="Port" value={String(data.port)} />,
+                    <PropertyRow key="uptime" label="Uptime" value={`${data.uptimeSeconds}s`} />,
+                    <PropertyRow key="skills" label="Skills" value={String(data.skillCount)} />,
+                    <PropertyRow key="workspaces" label="Workspaces" value={String(data.workspaceCount)} />,
+                    <PropertyRow key="auth" label="Auth" value={data.authEnabled ? 'bearer token' : 'disabled'} />,
+                  ]}
+                />
               )
             }
           />
@@ -174,13 +177,13 @@ function SettingsPage() {
             title="Reload from disk"
             description={
               <>
-                Skills and workspaces are hand-editable flat files under <code>DATA_DIR</code>. Edits are picked up
+                Skills and workspaces are hand-editable flat files under <Code>DATA_DIR</Code>. Edits are picked up
                 automatically, but you can force an immediate re-read here.
               </>
             }
             content={
               <Button variant="outline" onClick={reload}>
-                <RefreshCwIcon /> Reload config
+                <RefreshCw /> Reload config
               </Button>
             }
           />
