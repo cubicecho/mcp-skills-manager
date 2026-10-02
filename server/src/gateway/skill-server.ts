@@ -13,6 +13,7 @@ import {
   UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { errorMessage } from '../errors.ts';
+import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
@@ -123,15 +124,6 @@ const LOAD_TOOL_NAME = 'load_skill';
 const SEARCH_TOOL_NAME = 'search_skills';
 
 /**
- * MCP tool names are conventionally restricted to `[A-Za-z0-9_-]`, but skill
- * names may contain dots — sanitize for the tool name and keep a reverse map
- * (built per request from the live skill list) to resolve calls back.
- */
-function toolName(skill: Skill): string {
-  return skill.name.replace(/[^A-Za-z0-9_-]/g, '_');
-}
-
-/**
  * Extension → MIME type for bundled supporting files. Purely extension-driven so
  * the resource *listing* and the resource *read* agree on the type (the read
  * path decides blob-vs-text from the actual `binary` flag, independent of this).
@@ -232,7 +224,7 @@ function renderSkill(skill: Skill): string {
     sections.push(`---\nSkill metadata:\n${metaLines.join('\n')}`);
   }
 
-  const files = skill.files.filter((f) => f.type === 'file');
+  const files = bundledFiles(skill);
   if (files.length > 0) {
     const list = files.map((f) => `- ${f.path} — resource \`${fileResourceUri(skill.name, f.path)}\``).join('\n');
     sections.push(
@@ -248,10 +240,10 @@ function renderSkill(skill: Skill): string {
 function indexEntry(skill: Skill) {
   return {
     name: skill.name,
-    tool: toolName(skill),
+    tool: skillToolName(skill.name),
     description: skill.description,
     format: skill.format,
-    files: skill.files.filter((f) => f.type === 'file').map((f) => f.path),
+    files: bundledFiles(skill).map((f) => f.path),
     updatedAt: skill.updatedAt,
     ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
     // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill.
@@ -358,7 +350,8 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     skillCapabilities(liveUpdates),
   );
 
-  const findByToolName = (name: string): Skill | undefined => deps.getSkills().find((s) => toolName(s) === name);
+  const findByToolName = (name: string): Skill | undefined =>
+    deps.getSkills().find((s) => skillToolName(s.name) === name);
   const findByName = (name: string): Skill | undefined => deps.getSkills().find((s) => s.name === name);
 
   // Authoring tools are built once (closures over the store); whether they are
@@ -438,9 +431,9 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     // per-skill mode: one no-arg tool per skill.
     const reserved = reservedNames();
     const skillTools = skills
-      .filter((skill) => !reserved.has(toolName(skill)))
+      .filter((skill) => !reserved.has(skillToolName(skill.name)))
       .map((skill) => ({
-        name: toolName(skill),
+        name: skillToolName(skill.name),
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       }));
@@ -505,7 +498,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       // Expose each bundled supporting file as its own resource — but only when
       // we can actually read file contents, so we never advertise a dead URI.
       if (deps.readSupportingFile) {
-        for (const file of skill.files.filter((f) => f.type === 'file')) {
+        for (const file of bundledFiles(skill)) {
           resources.push({
             uri: fileResourceUri(skill.name, file.path),
             name: `${skill.name}/${file.path}`,
@@ -628,7 +621,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         // Only files of the already-chosen skill are valid completions for its path.
         const chosen = context?.arguments?.name;
         const skill = chosen ? skills.find((s) => s.name === chosen) : undefined;
-        const paths = skill ? skill.files.filter((f) => f.type === 'file').map((f) => f.path) : [];
+        const paths = skill ? bundledFiles(skill).map((f) => f.path) : [];
         return completeFrom(paths, argument.value);
       }
     }

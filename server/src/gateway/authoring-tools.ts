@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
 import { resolveSkillName } from '../skills/skill-name.ts';
+import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 
 /**
  * MCP tools that let an agent author and maintain skills over the same endpoint
@@ -21,11 +22,6 @@ import { resolveSkillName } from '../skills/skill-name.ts';
  * folder — refuses. The flag itself is deliberately not settable from here, so an
  * agent cannot lift the protection; it is toggled over the REST API / web UI.
  */
-
-/** MCP tool-name → conventional `[A-Za-z0-9_-]` (mirrors skill-server's toolName). */
-function toToolName(name: string): string {
-  return name.replace(/[^A-Za-z0-9_-]/g, '_');
-}
 
 const JSON_STRING = { type: 'string' } as const;
 const JSON_STRING_ARRAY = { type: 'array', items: { type: 'string' } } as const;
@@ -82,7 +78,7 @@ function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
 
 /** How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace). */
 function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
-  const load = `Load it by calling the tool named "${toToolName(skill.name)}".`;
+  const load = `Load it by calling the tool named "${skillToolName(skill.name)}".`;
   const parts = [
     skill.global ? 'served globally on the root /mcp endpoint' : 'hidden from the root /mcp endpoint (global:false)',
   ];
@@ -94,7 +90,7 @@ function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
 
 /** Short human/agent-readable summary of a skill's current supporting files. */
 function fileSummary(skill: Skill): string {
-  const files = skill.files.filter((f) => f.type === 'file');
+  const files = bundledFiles(skill);
   if (files.length === 0) {
     return 'It has no supporting files.';
   }
