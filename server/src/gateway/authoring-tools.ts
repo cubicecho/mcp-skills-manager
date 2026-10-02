@@ -1,5 +1,11 @@
 import type { Skill } from '@mcp-skills/shared';
-import { skillNameSchema, slugifySkillName } from '@mcp-skills/shared';
+import {
+  fileEncodingSchema,
+  skillFormatSchema,
+  skillNameSchema,
+  skillRelPathSchema,
+  slugifySkillName,
+} from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
@@ -105,7 +111,7 @@ const createArgs = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   body: z.string().optional(),
-  format: z.enum(['file', 'dir']).optional(),
+  format: skillFormatSchema.optional(),
   global: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -120,18 +126,18 @@ const renameArgs = z.object({ name: z.string(), new_name: z.string() });
 const deleteArgs = z.object({ name: z.string() });
 const writeFileArgs = z.object({
   skill: z.string(),
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']).optional(),
+  encoding: fileEncodingSchema.optional(),
 });
-const readFileArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
-const folderArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
+const readFileArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
+const folderArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
 const moveArgs = z.object({
   skill: z.string(),
-  from: z.string().min(1).max(255),
-  to: z.string().min(1).max(255),
+  from: skillRelPathSchema,
+  to: skillRelPathSchema,
 });
-const deleteFileArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
+const deleteFileArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
 
 /** Build the authoring tool set for an endpoint (root or a single workspace). */
 export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {

@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { skillToolModeSchema } from './settings.ts';
-import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
+import {
+  fileEncodingSchema,
+  skillFileSchema,
+  skillFormatSchema,
+  skillFrontmatterSchema,
+  skillNameSchema,
+  skillRelPathSchema,
+} from './skill.ts';
 import { workspaceConfigSchema, workspaceSlugSchema } from './workspace.ts';
 
 /**
@@ -21,7 +28,7 @@ export type SkillUsage = z.infer<typeof skillUsageSchema>;
 export const skillSummarySchema = z.object({
   name: skillNameSchema,
   description: z.string(),
-  format: z.enum(['file', 'dir']),
+  format: skillFormatSchema,
   /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
   global: z.boolean().default(true),
   /** Whether agents are barred from modifying the skill over MCP (the web UI can still edit it). */
@@ -68,9 +75,9 @@ export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
  * to the skill's root, e.g. "SKILL.md" or "scripts/run.py".
  */
 export const skillFileContentSchema = z.object({
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']).default('utf8'),
+  encoding: fileEncodingSchema.default('utf8'),
 });
 export type SkillFileContent = z.infer<typeof skillFileContentSchema>;
 
@@ -99,7 +106,7 @@ export type WriteSkillFileRequest = z.infer<typeof writeSkillFileRequestSchema>;
 export const skillFileReadSchema = z.object({
   path: z.string(),
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']),
+  encoding: fileEncodingSchema,
   size: z.number().int().nonnegative(),
   /** True when the file is not valid UTF-8 text and should not be opened in the text editor. */
   binary: z.boolean(),
@@ -109,16 +116,16 @@ export type SkillFileRead = z.infer<typeof skillFileReadSchema>;
 /** Body of POST /api/skills/:name/folders: create an empty sub-directory. */
 export const createSkillFolderRequestSchema = z.object({
   /** Directory path relative to the skill root, e.g. "reference/examples". */
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
 });
 export type CreateSkillFolderRequest = z.infer<typeof createSkillFolderRequestSchema>;
 
 /** Body of POST /api/skills/:name/files/move: rename or move a file or folder. */
 export const moveSkillPathRequestSchema = z.object({
   /** Existing file/folder path, relative to the skill root. */
-  from: z.string().min(1).max(255),
+  from: skillRelPathSchema,
   /** New path, relative to the skill root. */
-  to: z.string().min(1).max(255),
+  to: skillRelPathSchema,
 });
 export type MoveSkillPathRequest = z.infer<typeof moveSkillPathRequestSchema>;
 

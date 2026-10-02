@@ -22,6 +22,13 @@ export const skillNameSchema = z
 export const skillFormatSchema = z.enum(['file', 'dir']);
 export type SkillFormat = z.infer<typeof skillFormatSchema>;
 
+/** A file or folder path relative to a skill's root, e.g. "scripts/run.py"; at most 255 characters. */
+export const skillRelPathSchema = z.string().min(1).max(255);
+
+/** How file content travels as a string: `utf8` for text, `base64` for binary. */
+export const fileEncodingSchema = z.enum(['utf8', 'base64']);
+export type FileEncoding = z.infer<typeof fileEncodingSchema>;
+
 /**
  * Recognised frontmatter keys. Unknown keys are preserved (passthrough) so a
  * hand-authored skill's extra metadata survives a round-trip through the UI.
