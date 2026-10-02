@@ -4,8 +4,9 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import type { ConfigStore } from '../config/store.ts';
 import { errorMessage } from '../errors.ts';
+import { endpointDeps } from './endpoint.ts';
 import { McpSessionManager } from './session-manager.ts';
-import { createSkillServer, type SkillServerDeps } from './skill-server.ts';
+import { createSkillServer } from './skill-server.ts';
 
 /** What the MCP endpoints need from the process that mounts them. */
 export interface McpRouterDeps {
@@ -29,14 +30,6 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   const router = Router();
   const sessions = new McpSessionManager();
 
-  // Wire the store's `change` event so a stateful session pushes notifications
-  // when skills are edited on disk (the same hook stdio uses). Only attached to
-  // sessions built in live-updates mode.
-  const onSkillsChanged: SkillServerDeps['onSkillsChanged'] = (listener) => {
-    store.on('change', listener);
-    return () => store.off('change', listener);
-  };
-
   // Stateless path: fresh server + transport per request, cleaned up on close.
   const handleStateless = async (req: Request, res: Response, buildServer: () => Server): Promise<void> => {
     const server = buildServer();
@@ -53,9 +46,11 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   };
 
   // Dispatch to the stateful session manager or the stateless path per the live
-  // setting. `buildServer(live)` wires `onSkillsChanged` only when live so a
-  // stateless server never advertises capabilities it can't honor.
-  const handle = async (req: Request, res: Response, buildServer: (live: boolean) => Server): Promise<void> => {
+  // setting. Only a stateful session is built with live updates, so a stateless
+  // server never advertises capabilities it can't honor.
+  const handle = async (req: Request, res: Response, workspaceSlug: string | undefined): Promise<void> => {
+    const buildServer = (liveUpdates: boolean): Server =>
+      createSkillServer(endpointDeps(store, { workspaceSlug, liveUpdates }));
     if (store.isHttpLiveUpdates()) {
       await sessions.handle(req, res, () => buildServer(true));
     } else {
@@ -63,19 +58,9 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     }
   };
 
-  // Root aggregate: every globally-visible skill (skills flagged `global: false` are workspace-only).
+  // Root aggregate: every globally-visible skill.
   router.all('/', async (req, res) => {
-    await handle(req, res, (live) =>
-      createSkillServer({
-        label: 'all',
-        getSkills: () => store.getGlobalSkills(),
-        authoring: { store },
-        getSkillToolMode: () => store.getSkillToolMode(),
-        readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
-        onSkillLoaded: (name) => store.recordSkillUse(name),
-        ...(live ? { onSkillsChanged } : {}),
-      }),
-    );
+    await handle(req, res, undefined);
   });
 
   // Workspace-filtered aggregate: only the skills of an enabled workspace.
@@ -87,25 +72,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       res.status(404).json({ error: `Unknown workspace "${slug}"` });
       return;
     }
-    await handle(req, res, (live) =>
-      createSkillServer({
-        label: slug,
-        getSkills: () => {
-          const current = store.getWorkspace(slug);
-          return current ? store.getSkillsForWorkspace(current) : [];
-        },
-        // Skills authored via this endpoint are scoped to the workspace (global:false + added to it).
-        authoring: { store, workspaceSlug: slug },
-        // Resolve the workspace's own mode override (falling back to the global default) fresh per request.
-        getSkillToolMode: () => {
-          const current = store.getWorkspace(slug);
-          return current ? store.getSkillToolModeForWorkspace(current) : store.getSkillToolMode();
-        },
-        readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
-        onSkillLoaded: (name) => store.recordSkillUse(name),
-        ...(live ? { onSkillsChanged } : {}),
-      }),
-    );
+    await handle(req, res, slug);
   });
 
   return router;
