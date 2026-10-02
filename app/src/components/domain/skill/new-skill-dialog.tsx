@@ -1,5 +1,5 @@
 import type { SkillFormat } from '@mcp-skills/shared';
-import { slugifySkillName } from '@mcp-skills/shared';
+import { slugify } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -23,7 +23,7 @@ const IDLE_UPLOAD: UploadStatus = { ready: false, pending: false, dirty: false }
 
 /** A title must slugify to a usable skill id. */
 export function validateSkillTitle({ value }: { value: string }): string | undefined {
-  return slugifySkillName(value) ? undefined : 'Enter a title with at least one letter or digit.';
+  return slugify(value) ? undefined : 'Enter a title with at least one letter or digit.';
 }
 
 /**
@@ -40,7 +40,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const form = useAppForm({
     defaultValues: { title: '', description: '', format: 'file' as SkillFormat },
     onSubmit: async ({ value }) => {
-      const name = slugifySkillName(value.title);
+      const name = slugify(value.title);
       try {
         const skill = await create.mutateAsync({
           title: value.title,
@@ -89,7 +89,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                   void form.handleSubmit();
                 }}
               >
-                <form.Subscribe selector={(state) => slugifySkillName(state.values.title)}>
+                <form.Subscribe selector={(state) => slugify(state.values.title)}>
                   {(name) => (
                     <>
                       <InputField

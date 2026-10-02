@@ -5,10 +5,10 @@ import {
   skillFileSchema,
   skillFormatSchema,
   skillFrontmatterSchema,
-  skillNameSchema,
   skillRelPathSchema,
 } from './skill.ts';
-import { workspaceConfigSchema, workspaceSlugSchema } from './workspace.ts';
+import { slugSchema } from './slug.ts';
+import { workspaceConfigSchema } from './workspace.ts';
 
 /**
  * DTOs for the management REST API (/api/*).
@@ -26,7 +26,7 @@ export type SkillUsage = z.infer<typeof skillUsageSchema>;
 
 /** A skill without its body — the shape returned by GET /api/skills. */
 export const skillSummarySchema = z.object({
-  name: skillNameSchema,
+  name: slugSchema,
   description: z.string(),
   format: skillFormatSchema,
   /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
@@ -53,7 +53,7 @@ export type SkillDetail = z.infer<typeof skillDetailSchema>;
 /** Body of POST /api/skills. */
 export const createSkillRequestSchema = z.object({
   /** Id / route filter value; derived from `title` when omitted. */
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   /** Free-form title used to derive `name` when it is not given. */
   title: z.string().optional(),
   /** One-line summary, written to frontmatter. */
@@ -88,7 +88,7 @@ export type SkillFileContent = z.infer<typeof skillFileContentSchema>;
  * single Markdown file written verbatim as `<name>.md`.
  */
 export const importSkillRequestSchema = z.object({
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   title: z.string().optional(),
   format: skillFormatSchema,
   files: z.array(skillFileContentSchema).min(1).max(500),
@@ -132,7 +132,7 @@ export type MoveSkillPathRequest = z.infer<typeof moveSkillPathRequestSchema>;
 /** Body of PATCH /api/skills/:name. */
 export const updateSkillRequestSchema = z.object({
   /** Rename the skill (moves the file/dir). */
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   description: z.string().optional(),
   body: z.string().optional(),
   /** Toggle whether the skill is served on the root `/mcp` aggregate. */
@@ -157,10 +157,10 @@ export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 export const createWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100),
   /** Slug for the URL; derived from `name` when omitted. */
-  slug: workspaceSlugSchema.optional(),
+  slug: slugSchema.optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
-  skills: z.array(skillNameSchema).optional(),
+  skills: z.array(slugSchema).optional(),
   /** Override the global skill-tool mode for this workspace's endpoint (omit to inherit). */
   skillToolMode: skillToolModeSchema.optional(),
 });
@@ -172,7 +172,7 @@ export const updateWorkspaceRequestSchema = z.object({
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   /** Full replacement of the member list when provided. */
-  skills: z.array(skillNameSchema).optional(),
+  skills: z.array(slugSchema).optional(),
   /** Set to override the global skill-tool mode, or `null` to clear the override and inherit. */
   skillToolMode: skillToolModeSchema.nullable().optional(),
 });

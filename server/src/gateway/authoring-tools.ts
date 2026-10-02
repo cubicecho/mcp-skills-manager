@@ -1,11 +1,5 @@
 import type { Skill } from '@mcp-skills/shared';
-import {
-  fileEncodingSchema,
-  skillFormatSchema,
-  skillNameSchema,
-  skillRelPathSchema,
-  slugifySkillName,
-} from '@mcp-skills/shared';
+import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugify, slugSchema } from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
@@ -107,7 +101,7 @@ function fileSummary(skill: Skill): string {
 }
 
 const createArgs = z.object({
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   body: z.string().optional(),
@@ -197,11 +191,11 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(createArgs, args);
-        const resolved = input.name ?? (input.title ? slugifySkillName(input.title) : undefined);
+        const resolved = input.name ?? (input.title ? slugify(input.title) : undefined);
         if (!resolved) {
           throw new Error('Provide a "name" or a "title" to create a skill');
         }
-        const parsedName = skillNameSchema.safeParse(resolved);
+        const parsedName = slugSchema.safeParse(resolved);
         if (!parsedName.success) {
           throw new Error(
             `Invalid skill name "${resolved}" — lowercase alphanumerics, dots, dashes, underscores, must start alphanumeric`,
@@ -287,7 +281,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       run: async (args) => {
         const input = parseArgs(renameArgs, args);
         requireWritable(input.name);
-        const target = skillNameSchema.safeParse(input.new_name);
+        const target = slugSchema.safeParse(input.new_name);
         if (!target.success) {
           throw new Error(`Invalid skill name "${input.new_name}"`);
         }

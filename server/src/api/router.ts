@@ -12,14 +12,12 @@ import {
   createWorkspaceRequestSchema,
   importSkillRequestSchema,
   moveSkillPathRequestSchema,
-  skillNameSchema,
   slugify,
-  slugifySkillName,
+  slugSchema,
   updateSettingsRequestSchema,
   updateSkillRequestSchema,
   updateWorkspaceRequestSchema,
   workspaceConfigSchema,
-  workspaceSlugSchema,
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
 import { Router } from 'express';
@@ -114,11 +112,11 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.post('/skills', async (req, res) => {
     const request = createSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugifySkillName(request.title) : undefined);
+    const name = request.name ?? (request.title ? slugify(request.title) : undefined);
     if (!name) {
       throw new HttpError(400, 'A "name" or "title" is required to create a skill');
     }
-    const parsed = skillNameSchema.safeParse(name);
+    const parsed = slugSchema.safeParse(name);
     if (!parsed.success) {
       throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
     }
@@ -136,11 +134,11 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
   router.post('/skills/import', async (req, res) => {
     const request = importSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugifySkillName(request.title) : undefined);
+    const name = request.name ?? (request.title ? slugify(request.title) : undefined);
     if (!name) {
       throw new HttpError(400, 'A "name" or "title" is required to import a skill');
     }
-    const parsed = skillNameSchema.safeParse(name);
+    const parsed = slugSchema.safeParse(name);
     if (!parsed.success) {
       throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
     }
@@ -254,7 +252,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   };
 
   const requireValidSlug = (slug: string): string => {
-    const parsed = workspaceSlugSchema.safeParse(slug);
+    const parsed = slugSchema.safeParse(slug);
     if (!parsed.success) {
       throw new HttpError(400, `Invalid workspace slug "${slug}"`, 'derive a name that yields a valid URL slug');
     }

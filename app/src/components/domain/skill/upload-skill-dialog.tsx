@@ -1,4 +1,4 @@
-import { skillNameSchema } from '@mcp-skills/shared';
+import { slugSchema } from '@mcp-skills/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { FileArchive, FileText, Folder } from '@/components/app-icons';
@@ -51,7 +51,7 @@ export function UploadSkillForm({
     folderInputRef.current?.setAttribute('webkitdirectory', '');
   }, []);
 
-  const nameValid = skillNameSchema.safeParse(name).success;
+  const nameValid = slugSchema.safeParse(name).success;
   const ready = upload !== null && !upload.error && nameValid;
   const pending = importSkill.isPending;
   const dirty = upload !== null;

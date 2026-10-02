@@ -1,4 +1,4 @@
-import { normalizeTags, type SkillDetail, type SkillFile, skillNameSchema } from '@mcp-skills/shared';
+import { normalizeTags, type SkillDetail, type SkillFile, slugSchema } from '@mcp-skills/shared';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
@@ -996,7 +996,7 @@ function RenameButton({ skill, onRenamed }: { skill: SkillDetail; onRenamed: (na
             initial: skill.name,
             submitLabel: 'Rename',
             validate: (value) =>
-              skillNameSchema.safeParse(value).success
+              slugSchema.safeParse(value).success
                 ? undefined
                 : 'Must be a lowercase slug (letters, digits, dots, dashes, underscores).',
             onSubmit: async (next) => {

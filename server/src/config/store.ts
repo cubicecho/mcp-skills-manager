@@ -17,9 +17,9 @@ import {
   isReadOnlyFlag,
   normalizeTags,
   settingsFileSchema,
-  skillNameSchema,
   skillSchema,
   skillUsageSchema,
+  slugSchema,
   workspaceConfigSchema,
 } from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
@@ -427,7 +427,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     /** Tags/categories to write to frontmatter (normalized on write). */
     tags?: string[];
   }): Promise<Skill> {
-    const name = skillNameSchema.parse(input.name);
+    const name = slugSchema.parse(input.name);
     if (this.skills.has(name)) {
       throw new HttpError(409, `Skill "${name}" already exists`);
     }
@@ -484,7 +484,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (!existing) {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
-    const target = skillNameSchema.parse(nextName);
+    const target = slugSchema.parse(nextName);
     if (target === name) {
       return existing;
     }
@@ -576,7 +576,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     format: Skill['format'];
     files: { path: string; content: Buffer }[];
   }): Promise<Skill> {
-    const name = skillNameSchema.parse(input.name);
+    const name = slugSchema.parse(input.name);
     if (this.skills.has(name)) {
       throw new HttpError(409, `Skill "${name}" already exists`);
     }
@@ -967,8 +967,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     // the folder is a storage detail, the declared name is the skill's identity). Fall back to the
     // on-disk basename so hand-written flat files without a `name` still load.
     const declared = typeof frontmatter.name === 'string' ? frontmatter.name : undefined;
-    const name = declared && skillNameSchema.safeParse(declared).success ? declared : basename;
-    if (!skillNameSchema.safeParse(name).success) {
+    const name = declared && slugSchema.safeParse(declared).success ? declared : basename;
+    if (!slugSchema.safeParse(name).success) {
       throw new Error(`name "${name}" is not a valid slug (set a valid \`name\` in the SKILL.md frontmatter)`);
     }
     const files = format === 'dir' ? await this.listSupportingFiles(path.dirname(relPath)) : [];
