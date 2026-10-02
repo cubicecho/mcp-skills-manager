@@ -99,8 +99,6 @@ function fileSummary(skill: Skill): string {
   return `Supporting files: ${files.map((f) => f.path).join(', ')}.`;
 }
 
-// --- argument schemas ---
-
 const createArgs = z.object({
   name: skillNameSchema.optional(),
   title: z.string().optional(),

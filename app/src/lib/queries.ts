@@ -21,8 +21,6 @@ export const queryKeys = {
   workspace: (slug: string) => ['workspaces', slug] as const,
 };
 
-// --- queries ---
-
 export function useServerStatus() {
   return useQuery({
     queryKey: queryKeys.status,
@@ -72,8 +70,6 @@ export function useWorkspaces() {
   });
 }
 
-// --- settings mutations ---
-
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -84,8 +80,6 @@ export function useUpdateSettings() {
     },
   });
 }
-
-// --- skill mutations ---
 
 export function useCreateSkill() {
   const queryClient = useQueryClient();
@@ -179,8 +173,6 @@ export function useDeleteSkill() {
     },
   });
 }
-
-// --- workspace mutations ---
 
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();

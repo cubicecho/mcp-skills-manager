@@ -66,8 +66,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     return skill;
   };
 
-  // --- status ---
-
   router.get('/status', (_req, res) => {
     const status: ServerStatus = {
       version: SERVER_VERSION,
@@ -82,8 +80,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.json(status);
   });
 
-  // --- settings ---
-
   router.get('/settings', (_req, res) => {
     res.json(store.getSettingsView());
   });
@@ -93,8 +89,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     await store.updateSettings(update);
     res.json(store.getSettingsView());
   });
-
-  // --- skills ---
 
   router.get('/skills', (_req, res) => {
     res.json(store.getSkills().map((skill) => toSummary(store, skill)));
@@ -226,8 +220,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.json(toDetail(store, skill));
   });
 
-  // --- workspaces ---
-
   const workspacePath = (slug: string): string => `/mcp/w/${slug}`;
   const toWorkspaceStatus = (workspace: WorkspaceConfig): WorkspaceStatus => ({
     ...workspace,
@@ -311,8 +303,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     await store.deleteWorkspace(req.params.slug);
     res.status(204).end();
   });
-
-  // --- reload ---
 
   router.post('/reload', async (_req, res) => {
     const state = await store.reload();

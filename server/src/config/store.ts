@@ -282,8 +282,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return next;
   }
 
-  // --- skills ---
-
   getSkills(): Skill[] {
     return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -343,8 +341,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     return result;
   }
-
-  // --- usage analytics ---
 
   /** Usage stats for a skill (zeros if it has never been loaded). */
   getUsage(name: string): SkillUsage {
@@ -780,8 +776,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
-  // --- workspaces ---
-
   getWorkspaces(): WorkspaceConfig[] {
     return [...this.workspaces.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -824,8 +818,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     await this.saveWorkspace({ ...workspace, skills: workspace.skills.filter((s) => s !== name) });
   }
-
-  // --- internals ---
 
   private workspaceFile(slug: string): string {
     return path.join(this.workspacesDir, `${slug}.json`);

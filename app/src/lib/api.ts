@@ -77,13 +77,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (text.length > 0 ? JSON.parse(text) : undefined) as T;
 }
 
-// --- status ---
-
 export function getStatus(): Promise<ServerStatus> {
   return request('/api/status');
 }
-
-// --- settings ---
 
 export function getSettings(): Promise<SettingsView> {
   return request('/api/settings');
@@ -92,8 +88,6 @@ export function getSettings(): Promise<SettingsView> {
 export function updateSettings(body: UpdateSettingsRequest): Promise<SettingsView> {
   return request('/api/settings', { method: 'PATCH', body });
 }
-
-// --- skills ---
 
 export function listSkills(): Promise<SkillSummary[]> {
   return request('/api/skills');
@@ -158,8 +152,6 @@ export function deleteSkill(name: string): Promise<void> {
   return request(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
-// --- workspaces ---
-
 export function listWorkspaces(): Promise<WorkspaceStatus[]> {
   return request('/api/workspaces');
 }
@@ -179,8 +171,6 @@ export function updateWorkspace(slug: string, body: UpdateWorkspaceRequest): Pro
 export function deleteWorkspace(slug: string): Promise<void> {
   return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'DELETE' });
 }
-
-// --- config ---
 
 export function reloadConfig(): Promise<{ reloaded: boolean; skillCount: number; workspaceCount: number }> {
   return request('/api/reload', { method: 'POST' });
