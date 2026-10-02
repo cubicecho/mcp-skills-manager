@@ -72,6 +72,18 @@ const LOAD_TOOL_NAME = 'load_skill';
  */
 const SEARCH_TOOL_NAME = 'search_skills';
 
+/** JSON Schema for a tool that takes no arguments. */
+const NO_ARGS_SCHEMA = { type: 'object', properties: {}, additionalProperties: false } as const;
+
+/**
+ * Wrap text as a `tools/call` result.
+ * @param text - The text to hand back to the agent.
+ * @returns A tool result holding one text block.
+ */
+function textResult(text: string) {
+  return { content: [{ type: 'text' as const, text }] };
+}
+
 /** Max completion values the spec allows a single response to carry. */
 const COMPLETION_LIMIT = 100;
 
@@ -172,7 +184,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         (mode === 'loader'
           ? 'call `load_skill` with the `name` of each entry to fetch that skill’s full contents.'
           : "call the tool named in each entry's `tool` field to fetch that skill's full contents."),
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: NO_ARGS_SCHEMA,
     });
     const searchTool = {
       name: SEARCH_TOOL_NAME,
@@ -223,20 +235,26 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       .map((skill) => ({
         name: skillToolName(skill.name),
         description: skill.description || `Load the "${skill.name}" skill.`,
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        inputSchema: NO_ARGS_SCHEMA,
       }));
     return { tools: [indexToolFor(mode), searchTool, ...authoring, ...skillTools] };
   });
 
+  // Loading a skill over a tool counts as a use; a resource read does not.
+  const loadSkill = (skill: Skill) => {
+    deps.onSkillLoaded?.(skill.name);
+    return textResult(renderSkill(skill));
+  };
+
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
-      return { content: [{ type: 'text', text: renderIndex(deps.getSkills()) }] };
+      return textResult(renderIndex(deps.getSkills()));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
       const args = req.params.arguments ?? {};
       const query = typeof args.query === 'string' ? args.query : '';
       const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
-      return { content: [{ type: 'text', text: renderIndex(searchSkills(deps.getSkills(), query, tags)) }] };
+      return textResult(renderIndex(searchSkills(deps.getSkills(), query, tags)));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const raw = req.params.arguments?.name;
@@ -248,26 +266,23 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
       }
-      deps.onSkillLoaded?.(skill.name);
-      return { content: [{ type: 'text', text: renderSkill(skill) }] };
+      return loadSkill(skill);
     }
     const authoringTool = activeAuthoringTools().find((t) => t.definition.name === req.params.name);
     if (authoringTool) {
       try {
-        const text = await authoringTool.run(req.params.arguments ?? {});
-        return { content: [{ type: 'text', text }] };
+        return textResult(await authoringTool.run(req.params.arguments ?? {}));
       } catch (err) {
         // Surface authoring failures as a readable tool error, not a transport-level exception,
         // so the agent can see what went wrong and retry.
-        return { content: [{ type: 'text', text: errorMessage(err) }], isError: true };
+        return { ...textResult(errorMessage(err)), isError: true };
       }
     }
     const skill = findByToolName(req.params.name);
     if (!skill) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill tool "${req.params.name}"`);
     }
-    deps.onSkillLoaded?.(skill.name);
-    return { content: [{ type: 'text', text: renderSkill(skill) }] };
+    return loadSkill(skill);
   });
 
   server.setRequestHandler(ListResourcesRequestSchema, async (req) => {
@@ -392,26 +407,20 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       return empty;
     }
     const skills = deps.getSkills();
-    if (ref.uri === SKILL_URI_TEMPLATE && argument.name === 'name') {
+    const isFileTemplate = ref.uri === SKILL_FILE_URI_TEMPLATE;
+    const takesSkillName = ref.uri === SKILL_URI_TEMPLATE || isFileTemplate;
+    if (takesSkillName && argument.name === 'name') {
       return completeFrom(
         skills.map((s) => s.name),
         argument.value,
       );
     }
-    if (ref.uri === SKILL_FILE_URI_TEMPLATE) {
-      if (argument.name === 'name') {
-        return completeFrom(
-          skills.map((s) => s.name),
-          argument.value,
-        );
-      }
-      if (argument.name === 'path') {
-        // Only files of the already-chosen skill are valid completions for its path.
-        const chosen = context?.arguments?.name;
-        const skill = chosen ? skills.find((s) => s.name === chosen) : undefined;
-        const paths = skill ? bundledFiles(skill).map((f) => f.path) : [];
-        return completeFrom(paths, argument.value);
-      }
+    if (isFileTemplate && argument.name === 'path') {
+      // Only files of the already-chosen skill are valid completions for its path.
+      const chosen = context?.arguments?.name;
+      const skill = chosen ? skills.find((s) => s.name === chosen) : undefined;
+      const paths = skill ? bundledFiles(skill).map((f) => f.path) : [];
+      return completeFrom(paths, argument.value);
     }
     return empty;
   });
