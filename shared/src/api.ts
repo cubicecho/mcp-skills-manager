@@ -172,18 +172,21 @@ export const updateWorkspaceRequestSchema = z.object({
 export type UpdateWorkspaceRequest = z.infer<typeof updateWorkspaceRequestSchema>;
 
 /** Response of GET /api/status. */
-export interface ServerStatus {
-  version: string;
-  uptimeSeconds: number;
-  skillCount: number;
-  workspaceCount: number;
-  authEnabled: boolean;
+export const serverStatusSchema = z.object({
+  version: z.string(),
+  /** Seconds since the server process started serving. */
+  uptimeSeconds: z.number(),
+  skillCount: z.number(),
+  workspaceCount: z.number(),
+  authEnabled: z.boolean(),
   /** The port the HTTP server is actually listening on. */
-  port: number;
-}
+  port: z.number(),
+});
+export type ServerStatus = z.infer<typeof serverStatusSchema>;
 
 /** Standard error envelope for non-2xx responses. */
-export interface ApiError {
-  error: string;
-  detail?: string;
-}
+export const apiErrorSchema = z.object({
+  error: z.string(),
+  detail: z.string().optional(),
+});
+export type ApiError = z.infer<typeof apiErrorSchema>;
