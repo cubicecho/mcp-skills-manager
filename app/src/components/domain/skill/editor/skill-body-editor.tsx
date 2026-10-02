@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
+import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
 /** Edit the skill's own Markdown: its frontmatter description plus its body. */
 export function SkillBodyEditor({
@@ -74,20 +75,7 @@ export function SkillBodyEditor({
     );
   };
 
-  // Cmd/Ctrl+S. description/body/tags stay in deps so the handler always saves the latest content.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — see comment above.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-        event.preventDefault();
-        if (dirty && !update.isPending) {
-          save();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [dirty, update.isPending, description, body, tags]);
+  useSaveShortcut(save, dirty && !update.isPending);
 
   const path = skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`;
 

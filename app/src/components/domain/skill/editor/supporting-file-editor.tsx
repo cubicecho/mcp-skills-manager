@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatBytes } from '@/lib/format';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
+import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
 /** Edit a supporting `.md` file's contents. */
 export function SupportingFileEditor({
@@ -56,20 +57,7 @@ export function SupportingFileEditor({
     );
   };
 
-  // Cmd/Ctrl+S; content stays in deps so the handler always saves the latest value.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — see comment above.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-        event.preventDefault();
-        if (dirty && !write.isPending) {
-          save();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [dirty, write.isPending, content]);
+  useSaveShortcut(save, dirty && !write.isPending);
 
   return (
     <EditorFrame
