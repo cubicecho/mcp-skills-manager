@@ -498,31 +498,22 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (this.skills.has(target)) {
       throw new HttpError(409, `Skill "${target}" already exists`);
     }
-    if (existing.format === 'dir') {
+    const isDir = existing.format === 'dir';
+    const relPath = isDir ? dirSkillPath(target) : fileSkillPath(target);
+    if (isDir) {
       // Rename aligns the on-disk folder to the new identity, even if it previously differed.
-      const from = this.skillRoot(existing);
-      const to = path.join(this.skillsDir, target);
-      await rename(from, to);
-      const relPath = dirSkillPath(target);
-      // The SKILL.md frontmatter still carries the old name — rewrite it.
-      await this.writeTextAtomic(
-        path.join(this.skillsDir, relPath),
-        serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
-      );
-      this.skills.delete(name);
-      const reloaded = await this.reloadSkill(relPath, 'dir');
-      this.retargetUsage(name, target);
-      await this.retargetWorkspaceSkill(name, target);
-      return reloaded;
+      await rename(this.skillRoot(existing), path.join(this.skillsDir, target));
     }
-    const relPath = fileSkillPath(target);
+    // The frontmatter still carries the old name — rewrite it.
     await this.writeTextAtomic(
       path.join(this.skillsDir, relPath),
       serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
     );
-    await rm(path.join(this.skillsDir, existing.path), { force: true });
+    if (!isDir) {
+      await rm(path.join(this.skillsDir, existing.path), { force: true });
+    }
     this.skills.delete(name);
-    const reloaded = await this.reloadSkill(relPath, 'file');
+    const reloaded = await this.reloadSkill(relPath, existing.format);
     this.retargetUsage(name, target);
     await this.retargetWorkspaceSkill(name, target);
     return reloaded;
@@ -680,7 +671,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (from === to) {
       return existing;
     }
-    if (to === from || to.startsWith(`${from}/`)) {
+    if (to.startsWith(`${from}/`)) {
       throw new HttpError(400, 'Cannot move a folder into itself');
     }
     const root = this.skillRoot(existing);
