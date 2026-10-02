@@ -20,7 +20,7 @@ import {
   workspaceConfigSchema,
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
-import { Router } from 'express';
+import { type Request, Router } from 'express';
 import { isAuthEffective } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
@@ -63,6 +63,20 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
  */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
   return { ...toSummary(store, skill), body: skill.body, frontmatter: skill.frontmatter };
+}
+
+/**
+ * Reads the `path` query parameter of a supporting-file request, answering 400 when it is missing.
+ * @param req Request whose query string carries the path.
+ * @returns The non-empty path, relative to the skill root.
+ */
+function requirePathQuery(req: Request): string {
+  const relPath = req.query.path;
+  const isUsable = typeof relPath === 'string' && relPath !== '';
+  if (!isUsable) {
+    throw new HttpError(400, 'A "path" query parameter is required');
+  }
+  return relPath;
 }
 
 /**
@@ -196,11 +210,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.get('/skills/:name/files/content', async (req, res) => {
     const name = req.params.name;
     requireSkill(name);
-    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
-    if (!relPath) {
-      throw new HttpError(400, 'A "path" query parameter is required');
-    }
-    res.json(await store.readSupportingFile(name, relPath));
+    res.json(await store.readSupportingFile(name, requirePathQuery(req)));
   });
 
   // Add or overwrite a supporting file (promotes a `file` skill to a `dir`).
@@ -234,11 +244,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.delete('/skills/:name/files', async (req, res) => {
     const name = req.params.name;
     requireSkill(name);
-    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
-    if (!relPath) {
-      throw new HttpError(400, 'A "path" query parameter is required');
-    }
-    const skill = await store.deleteSupportingFile(name, relPath);
+    const skill = await store.deleteSupportingFile(name, requirePathQuery(req));
     res.json(toDetail(store, skill));
   });
 
