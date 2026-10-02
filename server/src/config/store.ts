@@ -467,10 +467,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     name: string,
     patch: { description?: string; body?: string; global?: boolean; readOnly?: boolean; tags?: string[] },
   ): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const nextGlobal = patch.global ?? existing.global;
     const nextReadOnly = patch.readOnly ?? existing.readOnly;
     // Tags: undefined → keep existing; a list → replace (empty clears the key).
@@ -493,10 +490,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Rename a skill, moving its file or directory. Rejects if the target name is taken. */
   async renameSkill(name: string, nextName: string): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const target = slugSchema.parse(nextName);
     if (target === name) {
       return existing;
@@ -558,10 +552,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * @param name Skill slug.
    */
   async deleteSkill(name: string): Promise<void> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     this.skills.delete(name);
     if (this.usage.delete(name)) {
       this.scheduleUsageFlush();
@@ -625,17 +616,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * skill is first promoted to a `dir` (its `.md` becomes `<name>/SKILL.md`).
    */
   async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const rel = this.safeSkillRelPath(name, relPath);
     if (rel === SKILL_FILE) {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
-    if (existing.format === 'file') {
-      await this.promoteToDir(existing);
-    }
+    await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     await mkdir(path.dirname(full), { recursive: true });
     await this.writeBufferAtomic(full, content);
@@ -644,10 +630,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Read one supporting file, returning UTF-8 text or, for binary files, base64 bytes. */
   async readSupportingFile(name: string, relPath: string): Promise<SkillFileRead> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const rel = this.requireDirRelPath(existing, relPath);
     const full = path.join(this.skillRoot(existing), rel);
     let stats: Awaited<ReturnType<typeof stat>>;
@@ -672,17 +655,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Create an empty sub-directory under a skill (promoting a `file` skill to a `dir` first). */
   async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const rel = this.safeSkillRelPath(name, relPath);
     if (rel === SKILL_FILE) {
       throw new HttpError(400, 'A folder cannot be named SKILL.md');
     }
-    if (existing.format === 'file') {
-      await this.promoteToDir(existing);
-    }
+    await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     if (existsSync(full)) {
       throw new HttpError(409, `"${rel}" already exists in skill "${name}"`);
@@ -693,10 +671,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Rename or move a supporting file or folder within a skill's directory. */
   async moveSupportingPath(name: string, fromPath: string, toPath: string): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const from = this.requireDirRelPath(existing, fromPath);
     const to = this.safeSkillRelPath(name, toPath);
     if (to === SKILL_FILE) {
@@ -725,10 +700,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Delete one supporting file or folder (folders recursively), pruning directories it leaves empty. */
   async deleteSupportingFile(name: string, relPath: string): Promise<Skill> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const rel = this.requireDirRelPath(existing, relPath);
     const root = this.skillRoot(existing);
     const full = path.join(root, rel);
@@ -739,10 +711,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Zip a skill for download: a `dir` skill nested under `<name>/`, a `file` skill as a lone `<name>.md`. */
   async exportSkillZip(name: string): Promise<Buffer> {
-    const existing = this.skills.get(name);
-    if (!existing) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
+    const existing = this.requireSkill(name);
     const entries: Record<string, Uint8Array> = {};
     if (existing.format === 'file') {
       entries[fileSkillPath(name)] = await readFile(path.join(this.skillsDir, existing.path));
@@ -773,6 +742,30 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     return rel;
+  }
+
+  /**
+   * Look a skill up by name, failing when there is none.
+   * @param name - Skill slug.
+   * @returns The skill.
+   * @throws HttpError 404 when no skill has that name.
+   */
+  private requireSkill(name: string): Skill {
+    const skill = this.skills.get(name);
+    if (!skill) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    return skill;
+  }
+
+  /**
+   * Make sure a skill has a folder to hold supporting files, promoting a `file` skill first.
+   * @param skill - The skill about to receive a supporting file or folder.
+   */
+  private async ensureDirSkill(skill: Skill): Promise<void> {
+    if (skill.format === 'file') {
+      await this.promoteToDir(skill);
+    }
   }
 
   /** Move a `file` skill's `.md` to `<folder>/SKILL.md`, converting it to a `dir` skill in place. */
