@@ -17,6 +17,15 @@ import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
+import {
+  INDEX_TOOL_NAME,
+  indexToolDefinition,
+  LOAD_TOOL_DEFINITION,
+  LOAD_TOOL_NAME,
+  NO_ARGS_SCHEMA,
+  SEARCH_TOOL_DEFINITION,
+  SEARCH_TOOL_NAME,
+} from './meta-tools.ts';
 import { fileMimeType } from './mime.ts';
 import {
   decodeCursor,
@@ -50,30 +59,6 @@ function skillCapabilities(liveUpdates: boolean) {
     },
   };
 }
-
-/**
- * Name of the meta-tool that returns the skill catalogue. A skill could in
- * theory be named `list_skills` too; the meta-tool wins (that skill stays
- * reachable as a resource and is omitted from the tool list to avoid a dupe).
- */
-const INDEX_TOOL_NAME = 'list_skills';
-
-/**
- * Name of the loader tool served in `loader` mode: a single `load_skill(name)`
- * tool that returns any skill's body, instead of one tool per skill. Keeps the
- * advertised tool count fixed regardless of how many skills exist.
- */
-const LOAD_TOOL_NAME = 'load_skill';
-
-/**
- * Name of the search meta-tool: full-text lookup over the catalogue (name,
- * description, tags, and body) so an agent can find relevant skills by intent
- * without loading every body. Returns the same metadata shape as `list_skills`.
- */
-const SEARCH_TOOL_NAME = 'search_skills';
-
-/** JSON Schema for a tool that takes no arguments. */
-const NO_ARGS_SCHEMA = { type: 'object', properties: {}, additionalProperties: false } as const;
 
 /**
  * Wrap text as a `tools/call` result.
@@ -142,6 +127,8 @@ export interface SkillServerDeps {
  * as a tool (calling it returns the skill's Markdown so an agent can load it on
  * demand) and as a resource (`skill://<name>`), so clients using either
  * mechanism can reach every skill.
+ * @param deps - The endpoint's skill source, label and optional capabilities.
+ * @returns The configured server, not yet connected to a transport.
  */
 export function createSkillServer(deps: SkillServerDeps): Server {
   const liveUpdates = Boolean(deps.onSkillsChanged);
@@ -150,9 +137,33 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     skillCapabilities(liveUpdates),
   );
 
+  registerToolHandlers(server, deps);
+  registerResourceHandlers(server, deps);
+  registerCompletionHandler(server, deps);
+  if (deps.onSkillsChanged) {
+    registerLiveUpdates(server, deps.onSkillsChanged);
+  }
+  return server;
+}
+
+/**
+ * Find a skill by its exact name.
+ * @param skills - The skills this endpoint serves.
+ * @param name - The skill name (slug) to look for.
+ * @returns The matching skill, or `undefined` when none is served under that name.
+ */
+function findByName(skills: Skill[], name: string): Skill | undefined {
+  return skills.find((s) => s.name === name);
+}
+
+/**
+ * Register `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
+ * @param server - The MCP server to register the handlers on.
+ * @param deps - The endpoint's skill source and optional authoring access.
+ */
+function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
   const findByToolName = (name: string): Skill | undefined =>
     deps.getSkills().find((s) => skillToolName(s.name) === name);
-  const findByName = (name: string): Skill | undefined => deps.getSkills().find((s) => s.name === name);
 
   // Authoring tools are built once (closures over the store); whether they are
   // actually served is decided live per request via `authoringEnabled`.
@@ -176,56 +187,12 @@ export function createSkillServer(deps: SkillServerDeps): Server {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const skills = deps.getSkills();
-    const indexToolFor = (mode: SkillToolMode) => ({
-      name: INDEX_TOOL_NAME,
-      description:
-        'List every skill available from this endpoint with its name, description, format, and supporting ' +
-        'files — without loading any skill bodies. Call this first to decide which skill(s) to load, then ' +
-        (mode === 'loader'
-          ? 'call `load_skill` with the `name` of each entry to fetch that skill’s full contents.'
-          : "call the tool named in each entry's `tool` field to fetch that skill's full contents."),
-      inputSchema: NO_ARGS_SCHEMA,
-    });
-    const searchTool = {
-      name: SEARCH_TOOL_NAME,
-      description:
-        'Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no ' +
-        'bodies). Provide a free-text `query` (matched against each skill’s name, description, tags, and body) ' +
-        'and/or a `tags` filter. Use this instead of `list_skills` when you know roughly what you need but not ' +
-        'the exact skill name; then load a match by its `tool`/`name` as usual.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Free-text search; every whitespace-separated term must match.' },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Only skills carrying at least one of these tags.',
-          },
-        },
-        additionalProperties: false,
-      },
-    };
     const authoring = activeAuthoringTools().map((t) => t.definition);
     const mode = skillToolMode();
 
     if (mode === 'loader') {
       // Single loader tool: fixed footprint regardless of catalogue size.
-      const loadTool = {
-        name: LOAD_TOOL_NAME,
-        description:
-          'Load one skill by name and return its full Markdown contents. Pass the `name` of a skill from ' +
-          '`list_skills`. Use this instead of a per-skill tool — the catalogue is advertised by `list_skills`.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'The skill name (slug) to load, as listed by list_skills.' },
-          },
-          required: ['name'],
-          additionalProperties: false,
-        },
-      };
-      return { tools: [indexToolFor(mode), searchTool, loadTool, ...authoring] };
+      return { tools: [indexToolDefinition(mode), SEARCH_TOOL_DEFINITION, LOAD_TOOL_DEFINITION, ...authoring] };
     }
 
     // per-skill mode: one no-arg tool per skill.
@@ -237,7 +204,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: NO_ARGS_SCHEMA,
       }));
-    return { tools: [indexToolFor(mode), searchTool, ...authoring, ...skillTools] };
+    return { tools: [indexToolDefinition(mode), SEARCH_TOOL_DEFINITION, ...authoring, ...skillTools] };
   });
 
   // Loading a skill over a tool counts as a use; a resource read does not.
@@ -262,7 +229,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
       // Resolve by the skill's real name only — the exact field `list_skills`
       // advertises. A sanitized-tool-name fallback would be ambiguous (distinct
       // slugs like `commit.messages` and `commit_messages` collide).
-      const skill = findByName(wanted);
+      const skill = findByName(deps.getSkills(), wanted);
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
       }
@@ -284,7 +251,14 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     }
     return loadSkill(skill);
   });
+}
 
+/**
+ * Register `resources/list`, `resources/read` and `resources/templates/list` for skills and their bundled files.
+ * @param server - The MCP server to register the handlers on.
+ * @param deps - The endpoint's skill source and optional file reader.
+ */
+function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
   server.setRequestHandler(ListResourcesRequestSchema, async (req) => {
     const resources = [];
     for (const skill of deps.getSkills()) {
@@ -340,7 +314,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
 
     if (slash === -1) {
       const name = decodeResourcePart(rest, uri);
-      const skill = name ? findByName(name) : undefined;
+      const skill = name ? findByName(deps.getSkills(), name) : undefined;
       if (!skill) {
         throw resourceNotFound(uri);
       }
@@ -352,7 +326,7 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
     const readSupportingFile = deps.readSupportingFile;
-    const canReadFile = findByName(skillName) !== undefined && readSupportingFile !== undefined;
+    const canReadFile = findByName(deps.getSkills(), skillName) !== undefined && readSupportingFile !== undefined;
     if (!canReadFile) {
       throw resourceNotFound(uri);
     }
@@ -397,9 +371,15 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     }
     return { resourceTemplates: templates };
   });
+}
 
-  // Argument autocompletion for those templates: skill names for `{name}`, and a
-  // skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
+/**
+ * Register argument autocompletion for the resource templates: skill names for `{name}`, and a
+ * skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
+ * @param server - The MCP server to register the handler on.
+ * @param deps - The endpoint's skill source.
+ */
+function registerCompletionHandler(server: Server, deps: SkillServerDeps): void {
   server.setRequestHandler(CompleteRequestSchema, async (req) => {
     const { ref, argument, context } = req.params;
     const empty = { completion: { values: [], total: 0, hasMore: false } };
@@ -418,47 +398,49 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     if (isFileTemplate && argument.name === 'path') {
       // Only files of the already-chosen skill are valid completions for its path.
       const chosen = context?.arguments?.name;
-      const skill = chosen ? skills.find((s) => s.name === chosen) : undefined;
+      const skill = chosen ? findByName(skills, chosen) : undefined;
       const paths = skill ? bundledFiles(skill).map((f) => f.path) : [];
       return completeFrom(paths, argument.value);
     }
     return empty;
   });
+}
 
-  // Live updates (stdio only): advertise `listChanged` + `subscribe`, and push
-  // notifications when the served skill set changes on disk.
-  if (deps.onSkillsChanged) {
-    const subscriptions = new Set<string>();
+/**
+ * Register resource subscriptions and push notifications when the served skill set changes on
+ * disk. Only for a long-lived transport (stdio).
+ * @param server - The MCP server to register the handlers on.
+ * @param onSkillsChanged - Registers a change listener and returns its unsubscribe function.
+ */
+function registerLiveUpdates(server: Server, onSkillsChanged: NonNullable<SkillServerDeps['onSkillsChanged']>): void {
+  const subscriptions = new Set<string>();
 
-    server.setRequestHandler(SubscribeRequestSchema, async (req) => {
-      subscriptions.add(req.params.uri);
-      return {};
+  server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+    subscriptions.add(req.params.uri);
+    return {};
+  });
+  server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
+    subscriptions.delete(req.params.uri);
+    return {};
+  });
+
+  // A disk change may add/remove/edit any skill, so tell clients the list moved
+  // and nudge every subscribed URI to re-read. We over-notify rather than diff —
+  // the client simply re-reads and the content is authoritative either way.
+  const unsubscribe = onSkillsChanged(() => {
+    server.sendResourceListChanged().catch((err: unknown) => {
+      console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
     });
-    server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
-      subscriptions.delete(req.params.uri);
-      return {};
-    });
-
-    // A disk change may add/remove/edit any skill, so tell clients the list moved
-    // and nudge every subscribed URI to re-read. We over-notify rather than diff —
-    // the client simply re-reads and the content is authoritative either way.
-    const unsubscribe = deps.onSkillsChanged(() => {
-      server.sendResourceListChanged().catch((err: unknown) => {
-        console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
+    for (const uri of subscriptions) {
+      server.sendResourceUpdated({ uri }).catch((err: unknown) => {
+        console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
       });
-      for (const uri of subscriptions) {
-        server.sendResourceUpdated({ uri }).catch((err: unknown) => {
-          console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
-        });
-      }
-    });
+    }
+  });
 
-    const prevOnClose = server.onclose;
-    server.onclose = () => {
-      unsubscribe();
-      prevOnClose?.();
-    };
-  }
-
-  return server;
+  const prevOnClose = server.onclose;
+  server.onclose = () => {
+    unsubscribe();
+    prevOnClose?.();
+  };
 }
