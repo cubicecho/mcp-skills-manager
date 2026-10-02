@@ -3,7 +3,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import type { ConfigStore } from '../config/store.ts';
-import { errorMessage } from '../errors.ts';
+import { closeQuietly } from './close-quietly.ts';
 import { endpointDeps } from './endpoint.ts';
 import { McpSessionManager } from './session-manager.ts';
 import { createSkillServer } from './skill-server.ts';
@@ -38,8 +38,8 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       enableJsonResponse: true,
     });
     res.on('close', () => {
-      transport.close().catch((err: unknown) => console.warn(`MCP transport close failed: ${errorMessage(err)}`));
-      server.close().catch((err: unknown) => console.warn(`MCP server close failed: ${errorMessage(err)}`));
+      void closeQuietly(transport, 'MCP transport');
+      void closeQuietly(server, 'MCP server');
     });
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
