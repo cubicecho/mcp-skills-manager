@@ -77,8 +77,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     );
   });
 
-  // Workspace-filtered aggregate. Registered before nothing else is needed here,
-  // but kept distinct from the root so `/mcp` and `/mcp/w/<slug>` never collide.
+  // Workspace-filtered aggregate: only the skills of an enabled workspace.
   router.all('/w/:slug', async (req, res) => {
     const slug = req.params.slug;
     const workspace = store.getWorkspace(slug);
