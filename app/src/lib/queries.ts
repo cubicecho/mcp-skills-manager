@@ -12,6 +12,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './api';
 
+/** TanStack Query keys for every cached API resource. */
 export const queryKeys = {
   status: ['status'] as const,
   settings: ['settings'] as const,
@@ -21,6 +22,10 @@ export const queryKeys = {
   workspace: (slug: string) => ['workspaces', slug] as const,
 };
 
+/**
+ * Polls the server status every 15 seconds.
+ * @returns The status query.
+ */
 export function useServerStatus() {
   return useQuery({
     queryKey: queryKeys.status,
@@ -29,6 +34,10 @@ export function useServerStatus() {
   });
 }
 
+/**
+ * Reads the token-free settings.
+ * @returns The settings query.
+ */
 export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings,
@@ -36,6 +45,10 @@ export function useSettings() {
   });
 }
 
+/**
+ * Polls the skill list every 10 seconds.
+ * @returns The skill-summaries query.
+ */
 export function useSkills() {
   return useQuery({
     queryKey: queryKeys.skills,
@@ -44,6 +57,11 @@ export function useSkills() {
   });
 }
 
+/**
+ * Reads one skill with its body.
+ * @param name Skill slug.
+ * @returns The skill-detail query.
+ */
 export function useSkill(name: string) {
   return useQuery({
     queryKey: queryKeys.skill(name),
@@ -62,6 +80,10 @@ export function useSkillFileContent(name: string, filePath: string | null) {
   });
 }
 
+/**
+ * Polls the workspace list every 10 seconds.
+ * @returns The workspaces query.
+ */
 export function useWorkspaces() {
   return useQuery({
     queryKey: queryKeys.workspaces,
@@ -70,6 +92,10 @@ export function useWorkspaces() {
   });
 }
 
+/**
+ * Patches the settings and refreshes the status.
+ * @returns The mutation.
+ */
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -81,6 +107,10 @@ export function useUpdateSettings() {
   });
 }
 
+/**
+ * Creates a skill and caches its detail.
+ * @returns The mutation.
+ */
 export function useCreateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -93,6 +123,10 @@ export function useCreateSkill() {
   });
 }
 
+/**
+ * Imports an uploaded skill and caches its detail.
+ * @returns The mutation.
+ */
 export function useImportSkill() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -117,6 +151,11 @@ export function useWriteSkillFile(name: string) {
   });
 }
 
+/**
+ * Creates an empty folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useCreateSkillFolder(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -128,6 +167,11 @@ export function useCreateSkillFolder(name: string) {
   });
 }
 
+/**
+ * Renames or moves a file or folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useMoveSkillPath(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -139,6 +183,11 @@ export function useMoveSkillPath(name: string) {
   });
 }
 
+/**
+ * Deletes a file or folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useDeleteSkillFile(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -150,6 +199,11 @@ export function useDeleteSkillFile(name: string) {
   });
 }
 
+/**
+ * Patches a skill; a rename moves its cache entry to the new name.
+ * @param name Current skill slug.
+ * @returns The mutation.
+ */
 export function useUpdateSkill(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -162,6 +216,10 @@ export function useUpdateSkill(name: string) {
   });
 }
 
+/**
+ * Deletes a skill and refreshes the lists that showed it.
+ * @returns The mutation.
+ */
 export function useDeleteSkill() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -174,6 +232,10 @@ export function useDeleteSkill() {
   });
 }
 
+/**
+ * Creates a workspace.
+ * @returns The mutation.
+ */
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -185,6 +247,11 @@ export function useCreateWorkspace() {
   });
 }
 
+/**
+ * Patches a workspace.
+ * @param slug Current workspace slug.
+ * @returns The mutation.
+ */
 export function useUpdateWorkspace(slug: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -195,6 +262,10 @@ export function useUpdateWorkspace(slug: string) {
   });
 }
 
+/**
+ * Deletes a workspace.
+ * @returns The mutation.
+ */
 export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({

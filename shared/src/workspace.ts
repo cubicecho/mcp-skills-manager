@@ -16,6 +16,7 @@ export const workspaceSlugSchema = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9._-]*$/, 'lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric');
 
+/** One workspace config file, DATA_DIR/config/workspaces/<slug>.json. */
 export const workspaceConfigSchema = z
   .object({
     /** Human-facing display name. */

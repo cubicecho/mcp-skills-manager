@@ -146,6 +146,7 @@ export const workspaceStatusSchema = workspaceConfigSchema.extend({
 });
 export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 
+/** Body of POST /api/workspaces. */
 export const createWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100),
   /** Slug for the URL; derived from `name` when omitted. */
@@ -158,6 +159,7 @@ export const createWorkspaceRequestSchema = z.object({
 });
 export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
 
+/** Body of PATCH /api/workspaces/:slug; a new name moves the slug with it. */
 export const updateWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   enabled: z.boolean().optional(),

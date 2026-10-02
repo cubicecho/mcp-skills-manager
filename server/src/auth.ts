@@ -1,11 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
 
+/** The effective bearer-auth state for one request. */
 export interface AuthConfig {
   enabled: boolean;
   token: string | null;
 }
 
+/** Lower-cased environment values that count as "on". */
 const TRUTHY_ENV = new Set(['1', 'true', 'yes', 'on']);
 
 /**

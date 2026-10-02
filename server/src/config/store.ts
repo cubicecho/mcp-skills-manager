@@ -28,12 +28,14 @@ import { authDisabledByEnv } from '../auth.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 
+/** A point-in-time copy of everything the store holds; the payload of its `change` event. */
 export interface ConfigState {
   settings: SettingsFile;
   skills: Skill[];
   workspaces: WorkspaceConfig[];
 }
 
+/** Quiet period in milliseconds after the last file event before the store reloads. */
 const WATCH_DEBOUNCE_MS = 300;
 /** Coalesce bursts of skill loads into one usage.json write. */
 const USAGE_FLUSH_MS = 500;
@@ -245,6 +247,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
+  /** Stops the watcher and flushes pending usage counts; call on shutdown. */
   async close(): Promise<void> {
     if (this.watchDebounce) {
       clearTimeout(this.watchDebounce);
@@ -262,6 +265,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
+  /**
+   * Captures the current settings, skills and workspaces.
+   * @returns The state, with skills and workspaces sorted by name.
+   */
   snapshot(): ConfigState {
     return {
       settings: this.settings,
@@ -270,6 +277,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     };
   }
 
+  /**
+   * Reads the settings as stored, auth token included.
+   * @returns The in-memory settings.json contents.
+   */
   getSettings(): SettingsFile {
     return this.settings;
   }
@@ -282,6 +293,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return next;
   }
 
+  /**
+   * Lists every skill, global or not.
+   * @returns The skills sorted by name.
+   */
   getSkills(): Skill[] {
     return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -321,6 +336,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     };
   }
 
+  /**
+   * Looks a skill up by its canonical name.
+   * @param name Skill slug.
+   * @returns The skill, or undefined when there is none.
+   */
   getSkill(name: string): Skill | undefined {
     return this.skills.get(name);
   }
@@ -520,6 +540,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
+  /**
+   * Deletes a skill, its supporting files, its usage stats and its workspace memberships.
+   * @param name Skill slug.
+   */
   async deleteSkill(name: string): Promise<void> {
     const existing = this.skills.get(name);
     if (!existing) {
@@ -776,14 +800,28 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
+  /**
+   * Lists every workspace, enabled or not.
+   * @returns The workspaces sorted by display name.
+   */
   getWorkspaces(): WorkspaceConfig[] {
     return [...this.workspaces.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /**
+   * Looks a workspace up by slug.
+   * @param slug Workspace slug.
+   * @returns The workspace, or undefined when there is none.
+   */
   getWorkspace(slug: string): WorkspaceConfig | undefined {
     return this.workspaces.get(slug);
   }
 
+  /**
+   * Creates or replaces a workspace and writes its config file.
+   * @param config Workspace to store, keyed by its slug.
+   * @returns The stored workspace, with members that no longer exist dropped.
+   */
   async saveWorkspace(config: WorkspaceConfig): Promise<WorkspaceConfig> {
     const parsed = workspaceConfigSchema.parse(config);
     // A workspace only lists live skills: silently drop any member that no longer exists.
@@ -793,6 +831,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return pruned;
   }
 
+  /**
+   * Removes a workspace and its config file; a no-op for an unknown slug.
+   * @param slug Workspace slug.
+   */
   async deleteWorkspace(slug: string): Promise<void> {
     this.workspaces.delete(slug);
     await rm(this.workspaceFile(slug), { force: true });

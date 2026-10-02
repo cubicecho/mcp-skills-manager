@@ -7,6 +7,7 @@ import { errorMessage } from '../errors.ts';
 import { McpSessionManager } from './session-manager.ts';
 import { createSkillServer, type SkillServerDeps } from './skill-server.ts';
 
+/** What the MCP endpoints need from the process that mounts them. */
 export interface McpRouterDeps {
   store: ConfigStore;
 }

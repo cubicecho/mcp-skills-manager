@@ -5,6 +5,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
 import { errorMessage } from '../errors.ts';
 
+/** One live stateful session: its skill server and the transport that carries it. */
 interface Session {
   server: Server;
   transport: StreamableHTTPServerTransport;

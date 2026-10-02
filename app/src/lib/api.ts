@@ -31,6 +31,7 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** Method and JSON body of one API call. */
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -77,50 +78,112 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (text.length > 0 ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * GET /api/status.
+ * @returns Version, uptime, counts and auth state.
+ */
 export function getStatus(): Promise<ServerStatus> {
   return request('/api/status');
 }
 
+/**
+ * GET /api/settings.
+ * @returns The settings without the auth token.
+ */
 export function getSettings(): Promise<SettingsView> {
   return request('/api/settings');
 }
 
+/**
+ * PATCH /api/settings.
+ * @param body Settings to change.
+ * @returns The updated settings.
+ */
 export function updateSettings(body: UpdateSettingsRequest): Promise<SettingsView> {
   return request('/api/settings', { method: 'PATCH', body });
 }
 
+/**
+ * GET /api/skills.
+ * @returns Every skill, without bodies.
+ */
 export function listSkills(): Promise<SkillSummary[]> {
   return request('/api/skills');
 }
 
+/**
+ * GET /api/skills/:name.
+ * @param name Skill slug.
+ * @returns The skill with its body.
+ */
 export function getSkill(name: string): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}`);
 }
 
+/**
+ * POST /api/skills.
+ * @param body Skill to create.
+ * @returns The created skill.
+ */
 export function createSkill(body: CreateSkillRequest): Promise<SkillDetail> {
   return request('/api/skills', { method: 'POST', body });
 }
 
+/**
+ * POST /api/skills/import.
+ * @param body Uploaded files, normalized by skill-upload.
+ * @returns The created skill.
+ */
 export function importSkill(body: ImportSkillRequest): Promise<SkillDetail> {
   return request('/api/skills/import', { method: 'POST', body });
 }
 
+/**
+ * PUT /api/skills/:name/files.
+ * @param name Skill slug.
+ * @param body File path and content.
+ * @returns The skill with its updated file list.
+ */
 export function writeSkillFile(name: string, body: WriteSkillFileRequest): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}/files`, { method: 'PUT', body });
 }
 
+/**
+ * GET /api/skills/:name/files/content.
+ * @param name Skill slug.
+ * @param filePath File path relative to the skill root.
+ * @returns The file content, base64 when binary.
+ */
 export function readSkillFile(name: string, filePath: string): Promise<SkillFileRead> {
   return request(`/api/skills/${encodeURIComponent(name)}/files/content?path=${encodeURIComponent(filePath)}`);
 }
 
+/**
+ * POST /api/skills/:name/folders.
+ * @param name Skill slug.
+ * @param body Folder path.
+ * @returns The skill with its updated file list.
+ */
 export function createSkillFolder(name: string, body: CreateSkillFolderRequest): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}/folders`, { method: 'POST', body });
 }
 
+/**
+ * POST /api/skills/:name/files/move.
+ * @param name Skill slug.
+ * @param body Source and destination paths.
+ * @returns The skill with its updated file list.
+ */
 export function moveSkillPath(name: string, body: MoveSkillPathRequest): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}/files/move`, { method: 'POST', body });
 }
 
+/**
+ * DELETE /api/skills/:name/files.
+ * @param name Skill slug.
+ * @param filePath File or folder path relative to the skill root.
+ * @returns The skill with its updated file list.
+ */
 export function deleteSkillFile(name: string, filePath: string): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}/files?path=${encodeURIComponent(filePath)}`, {
     method: 'DELETE',
@@ -144,34 +207,72 @@ export async function exportSkill(name: string): Promise<Blob> {
   return response.blob();
 }
 
+/**
+ * PATCH /api/skills/:name.
+ * @param name Current skill slug.
+ * @param body Fields to change.
+ * @returns The updated skill.
+ */
 export function updateSkill(name: string, body: UpdateSkillRequest): Promise<SkillDetail> {
   return request(`/api/skills/${encodeURIComponent(name)}`, { method: 'PATCH', body });
 }
 
+/**
+ * DELETE /api/skills/:name.
+ * @param name Skill slug.
+ */
 export function deleteSkill(name: string): Promise<void> {
   return request(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
+/**
+ * GET /api/workspaces.
+ * @returns Every workspace.
+ */
 export function listWorkspaces(): Promise<WorkspaceStatus[]> {
   return request('/api/workspaces');
 }
 
+/**
+ * GET /api/workspaces/:slug.
+ * @param slug Workspace slug.
+ * @returns The workspace.
+ */
 export function getWorkspace(slug: string): Promise<WorkspaceStatus> {
   return request(`/api/workspaces/${encodeURIComponent(slug)}`);
 }
 
+/**
+ * POST /api/workspaces.
+ * @param body Workspace to create.
+ * @returns The created workspace.
+ */
 export function createWorkspace(body: CreateWorkspaceRequest): Promise<WorkspaceStatus> {
   return request('/api/workspaces', { method: 'POST', body });
 }
 
+/**
+ * PATCH /api/workspaces/:slug.
+ * @param slug Current workspace slug.
+ * @param body Fields to change.
+ * @returns The updated workspace.
+ */
 export function updateWorkspace(slug: string, body: UpdateWorkspaceRequest): Promise<WorkspaceStatus> {
   return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body });
 }
 
+/**
+ * DELETE /api/workspaces/:slug.
+ * @param slug Workspace slug.
+ */
 export function deleteWorkspace(slug: string): Promise<void> {
   return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'DELETE' });
 }
 
+/**
+ * POST /api/reload: re-reads DATA_DIR from disk.
+ * @returns The counts after the reload.
+ */
 export function reloadConfig(): Promise<{ reloaded: boolean; skillCount: number; workspaceCount: number }> {
   return request('/api/reload', { method: 'POST' });
 }

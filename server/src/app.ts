@@ -7,6 +7,7 @@ import { authDisabledByEnv, createAuthMiddleware } from './auth.ts';
 import type { ConfigStore } from './config/store.ts';
 import { createMcpRouter } from './gateway/routes.ts';
 
+/** What the HTTP app needs to be built. */
 export interface AppDeps {
   store: ConfigStore;
   /** The port the server will listen on; reported via GET /api/status. */

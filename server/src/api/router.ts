@@ -28,12 +28,19 @@ import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
 import { SERVER_VERSION } from '../version.ts';
 
+/** What the management API needs from the process that mounts it. */
 export interface ApiDeps {
   store: ConfigStore;
   /** The port the HTTP server is listening on, surfaced via GET /status. */
   port: number;
 }
 
+/**
+ * Builds the body-less API view of a skill.
+ * @param store Store supplying the usage stats.
+ * @param skill Skill to render.
+ * @returns The summary DTO.
+ */
 function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
   return {
     name: skill.name,
@@ -49,10 +56,21 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
   };
 }
 
+/**
+ * Builds the full API view of a skill.
+ * @param store Store supplying the usage stats.
+ * @param skill Skill to render.
+ * @returns The summary plus body and frontmatter.
+ */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
   return { ...toSummary(store, skill), body: skill.body, frontmatter: skill.frontmatter };
 }
 
+/**
+ * Builds the management REST API mounted at /api.
+ * @param deps Store and listening port.
+ * @returns The router; errors thrown by its handlers reach the error middleware.
+ */
 export function createApiRouter(deps: ApiDeps): Router {
   const { store, port } = deps;
   const startedAt = Date.now();

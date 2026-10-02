@@ -44,6 +44,7 @@ export interface AuthoringTool {
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
+/** What the authoring tools need from the endpoint that exposes them. */
 export interface AuthoringDeps {
   store: ConfigStore;
   /** Set when serving a workspace endpoint — new skills are scoped to this workspace. */
