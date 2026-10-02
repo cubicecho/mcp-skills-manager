@@ -17,6 +17,21 @@ import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
+import { fileMimeType } from './mime.ts';
+import {
+  decodeCursor,
+  decodeResourcePart,
+  encodeCursor,
+  fileResourceUri,
+  RESOURCE_PAGE_SIZE,
+  RESOURCE_SCHEME,
+  resourceNotFound,
+  SKILL_FILE_URI_TEMPLATE,
+  SKILL_URI_TEMPLATE,
+  skillResourceUri,
+} from './resource-uri.ts';
+import { renderIndex, renderSkill, skillTitle } from './skill-render.ts';
+import { searchSkills } from './skill-search.ts';
 
 /**
  * Server capabilities. `liveUpdates` toggles the two resource sub-capabilities
@@ -34,72 +49,6 @@ function skillCapabilities(liveUpdates: boolean) {
       completions: {},
     },
   };
-}
-
-/** URI scheme under which skills are exposed as MCP resources. */
-const RESOURCE_SCHEME = 'skill';
-
-/**
- * RFC 6570 URI templates advertised via `resources/templates/list`. The primary
- * document is a single variable; a bundled file uses reserved expansion (`{+path}`)
- * so nested paths with `/` expand literally rather than being percent-encoded.
- */
-const SKILL_URI_TEMPLATE = `${RESOURCE_SCHEME}://{name}`;
-const SKILL_FILE_URI_TEMPLATE = `${RESOURCE_SCHEME}://{name}/{+path}`;
-
-/**
- * MCP's spec-defined "resource not found" JSON-RPC error code. It is absent from
- * the SDK's `ErrorCode` enum, so we spell it out; the spec asks servers to return
- * it (with the offending URI in `data`) for unknown resources rather than the
- * generic `InvalidParams`.
- */
-const RESOURCE_NOT_FOUND = -32002;
-
-/** A spec-compliant resource-not-found error carrying the offending URI in `data`. */
-function resourceNotFound(uri: string): McpError {
-  return new McpError(RESOURCE_NOT_FOUND, `Unknown skill resource "${uri}"`, { uri });
-}
-
-/** The `skill://<name>` resource URI for a skill's primary document. Names are slugs, already URI-safe. */
-function skillResourceUri(name: string): string {
-  return `${RESOURCE_SCHEME}://${name}`;
-}
-
-/**
- * The `skill://<name>/<path>` URI for a bundled supporting file, percent-encoding
- * each path segment (but not the `/` separators) so the advertised URI round-trips
- * cleanly through the read handler's `decodeURIComponent` — filenames with spaces,
- * `%`, `#`, etc. survive intact.
- */
-function fileResourceUri(name: string, relPath: string): string {
-  const encoded = relPath.split('/').map(encodeURIComponent).join('/');
-  return `${skillResourceUri(name)}/${encoded}`;
-}
-
-/**
- * Max resources returned per `resources/list` page. The list is rebuilt from live
- * state each call, so the cursor is a plain offset — a mutation between pages can
- * shift entries, which is acceptable under MCP's opaque-cursor semantics.
- */
-const RESOURCE_PAGE_SIZE = 100;
-
-/** Encode a list offset as an opaque pagination cursor. */
-function encodeCursor(offset: number): string {
-  return Buffer.from(String(offset), 'utf8').toString('base64url');
-}
-
-/** Decode a pagination cursor back to an offset; a malformed cursor is an `InvalidParams` error. */
-function decodeCursor(cursor: string | undefined): number {
-  if (cursor === undefined) {
-    return 0;
-  }
-  const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-  const offset = Number.parseInt(decoded, 10);
-  const isCanonicalOffset = Number.isInteger(offset) && offset >= 0 && String(offset) === decoded;
-  if (!isCanonicalOffset) {
-    throw new McpError(ErrorCode.InvalidParams, `Invalid pagination cursor "${cursor}"`);
-  }
-  return offset;
 }
 
 /**
@@ -122,167 +71,6 @@ const LOAD_TOOL_NAME = 'load_skill';
  * without loading every body. Returns the same metadata shape as `list_skills`.
  */
 const SEARCH_TOOL_NAME = 'search_skills';
-
-/**
- * Extension → MIME type for bundled supporting files. Purely extension-driven so
- * the resource *listing* and the resource *read* agree on the type (the read
- * path decides blob-vs-text from the actual `binary` flag, independent of this).
- * Returns `undefined` for unknown extensions — we omit the mimeType rather than
- * guess `text/plain` and mislabel a binary blob.
- */
-const MIME_BY_EXT: Record<string, string> = {
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  txt: 'text/plain',
-  json: 'application/json',
-  py: 'text/x-python',
-  js: 'text/javascript',
-  mjs: 'text/javascript',
-  ts: 'text/x-typescript',
-  yaml: 'application/yaml',
-  yml: 'application/yaml',
-  csv: 'text/csv',
-  html: 'text/html',
-  htm: 'text/html',
-  xml: 'application/xml',
-  toml: 'application/toml',
-  sh: 'application/x-sh',
-  svg: 'image/svg+xml',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  pdf: 'application/pdf',
-  zip: 'application/zip',
-};
-
-/** Best-effort MIME type for a bundled supporting file; `undefined` when the extension is unrecognized. */
-function fileMimeType(relPath: string): string | undefined {
-  const dot = relPath.lastIndexOf('.');
-  if (dot === -1) {
-    return undefined;
-  }
-  return MIME_BY_EXT[relPath.slice(dot + 1).toLowerCase()];
-}
-
-/**
- * `decodeURIComponent`, but a malformed percent-escape (e.g. a lone `%`) surfaces
- * as a clean `InvalidParams` MCP error instead of a raw `URIError` that would
- * escape as a transport-level exception.
- */
-function decodeResourcePart(part: string, uri: string): string {
-  try {
-    return decodeURIComponent(part);
-  } catch {
-    throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
-  }
-}
-
-/** Normalize the `allowed-tools` frontmatter (a comma-separated string or a list) to a clean string array. */
-function allowedTools(skill: Skill): string[] {
-  const raw = skill.frontmatter['allowed-tools'];
-  const parts = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [];
-  return parts.map((t) => t.trim()).filter((t) => t.length > 0);
-}
-
-/** The optional Agent Skills metadata (license, allowed-tools) an agent may care about, if present. */
-function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } {
-  const meta: { license?: string; allowedTools?: string[] } = {};
-  const license = skill.frontmatter.license;
-  const hasLicense = typeof license === 'string' && license.length > 0;
-  if (hasLicense) {
-    meta.license = license;
-  }
-  const tools = allowedTools(skill);
-  if (tools.length > 0) {
-    meta.allowedTools = tools;
-  }
-  return meta;
-}
-
-/** Optional human-readable display title, from frontmatter `title` when authored (never fabricated from the slug). */
-function skillTitle(skill: Skill): string | undefined {
-  const title = skill.frontmatter.title;
-  const hasTitle = typeof title === 'string' && title.trim().length > 0;
-  return hasTitle ? title.trim() : undefined;
-}
-
-/** The text handed to an agent when it loads a skill: the Markdown body, plus footers for metadata and bundled files. */
-function renderSkill(skill: Skill): string {
-  const sections = [skill.body];
-
-  const meta = skillMeta(skill);
-  const metaLines: string[] = [];
-  if (meta.allowedTools) {
-    metaLines.push(`- Allowed tools: ${meta.allowedTools.join(', ')}`);
-  }
-  if (meta.license) {
-    metaLines.push(`- License: ${meta.license}`);
-  }
-  if (metaLines.length > 0) {
-    sections.push(`---\nSkill metadata:\n${metaLines.join('\n')}`);
-  }
-
-  const files = bundledFiles(skill);
-  if (files.length > 0) {
-    const list = files.map((f) => `- ${f.path} — resource \`${fileResourceUri(skill.name, f.path)}\``).join('\n');
-    sections.push(
-      `---\nBundled supporting files (in the skill directory \`${skill.name}/\`), readable as MCP resources:\n${list}`,
-    );
-  }
-
-  // Single section ⇒ exactly `skill.body`; multiple ⇒ body + footers joined.
-  return sections.join('\n\n');
-}
-
-/** One catalogue entry: the metadata an agent needs to decide whether to load a skill (never the body). */
-function indexEntry(skill: Skill) {
-  return {
-    name: skill.name,
-    tool: skillToolName(skill.name),
-    description: skill.description,
-    format: skill.format,
-    files: bundledFiles(skill).map((f) => f.path),
-    updatedAt: skill.updatedAt,
-    ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
-    // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill.
-    ...(skill.readOnly ? { readOnly: true } : {}),
-    ...skillMeta(skill),
-  };
-}
-
-/** The JSON catalogue returned by the index tool: every skill's metadata, no bodies. */
-function renderIndex(skills: Skill[]): string {
-  return JSON.stringify({ count: skills.length, skills: skills.map(indexEntry) }, null, 2);
-}
-
-/**
- * Rank skills against a free-text query and/or a tag filter. `query` is matched
- * case-insensitively against the name, description, tags, and body (each search
- * term must appear somewhere); `tags` narrows to skills carrying at least one of
- * the requested tags. With neither, every skill matches (mirrors `list_skills`).
- * Matches keep the caller's order — the metadata each carries lets the agent rank.
- */
-function searchSkills(skills: Skill[], query: string, tags: string[]): Skill[] {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const wantTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
-  return skills.filter((skill) => {
-    if (wantTags.length > 0) {
-      const skillTags = skill.tags.map((t) => t.toLowerCase());
-      if (!wantTags.some((t) => skillTags.includes(t))) {
-        return false;
-      }
-    }
-    if (terms.length > 0) {
-      const haystack = `${skill.name}\n${skill.description}\n${skill.tags.join(' ')}\n${skill.body}`.toLowerCase();
-      if (!terms.every((term) => haystack.includes(term))) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
 
 /** Max completion values the spec allows a single response to carry. */
 const COMPLETION_LIMIT = 100;
