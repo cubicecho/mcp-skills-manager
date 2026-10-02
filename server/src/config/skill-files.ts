@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { HttpError } from '../errors.ts';
@@ -63,5 +64,28 @@ export async function pruneEmptyDirs(dir: string, stopAt: string): Promise<void>
     }
     await rm(current, { recursive: true, force: true });
     current = path.dirname(current);
+  }
+}
+
+/** One entry found while walking a directory tree. */
+export interface WalkedEntry {
+  /** The directory entry itself. */
+  entry: Dirent;
+  /** Absolute path of the entry. */
+  full: string;
+}
+
+/**
+ * Walk a directory tree depth-first, yielding each directory before its contents.
+ * @param dir - Absolute path of the directory to walk.
+ * @returns Every entry under `dir`, in `readdir` order.
+ */
+export async function* walkEntries(dir: string): AsyncGenerator<WalkedEntry> {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    yield { entry, full };
+    if (entry.isDirectory()) {
+      yield* walkEntries(full);
+    }
   }
 }

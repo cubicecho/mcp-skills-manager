@@ -28,7 +28,7 @@ import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 import { writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
 import { migrateLegacyWorkspaces } from './legacy-workspaces.ts';
-import { isBinary, pruneEmptyDirs, safeSkillRelPath, toPosix } from './skill-files.ts';
+import { isBinary, pruneEmptyDirs, safeSkillRelPath, toPosix, walkEntries } from './skill-files.ts';
 import { dirSkillPath, fileSkillPath, SKILL_FILE, skillFolder } from './skill-layout.ts';
 import { STARTER_SKILL, STARTER_WORKSPACE } from './starter-skill.ts';
 import { UsageTracker } from './usage-tracker.ts';
@@ -544,17 +544,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       entries[fileSkillPath(name)] = await readFile(path.join(this.skillsDir, existing.path));
     } else {
       const dir = this.skillRoot(existing);
-      const collect = async (current: string): Promise<void> => {
-        for (const entry of await readdir(current, { withFileTypes: true })) {
-          const full = path.join(current, entry.name);
-          if (entry.isDirectory()) {
-            await collect(full);
-          } else if (entry.isFile()) {
-            entries[`${name}/${toPosix(path.relative(dir, full))}`] = await readFile(full);
-          }
+      for await (const { entry, full } of walkEntries(dir)) {
+        if (entry.isFile()) {
+          entries[`${name}/${toPosix(path.relative(dir, full))}`] = await readFile(full);
         }
-      };
-      await collect(dir);
+      }
     }
     return Buffer.from(zipSync(entries));
   }
@@ -796,24 +790,15 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private async listSupportingFiles(folderRel: string): Promise<SkillFile[]> {
     const dir = path.join(this.skillsDir, folderRel);
     const out: SkillFile[] = [];
-    const walk = async (current: string): Promise<void> => {
-      const entries = await readdir(current, { withFileTypes: true });
-      for (const entry of entries) {
-        const full = path.join(current, entry.name);
-        const rel = toPosix(path.relative(dir, full));
-        if (entry.isDirectory()) {
-          out.push({ path: rel, type: 'dir', size: 0 });
-          await walk(full);
-        } else if (entry.isFile()) {
-          if (rel === SKILL_FILE) {
-            continue;
-          }
-          const stats = await stat(full);
-          out.push({ path: rel, type: 'file', size: stats.size });
-        }
+    for await (const { entry, full } of walkEntries(dir)) {
+      const rel = toPosix(path.relative(dir, full));
+      if (entry.isDirectory()) {
+        out.push({ path: rel, type: 'dir', size: 0 });
+      } else if (entry.isFile() && rel !== SKILL_FILE) {
+        const stats = await stat(full);
+        out.push({ path: rel, type: 'file', size: stats.size });
       }
-    };
-    await walk(dir);
+    }
     return out.sort((a, b) => a.path.localeCompare(b.path));
   }
 
