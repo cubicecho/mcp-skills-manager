@@ -82,7 +82,8 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   router.all('/w/:slug', async (req, res) => {
     const slug = req.params.slug;
     const workspace = store.getWorkspace(slug);
-    if (!workspace || !workspace.enabled) {
+    const isServed = workspace?.enabled === true;
+    if (!isServed) {
       res.status(404).json({ error: `Unknown workspace "${slug}"` });
       return;
     }

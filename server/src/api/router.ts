@@ -169,8 +169,10 @@ export function createApiRouter(deps: ApiDeps): Router {
       readOnly: update.readOnly,
       tags: update.tags,
     });
-    if (update.name !== undefined && update.name !== name) {
-      skill = await store.renameSkill(name, update.name);
+    const newName = update.name;
+    const isRename = newName !== undefined && newName !== name;
+    if (isRename) {
+      skill = await store.renameSkill(name, newName);
     }
     res.json(toDetail(store, skill));
   });
@@ -296,7 +298,8 @@ export function createApiRouter(deps: ApiDeps): Router {
     // slug when the name is unchanged so member-only edits never move the URL.
     const name = update.name ?? existing.name;
     const slug = update.name !== undefined ? requireValidSlug(slugify(name)) : existing.slug;
-    if (slug !== existing.slug && store.getWorkspace(slug)) {
+    const collidesWithAnother = slug !== existing.slug && store.getWorkspace(slug) !== undefined;
+    if (collidesWithAnother) {
       throw new HttpError(409, `Workspace "${slug}" already exists`);
     }
     // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.

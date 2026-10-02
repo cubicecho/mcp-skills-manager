@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
+import { type Dirent, existsSync } from 'node:fs';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -43,6 +43,15 @@ const USAGE_FLUSH_MS = 500;
 /** Normalize an OS-native path (which may use `\` on Windows) to a POSIX-style relative path. */
 function toPosix(p: string): string {
   return p.split(path.sep).join('/');
+}
+
+/**
+ * Tells whether a skills-dir entry is a flat-file skill.
+ * @param entry Directory entry to test.
+ * @returns True for a regular file named `*.md`.
+ */
+function isMarkdownFile(entry: Dirent): boolean {
+  return entry.isFile() && entry.name.endsWith('.md');
 }
 
 /** Heuristic: a file is binary if it holds a NUL byte or is not decodable as UTF-8. */
@@ -781,7 +790,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const skillDir = path.join(this.skillsDir, name);
     const full = path.resolve(skillDir, cleaned);
     const rel = path.relative(skillDir, full);
-    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+    const escapesSkillDir = rel === '' || rel.startsWith('..') || path.isAbsolute(rel);
+    if (escapesSkillDir) {
       throw new HttpError(400, `Unsafe file path "${relPath}"`, 'paths must stay within the skill directory');
     }
     return rel.split(path.sep).join('/');
@@ -789,8 +799,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Remove now-empty directories from `dir` up to (but not including) `stopAt`. */
   private async pruneEmptyDirs(dir: string, stopAt: string): Promise<void> {
+    const isBelowStop = (candidate: string): boolean => candidate !== stopAt && candidate.startsWith(stopAt + path.sep);
     let current = dir;
-    while (current !== stopAt && current.startsWith(stopAt + path.sep)) {
+    while (isBelowStop(current)) {
       const remaining = await readdir(current);
       if (remaining.length > 0) {
         break;
@@ -904,7 +915,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       settings = settingsFileSchema.parse({});
       dirty = true;
     }
-    if (settings.authEnabled && !authDisabledByEnv() && !settings.authToken && !process.env.MCP_SKILLS_TOKEN) {
+    const hasToken = Boolean(settings.authToken || process.env.MCP_SKILLS_TOKEN);
+    const needsGeneratedToken = settings.authEnabled && !authDisabledByEnv() && !hasToken;
+    if (needsGeneratedToken) {
       settings.authToken = randomBytes(32).toString('hex');
       dirty = true;
       console.log(`Generated auth token (persisted to ${file}):\n  ${settings.authToken}`);
@@ -932,7 +945,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         }
         relPath = path.join(entry.name, 'SKILL.md');
         format = 'dir';
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      } else if (isMarkdownFile(entry)) {
         relPath = entry.name;
         format = 'file';
       } else {

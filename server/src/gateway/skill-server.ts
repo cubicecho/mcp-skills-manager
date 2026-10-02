@@ -94,7 +94,8 @@ function decodeCursor(cursor: string | undefined): number {
   }
   const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
   const offset = Number.parseInt(decoded, 10);
-  if (!Number.isInteger(offset) || offset < 0 || String(offset) !== decoded) {
+  const isCanonicalOffset = Number.isInteger(offset) && offset >= 0 && String(offset) === decoded;
+  if (!isCanonicalOffset) {
     throw new McpError(ErrorCode.InvalidParams, `Invalid pagination cursor "${cursor}"`);
   }
   return offset;
@@ -196,8 +197,10 @@ function allowedTools(skill: Skill): string[] {
 /** The optional Agent Skills metadata (license, allowed-tools) an agent may care about, if present. */
 function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } {
   const meta: { license?: string; allowedTools?: string[] } = {};
-  if (typeof skill.frontmatter.license === 'string' && skill.frontmatter.license.length > 0) {
-    meta.license = skill.frontmatter.license;
+  const license = skill.frontmatter.license;
+  const hasLicense = typeof license === 'string' && license.length > 0;
+  if (hasLicense) {
+    meta.license = license;
   }
   const tools = allowedTools(skill);
   if (tools.length > 0) {
@@ -209,7 +212,8 @@ function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } 
 /** Optional human-readable display title, from frontmatter `title` when authored (never fabricated from the slug). */
 function skillTitle(skill: Skill): string | undefined {
   const title = skill.frontmatter.title;
-  return typeof title === 'string' && title.trim().length > 0 ? title.trim() : undefined;
+  const hasTitle = typeof title === 'string' && title.trim().length > 0;
+  return hasTitle ? title.trim() : undefined;
 }
 
 /** The text handed to an agent when it loads a skill: the Markdown body, plus footers for metadata and bundled files. */
@@ -551,12 +555,14 @@ export function createSkillServer(deps: SkillServerDeps): Server {
     const skillName = decodeResourcePart(rest.slice(0, slash), uri);
     const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
-    if (!findByName(skillName) || !deps.readSupportingFile) {
+    const readSupportingFile = deps.readSupportingFile;
+    const canReadFile = findByName(skillName) !== undefined && readSupportingFile !== undefined;
+    if (!canReadFile) {
       throw resourceNotFound(uri);
     }
     let file: SkillFileRead;
     try {
-      file = await deps.readSupportingFile(skillName, relPath);
+      file = await readSupportingFile(skillName, relPath);
     } catch (err) {
       throw new McpError(ErrorCode.InvalidParams, `Cannot read resource "${uri}": ${errorMessage(err)}`);
     }
