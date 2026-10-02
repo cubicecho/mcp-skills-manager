@@ -49,6 +49,15 @@ export interface AuthoringDeps {
 }
 
 /**
+ * Join a validation error's issue messages into one line an agent can read.
+ * @param error - The zod error to summarize.
+ * @returns The issue messages, separated by `; `.
+ */
+function issueSummary(error: z.ZodError): string {
+  return error.issues.map((i) => i.message).join('; ');
+}
+
+/**
  * Run a store mutation, normalizing its HttpError/validation failures into plain
  * Errors with a clean message. The skill-server dispatch turns a thrown Error
  * into an `isError` tool result the authoring agent can read and act on.
@@ -58,7 +67,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (err) {
     if (err instanceof z.ZodError) {
-      throw new Error(err.issues.map((i) => i.message).join('; '));
+      throw new Error(issueSummary(err));
     }
     if (err instanceof HttpError) {
       throw new Error(errorDetailMessage(err));
@@ -71,7 +80,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
 function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
   const result = schema.safeParse(args);
   if (!result.success) {
-    throw new Error(result.error.issues.map((i) => i.message).join('; '));
+    throw new Error(issueSummary(result.error));
   }
   return result.data;
 }
@@ -121,14 +130,13 @@ const writeFileArgs = z.object({
   content: z.string(),
   encoding: fileEncodingSchema.optional(),
 });
-const readFileArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
-const folderArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
+/** Arguments of every tool that addresses one path inside a skill's folder. */
+const skillPathArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
 const moveArgs = z.object({
   skill: z.string(),
   from: skillRelPathSchema,
   to: skillRelPathSchema,
 });
-const deleteFileArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
 
 /** Build the authoring tool set for an endpoint (root or a single workspace). */
 export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
@@ -355,7 +363,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(readFileArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         const file = await guard(() => store.readSupportingFile(input.skill, input.path));
         if (file.binary) {
           return `${input.path} (${file.size} bytes, binary, base64):\n${file.content}`;
@@ -381,7 +389,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(folderArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         requireWritable(input.skill);
         const skill = await guard(() => store.createSupportingFolder(input.skill, input.path));
         return `Created folder "${input.path}" in skill "${skill.name}".`;
@@ -424,7 +432,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(deleteFileArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         requireWritable(input.skill);
         const skill = await guard(() => store.deleteSupportingFile(input.skill, input.path));
         return `Deleted "${input.path}" from skill "${skill.name}". ${fileSummary(skill)}`;
