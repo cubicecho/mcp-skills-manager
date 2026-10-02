@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { type Dirent, existsSync } from 'node:fs';
-import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   SettingsFile,
@@ -18,7 +18,6 @@ import {
   normalizeTags,
   settingsFileSchema,
   skillSchema,
-  skillUsageSchema,
   slugSchema,
   workspaceConfigSchema,
 } from '@mcp-skills/shared';
@@ -27,7 +26,12 @@ import { zipSync } from 'fflate';
 import { isAuthEffective } from '../auth.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
+import { writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
+import { migrateLegacyWorkspaces } from './legacy-workspaces.ts';
+import { isBinary, pruneEmptyDirs, safeSkillRelPath, toPosix } from './skill-files.ts';
 import { dirSkillPath, fileSkillPath, SKILL_FILE, skillFolder } from './skill-layout.ts';
+import { STARTER_SKILL, STARTER_WORKSPACE } from './starter-skill.ts';
+import { UsageTracker } from './usage-tracker.ts';
 
 /** A point-in-time copy of everything the store holds; the payload of its `change` event. */
 export interface ConfigState {
@@ -38,14 +42,6 @@ export interface ConfigState {
 
 /** Quiet period in milliseconds after the last file event before the store reloads. */
 const WATCH_DEBOUNCE_MS = 300;
-/** Coalesce bursts of skill loads into one usage.json write. */
-const USAGE_FLUSH_MS = 500;
-
-/** Normalize an OS-native path (which may use `\` on Windows) to a POSIX-style relative path. */
-function toPosix(p: string): string {
-  return p.split(path.sep).join('/');
-}
-
 /**
  * Tells whether a skills-dir entry is a flat-file skill.
  * @param entry Directory entry to test.
@@ -54,50 +50,6 @@ function toPosix(p: string): string {
 function isMarkdownFile(entry: Dirent): boolean {
   return entry.isFile() && entry.name.endsWith('.md');
 }
-
-/** Heuristic: a file is binary if it holds a NUL byte or is not decodable as UTF-8. */
-function isBinary(buffer: Buffer): boolean {
-  if (buffer.includes(0)) {
-    return true;
-  }
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-/** Body of the starter skill written on a fresh install (see seedDefaults). */
-const GETTING_STARTED_BODY = `# Getting started
-
-Welcome to **MCP Skills Manager**. This is a starter skill, created automatically
-because your data directory was empty. Feel free to edit or delete it.
-
-## What a skill is
-
-A skill is a Markdown document that an agent can load over MCP. Each skill is
-served two ways at once:
-
-- as an MCP **tool** — calling it returns this Markdown body;
-- as an MCP **resource** at \`skill://<name>\`.
-
-## Authoring skills
-
-Skills live under \`DATA_DIR/skills\` in one of two shapes:
-
-- a flat file: \`skills/<name>.md\`
-- a directory: \`skills/<name>/SKILL.md\` plus any supporting files
-
-Both start with YAML frontmatter carrying \`name\` and \`description\`, followed by
-the Markdown body. Edit them here in the web UI, or on disk — changes are picked
-up automatically.
-
-## Workspaces
-
-Group a subset of skills into a **workspace** to serve them at their own endpoint,
-\`/mcp/w/<slug>\`. This skill belongs to the seeded "Examples" workspace.
-`;
 
 /**
  * Owns the flat, hand-editable state under DATA_DIR:
@@ -119,9 +71,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private workspaces = new Map<string, WorkspaceConfig>();
   private watcher: FSWatcher | null = null;
   private watchDebounce: NodeJS.Timeout | null = null;
-  /** In-memory usage stats, authoritative once loaded; flushed to usage.json (unwatched) after each record. */
-  private usage = new Map<string, SkillUsage>();
-  private usageFlush: NodeJS.Timeout | null = null;
+  /** Usage stats, authoritative in memory once loaded; flushed to usage.json (unwatched) after each record. */
+  private readonly usage: UsageTracker;
   /** Absolute path to usage.json — kept at the dataDir root, OUTSIDE the watched dirs, so writes don't trigger reloads. */
   readonly usageFile: string;
 
@@ -138,72 +89,19 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.skillsDir = path.join(dataDir, 'skills');
     this.settingsFile = path.join(this.configDir, 'settings.json');
     this.usageFile = path.join(dataDir, 'usage.json');
+    this.usage = new UsageTracker(this.usageFile);
   }
 
   /** Create directories, seed defaults on first run and load everything. */
   async init(): Promise<void> {
     await mkdir(this.workspacesDir, { recursive: true });
     await mkdir(this.skillsDir, { recursive: true });
-    await this.migrateLegacyWorkspaces();
+    await migrateLegacyWorkspaces(this.configDir, this.workspacesDir);
     await this.loadAll();
     // Usage lives outside the watched dirs and stays authoritative in memory, so it is loaded
     // once here rather than in loadAll() (which reruns on every disk-change reload).
-    this.usage = await this.loadUsage();
+    await this.usage.load();
     await this.seedDefaults();
-  }
-
-  /**
-   * One-time migration: "profiles" were renamed to "workspaces", including their
-   * on-disk config directory (`config/profiles` → `config/workspaces`). If an
-   * install still has the legacy `config/profiles` dir, move each `*.json` into
-   * `config/workspaces` (without clobbering a file already there) and remove the
-   * emptied legacy dir. Safe to run every startup — it no-ops once migrated.
-   */
-  private async migrateLegacyWorkspaces(): Promise<void> {
-    const legacyDir = path.join(this.configDir, 'profiles');
-    if (!existsSync(legacyDir)) {
-      return;
-    }
-    const files = (await readdir(legacyDir)).filter((f) => f.endsWith('.json'));
-    let moved = 0;
-    // Sort for a deterministic winner when two legacy files resolve to the same slug.
-    for (const file of files.sort()) {
-      const source = path.join(legacyDir, file);
-      // Migrate to the file's canonical `<slug>.json` name so the collision check
-      // is by workspace identity (slug), not by a possibly hand-edited filename —
-      // loadWorkspaces keys by the declared slug, so a mismatched filename could
-      // otherwise slip past and overwrite an existing workspace on load.
-      const target = path.join(this.workspacesDir, await this.legacyWorkspaceTargetName(source, file));
-      if (existsSync(target)) {
-        continue; // a workspace with this slug already exists; leave the legacy copy in place
-      }
-      await rename(source, target);
-      moved += 1;
-    }
-    // Drop the legacy dir once no workspace files remain in it; stray non-.json
-    // entries (e.g. .DS_Store) are ours to clear out along with the dir.
-    if ((await readdir(legacyDir)).filter((f) => f.endsWith('.json')).length === 0) {
-      await rm(legacyDir, { recursive: true, force: true });
-    }
-    if (moved > 0) {
-      console.log(`Migrated ${moved} profile config file(s) to config/workspaces.`);
-    }
-  }
-
-  /** Canonical `<slug>.json` destination for a legacy profile file, or its original
-   * filename when the file can't be read or parsed for a slug — so a bad entry (an
-   * unreadable file, or a `.json`-named directory) is never lost and never aborts
-   * startup, matching the old rename-only behavior. */
-  private async legacyWorkspaceTargetName(source: string, fallback: string): Promise<string> {
-    try {
-      const parsed = workspaceConfigSchema.safeParse(JSON.parse(await readFile(source, 'utf8')));
-      if (parsed.success) {
-        return `${parsed.data.slug}.json`;
-      }
-    } catch {
-      // Unreadable (EISDIR/EACCES) or invalid JSON — fall through to the original filename.
-    }
-    return fallback;
   }
 
   /**
@@ -218,19 +116,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       return;
     }
     console.log('No skills or workspaces found; seeding a starter skill and workspace.');
-    await this.createSkill({
-      name: 'getting-started',
-      description: 'How MCP Skills Manager works and how to author your own skills.',
-      body: GETTING_STARTED_BODY,
-    });
-    await this.saveWorkspace(
-      workspaceConfigSchema.parse({
-        name: 'Examples',
-        slug: 'examples',
-        description: 'A starter workspace. Edit or delete it once you add your own skills.',
-        skills: ['getting-started'],
-      }),
-    );
+    await this.createSkill(STARTER_SKILL);
+    await this.saveWorkspace(workspaceConfigSchema.parse(STARTER_WORKSPACE));
   }
 
   /** Re-read all state from disk and return the new snapshot. */
@@ -267,11 +154,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       this.watchDebounce = null;
     }
     // Flush any pending usage write so counts survive a graceful shutdown.
-    if (this.usageFlush) {
-      clearTimeout(this.usageFlush);
-      this.usageFlush = null;
-      await this.flushUsage().catch(() => {});
-    }
+    await this.usage.close();
     if (this.watcher) {
       await this.watcher.close();
       this.watcher = null;
@@ -301,7 +184,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Merge a partial settings update, persist settings.json, and apply it in memory. */
   async updateSettings(patch: Partial<SettingsFile>): Promise<SettingsFile> {
     const next = settingsFileSchema.parse({ ...this.settings, ...patch });
-    await this.writeJsonAtomic(this.settingsFile, next);
+    await writeJsonAtomic(this.settingsFile, next);
     this.settings = next;
     return next;
   }
@@ -377,7 +260,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Usage stats for a skill (zeros if it has never been loaded). */
   getUsage(name: string): SkillUsage {
-    return this.usage.get(name) ?? { count: 0, lastUsedAt: null };
+    return this.usage.get(name);
   }
 
   /**
@@ -385,45 +268,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * The write to usage.json is debounced and best-effort — never blocks or fails a load.
    */
   recordSkillUse(name: string): void {
-    const prev = this.usage.get(name);
-    this.usage.set(name, { count: (prev?.count ?? 0) + 1, lastUsedAt: new Date().toISOString() });
-    this.scheduleUsageFlush();
-  }
-
-  private scheduleUsageFlush(): void {
-    if (this.usageFlush) {
-      return;
-    }
-    this.usageFlush = setTimeout(() => {
-      this.usageFlush = null;
-      this.flushUsage().catch((err: unknown) => {
-        console.error(`Persisting skill usage failed: ${errorMessage(err)}`);
-      });
-    }, USAGE_FLUSH_MS);
-  }
-
-  private async flushUsage(): Promise<void> {
-    await this.writeJsonAtomic(this.usageFile, Object.fromEntries(this.usage));
-  }
-
-  private async loadUsage(): Promise<Map<string, SkillUsage>> {
-    if (!existsSync(this.usageFile)) {
-      return new Map();
-    }
-    try {
-      const parsed = JSON.parse(await readFile(this.usageFile, 'utf8')) as Record<string, unknown>;
-      const usage = new Map<string, SkillUsage>();
-      for (const [name, value] of Object.entries(parsed)) {
-        const result = skillUsageSchema.safeParse(value);
-        if (result.success) {
-          usage.set(name, result.data);
-        }
-      }
-      return usage;
-    } catch (err) {
-      console.error(`Ignoring unreadable usage.json: ${errorMessage(err)}`);
-      return new Map();
-    }
+    this.usage.record(name);
   }
 
   /**
@@ -458,7 +303,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       frontmatter.tags = tags;
     }
     const content = serializeMarkdown(frontmatter, input.body);
-    await this.writeTextAtomic(fullPath, content);
+    await writeTextAtomic(fullPath, content);
     return this.reloadSkill(relPath, format);
   }
 
@@ -484,7 +329,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     };
     const body = patch.body ?? existing.body;
     const fullPath = path.join(this.skillsDir, existing.path);
-    await this.writeTextAtomic(fullPath, serializeMarkdown(frontmatter, body));
+    await writeTextAtomic(fullPath, serializeMarkdown(frontmatter, body));
     return this.reloadSkill(existing.path, existing.format);
   }
 
@@ -505,7 +350,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await rename(this.skillRoot(existing), path.join(this.skillsDir, target));
     }
     // The frontmatter still carries the old name — rewrite it.
-    await this.writeTextAtomic(
+    await writeTextAtomic(
       path.join(this.skillsDir, relPath),
       serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
     );
@@ -514,19 +359,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     this.skills.delete(name);
     const reloaded = await this.reloadSkill(relPath, existing.format);
-    this.retargetUsage(name, target);
+    this.usage.retarget(name, target);
     await this.retargetWorkspaceSkill(name, target);
     return reloaded;
-  }
-
-  /** Carry a skill's usage stats over to its new name on rename, so history is not lost. */
-  private retargetUsage(from: string, to: string): void {
-    const stats = this.usage.get(from);
-    if (stats) {
-      this.usage.delete(from);
-      this.usage.set(to, stats);
-      this.scheduleUsageFlush();
-    }
   }
 
   /** Point every workspace that listed `from` at `to`, preserving position (used when a skill is renamed). */
@@ -545,9 +380,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async deleteSkill(name: string): Promise<void> {
     const existing = this.requireSkill(name);
     this.skills.delete(name);
-    if (this.usage.delete(name)) {
-      this.scheduleUsageFlush();
-    }
+    this.usage.forget(name);
     if (existing.format === 'dir') {
       await rm(this.skillRoot(existing), { recursive: true, force: true });
     } else {
@@ -584,11 +417,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         throw new HttpError(400, 'A file-format skill must contain exactly one Markdown file');
       }
       const relPath = fileSkillPath(name);
-      await this.writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
+      await writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
       return this.reloadSkill(relPath, 'file');
     }
     // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
-    const entries = input.files.map((file) => ({ rel: this.safeSkillRelPath(name, file.path), content: file.content }));
+    const entries = input.files.map((file) => ({
+      rel: safeSkillRelPath(this.skillsDir, name, file.path),
+      content: file.content,
+    }));
     if (!entries.some((entry) => entry.rel === SKILL_FILE)) {
       throw new HttpError(400, 'A directory skill must include a SKILL.md at its root');
     }
@@ -597,7 +433,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     for (const entry of entries) {
       const full = path.join(dir, entry.rel);
       await mkdir(path.dirname(full), { recursive: true });
-      await this.writeBufferAtomic(full, entry.content);
+      await writeBufferAtomic(full, entry.content);
     }
     return this.reloadSkill(dirSkillPath(name), 'dir');
   }
@@ -608,14 +444,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    */
   async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
     const existing = this.requireSkill(name);
-    const rel = this.safeSkillRelPath(name, relPath);
+    const rel = safeSkillRelPath(this.skillsDir, name, relPath);
     if (rel === SKILL_FILE) {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     await mkdir(path.dirname(full), { recursive: true });
-    await this.writeBufferAtomic(full, content);
+    await writeBufferAtomic(full, content);
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
@@ -647,7 +483,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Create an empty sub-directory under a skill (promoting a `file` skill to a `dir` first). */
   async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
-    const rel = this.safeSkillRelPath(name, relPath);
+    const rel = safeSkillRelPath(this.skillsDir, name, relPath);
     if (rel === SKILL_FILE) {
       throw new HttpError(400, 'A folder cannot be named SKILL.md');
     }
@@ -664,7 +500,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async moveSupportingPath(name: string, fromPath: string, toPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const from = this.requireDirRelPath(existing, fromPath);
-    const to = this.safeSkillRelPath(name, toPath);
+    const to = safeSkillRelPath(this.skillsDir, name, toPath);
     if (to === SKILL_FILE) {
       throw new HttpError(400, 'A supporting file cannot be named SKILL.md');
     }
@@ -685,7 +521,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     await mkdir(path.dirname(toFull), { recursive: true });
     await rename(fromFull, toFull);
-    await this.pruneEmptyDirs(path.dirname(fromFull), root);
+    await pruneEmptyDirs(path.dirname(fromFull), root);
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
@@ -696,7 +532,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const root = this.skillRoot(existing);
     const full = path.join(root, rel);
     await rm(full, { recursive: true, force: true });
-    await this.pruneEmptyDirs(path.dirname(full), root);
+    await pruneEmptyDirs(path.dirname(full), root);
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
@@ -728,7 +564,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (skill.format !== 'dir') {
       throw new HttpError(400, `Skill "${skill.name}" has no supporting files`);
     }
-    const rel = this.safeSkillRelPath(skill.name, relPath);
+    const rel = safeSkillRelPath(this.skillsDir, skill.name, relPath);
     if (rel === SKILL_FILE) {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
@@ -765,38 +601,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const raw = await readFile(fileFull, 'utf8');
     const dir = this.skillRoot(skill);
     await mkdir(dir, { recursive: true });
-    await this.writeTextAtomic(path.join(dir, SKILL_FILE), raw);
+    await writeTextAtomic(path.join(dir, SKILL_FILE), raw);
     await rm(fileFull, { force: true });
-  }
-
-  /**
-   * Resolve a caller-supplied path within a skill's directory, rejecting absolute
-   * paths and `..` traversal. Returns the safe POSIX-style relative path.
-   */
-  private safeSkillRelPath(name: string, relPath: string): string {
-    const cleaned = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
-    const skillDir = path.join(this.skillsDir, name);
-    const full = path.resolve(skillDir, cleaned);
-    const rel = path.relative(skillDir, full);
-    const escapesSkillDir = rel === '' || rel.startsWith('..') || path.isAbsolute(rel);
-    if (escapesSkillDir) {
-      throw new HttpError(400, `Unsafe file path "${relPath}"`, 'paths must stay within the skill directory');
-    }
-    return toPosix(rel);
-  }
-
-  /** Remove now-empty directories from `dir` up to (but not including) `stopAt`. */
-  private async pruneEmptyDirs(dir: string, stopAt: string): Promise<void> {
-    const isBelowStop = (candidate: string): boolean => candidate !== stopAt && candidate.startsWith(stopAt + path.sep);
-    let current = dir;
-    while (isBelowStop(current)) {
-      const remaining = await readdir(current);
-      if (remaining.length > 0) {
-        break;
-      }
-      await rm(current, { recursive: true, force: true });
-      current = path.dirname(current);
-    }
   }
 
   /**
@@ -826,7 +632,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     // A workspace only lists live skills: silently drop any member that no longer exists.
     const pruned: WorkspaceConfig = { ...parsed, skills: parsed.skills.filter((name) => this.skills.has(name)) };
     this.workspaces.set(pruned.slug, pruned);
-    await this.writeJsonAtomic(this.workspaceFile(pruned.slug), pruned);
+    await writeJsonAtomic(this.workspaceFile(pruned.slug), pruned);
     return pruned;
   }
 
@@ -910,7 +716,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     if (dirty) {
       await mkdir(this.configDir, { recursive: true });
-      await this.writeJsonAtomic(file, settings);
+      await writeJsonAtomic(file, settings);
     }
     return settings;
   }
@@ -1048,23 +854,5 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     } catch (cause) {
       throw new Error(`${file} failed validation: ${errorMessage(cause)}`, { cause });
     }
-  }
-
-  /** Atomic write of a JSON value: tmp file in the same dir, chmod 0600, rename over the target. */
-  private async writeJsonAtomic(file: string, value: unknown): Promise<void> {
-    await this.writeTextAtomic(file, `${JSON.stringify(value, null, 2)}\n`, 0o600);
-  }
-
-  /** Atomic write of text: tmp file in the same dir, rename over the target. */
-  private async writeTextAtomic(file: string, content: string, mode = 0o644): Promise<void> {
-    await this.writeBufferAtomic(file, Buffer.from(content, 'utf8'), mode);
-  }
-
-  /** Atomic write of raw bytes: tmp file in the same dir, chmod, rename over the target. */
-  private async writeBufferAtomic(file: string, content: Buffer, mode = 0o644): Promise<void> {
-    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tmp, content, { mode });
-    await chmod(tmp, mode);
-    await rename(tmp, file);
   }
 }
