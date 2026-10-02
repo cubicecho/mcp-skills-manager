@@ -1,5 +1,5 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { File, FilePlus, FileText, Folder, FolderPlus, FolderUp } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
@@ -17,6 +17,22 @@ import { reported } from '@/lib/reported';
 import { fileToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
 import { cn, HOVER_REVEAL } from '@/lib/utils';
+
+/**
+ * Describe where a new file or folder will be created.
+ * @param base - The folder it is created under, relative to the skill root; empty for the root itself.
+ * @returns The description shown in the path prompt.
+ */
+function pathHint(base: string): ReactNode {
+  if (!base) {
+    return 'A path relative to the skill root.';
+  }
+  return (
+    <>
+      Created under <Code>{base}/</Code>.
+    </>
+  );
+}
 
 /**
  * The file tree and its management toolbar: the skill's own Markdown (first, un-renamable) plus every
@@ -69,16 +85,16 @@ export function FilesPanel({
     }
   };
 
+  const uploadPicked = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files?.length) {
+      void upload(event.target.files);
+    }
+  };
+
   const newFile = (base = '') =>
     setPrompt({
       title: 'New file',
-      description: base ? (
-        <>
-          Created under <Code>{base}/</Code>.
-        </>
-      ) : (
-        'A path relative to the skill root.'
-      ),
+      description: pathHint(base),
       label: 'Path',
       placeholder: base ? 'intro.md' : 'docs/intro.md',
       submitLabel: 'Create file',
@@ -92,13 +108,7 @@ export function FilesPanel({
   const newFolder = (base = '') =>
     setPrompt({
       title: 'New folder',
-      description: base ? (
-        <>
-          Created under <Code>{base}/</Code>.
-        </>
-      ) : (
-        'A path relative to the skill root.'
-      ),
+      description: pathHint(base),
       label: base ? 'Name' : 'Path',
       placeholder: base ? 'examples' : 'reference/examples',
       submitLabel: 'Create folder',
@@ -180,28 +190,8 @@ export function FilesPanel({
               <Download /> Export .zip
             </Button>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            hidden
-            multiple
-            onChange={(event) => {
-              if (event.target.files?.length) {
-                void upload(event.target.files);
-              }
-            }}
-          />
-          <input
-            ref={folderInputRef}
-            type="file"
-            hidden
-            multiple
-            onChange={(event) => {
-              if (event.target.files?.length) {
-                void upload(event.target.files);
-              }
-            }}
-          />
+          <input ref={fileInputRef} type="file" hidden multiple onChange={uploadPicked} />
+          <input ref={folderInputRef} type="file" hidden multiple onChange={uploadPicked} />
 
           <ul className="flex flex-col rounded-md border py-1">
             {/* The skill's own Markdown — always first, and never renamable/deletable. */}

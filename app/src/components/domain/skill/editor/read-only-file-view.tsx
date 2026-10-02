@@ -1,18 +1,15 @@
-import { File } from '@/components/app-icons';
 import { FILE_TITLE } from '@/components/domain/skill/editor/editor-frame';
-import { EmptyState } from '@/components/page';
-import { QueryError } from '@/components/query-state';
+import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { Section } from '@/components/section';
 import { Badge } from '@/components/ui/badge';
 import { Code } from '@/components/ui/code';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { formatBytes } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
 
 /** Show a non-Markdown file read-only — its contents cannot be edited here. */
 export function ReadOnlyFileView({ skillName, path }: { skillName: string; path: string }) {
-  const { data, isPending, error, refetch } = useSkillFileContent(skillName, path);
+  const file = useSkillFileContent(skillName, path);
+  const { data } = file;
   return (
     <Section
       surface="card"
@@ -28,15 +25,10 @@ export function ReadOnlyFileView({ skillName, path }: { skillName: string; path:
       contentClassName="gap-3"
       content={
         <>
-          {isPending && <Skeleton className="h-[50vh] w-full" />}
-          {error && <QueryError error={error} onRetry={() => void refetch()} what="this file" />}
-          {data?.binary && (
-            <EmptyState
-              icon={File}
-              title="Binary file"
-              description={`${formatBytes(data.size)}. Export the skill as a .zip to work with it.`}
-            />
-          )}
+          <FileLoadState
+            file={file}
+            describeBinary={(size) => `${size}. Export the skill as a .zip to work with it.`}
+          />
           {data && !data.binary && (
             <Textarea
               value={data.content}
