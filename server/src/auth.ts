@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import type { SettingsFile } from '@mcp-skills/shared';
 import type { RequestHandler } from 'express';
 
 /** The effective bearer-auth state for one request. */
@@ -18,6 +19,19 @@ const TRUTHY_ENV = new Set(['1', 'true', 'yes', 'on']);
 export function authDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   const value = env.SECURE_LOCAL_NET;
   return value !== undefined && TRUTHY_ENV.has(value.trim().toLowerCase());
+}
+
+/**
+ * Tells whether bearer auth is actually enforced: on in settings and not overridden by SECURE_LOCAL_NET.
+ * @param settings Settings carrying the `authEnabled` flag.
+ * @param env Environment to read SECURE_LOCAL_NET from.
+ * @returns True when requests must carry the token.
+ */
+export function isAuthEffective(
+  settings: Pick<SettingsFile, 'authEnabled'>,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return settings.authEnabled && !authDisabledByEnv(env);
 }
 
 /** Constant-time comparison that does not leak token length (compares sha256 digests). */

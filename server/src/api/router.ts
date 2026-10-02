@@ -21,7 +21,7 @@ import {
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
 import { Router } from 'express';
-import { authDisabledByEnv } from '../auth.ts';
+import { isAuthEffective } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
 import { resolveSkillName } from '../skills/skill-name.ts';
@@ -109,7 +109,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       workspaceCount: store.getWorkspaces().length,
       // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
       // matching the auth middleware in app.ts.
-      authEnabled: store.getSettings().authEnabled && !authDisabledByEnv(),
+      authEnabled: isAuthEffective(store.getSettings()),
       port,
     };
     res.json(status);

@@ -24,7 +24,7 @@ import {
 } from '@mcp-skills/shared';
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
-import { authDisabledByEnv } from '../auth.ts';
+import { isAuthEffective } from '../auth.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 
@@ -916,7 +916,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       dirty = true;
     }
     const hasToken = Boolean(settings.authToken || process.env.MCP_SKILLS_TOKEN);
-    const needsGeneratedToken = settings.authEnabled && !authDisabledByEnv() && !hasToken;
+    const needsGeneratedToken = isAuthEffective(settings) && !hasToken;
     if (needsGeneratedToken) {
       settings.authToken = randomBytes(32).toString('hex');
       dirty = true;
