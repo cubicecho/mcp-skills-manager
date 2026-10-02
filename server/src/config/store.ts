@@ -27,6 +27,7 @@ import { zipSync } from 'fflate';
 import { isAuthEffective } from '../auth.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
+import { dirSkillPath, fileSkillPath, SKILL_FILE, skillFolder } from './skill-layout.ts';
 
 /** A point-in-time copy of everything the store holds; the payload of its `change` event. */
 export interface ConfigState {
@@ -110,6 +111,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   readonly configDir: string;
   readonly workspacesDir: string;
   readonly skillsDir: string;
+  /** Absolute path to settings.json. */
+  private readonly settingsFile: string;
 
   private settings: SettingsFile = settingsFileSchema.parse({});
   private skills = new Map<string, Skill>();
@@ -133,6 +136,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.configDir = path.join(dataDir, 'config');
     this.workspacesDir = path.join(this.configDir, 'workspaces');
     this.skillsDir = path.join(dataDir, 'skills');
+    this.settingsFile = path.join(this.configDir, 'settings.json');
     this.usageFile = path.join(dataDir, 'usage.json');
   }
 
@@ -297,7 +301,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Merge a partial settings update, persist settings.json, and apply it in memory. */
   async updateSettings(patch: Partial<SettingsFile>): Promise<SettingsFile> {
     const next = settingsFileSchema.parse({ ...this.settings, ...patch });
-    await this.writeJsonAtomic(path.join(this.configDir, 'settings.json'), next);
+    await this.writeJsonAtomic(this.settingsFile, next);
     this.settings = next;
     return next;
   }
@@ -441,7 +445,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(409, `Skill "${name}" already exists`);
     }
     const format = input.format ?? 'file';
-    const relPath = format === 'dir' ? path.join(name, 'SKILL.md') : `${name}.md`;
+    const relPath = format === 'dir' ? dirSkillPath(name) : fileSkillPath(name);
     const fullPath = path.join(this.skillsDir, relPath);
     await mkdir(path.dirname(fullPath), { recursive: true });
     // Only persist the `global` key when it is false — the true default stays implicit for clean files.
@@ -505,7 +509,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       const from = this.skillRoot(existing);
       const to = path.join(this.skillsDir, target);
       await rename(from, to);
-      const relPath = path.join(target, 'SKILL.md');
+      const relPath = dirSkillPath(target);
       // The SKILL.md frontmatter still carries the old name — rewrite it.
       await this.writeTextAtomic(
         path.join(this.skillsDir, relPath),
@@ -517,7 +521,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await this.retargetWorkspaceSkill(name, target);
       return reloaded;
     }
-    const relPath = `${target}.md`;
+    const relPath = fileSkillPath(target);
     await this.writeTextAtomic(
       path.join(this.skillsDir, relPath),
       serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
@@ -597,13 +601,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       if (input.files.length !== 1 || !only) {
         throw new HttpError(400, 'A file-format skill must contain exactly one Markdown file');
       }
-      const relPath = `${name}.md`;
+      const relPath = fileSkillPath(name);
       await this.writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
       return this.reloadSkill(relPath, 'file');
     }
     // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
     const entries = input.files.map((file) => ({ rel: this.safeSkillRelPath(name, file.path), content: file.content }));
-    if (!entries.some((entry) => entry.rel === 'SKILL.md')) {
+    if (!entries.some((entry) => entry.rel === SKILL_FILE)) {
       throw new HttpError(400, 'A directory skill must include a SKILL.md at its root');
     }
     const dir = path.join(this.skillsDir, name);
@@ -613,7 +617,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await mkdir(path.dirname(full), { recursive: true });
       await this.writeBufferAtomic(full, entry.content);
     }
-    return this.reloadSkill(path.join(name, 'SKILL.md'), 'dir');
+    return this.reloadSkill(dirSkillPath(name), 'dir');
   }
 
   /**
@@ -626,7 +630,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const rel = this.safeSkillRelPath(name, relPath);
-    if (rel === 'SKILL.md') {
+    if (rel === SKILL_FILE) {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     if (existing.format === 'file') {
@@ -673,7 +677,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(404, `Unknown skill "${name}"`);
     }
     const rel = this.safeSkillRelPath(name, relPath);
-    if (rel === 'SKILL.md') {
+    if (rel === SKILL_FILE) {
       throw new HttpError(400, 'A folder cannot be named SKILL.md');
     }
     if (existing.format === 'file') {
@@ -695,7 +699,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const from = this.requireDirRelPath(existing, fromPath);
     const to = this.safeSkillRelPath(name, toPath);
-    if (to === 'SKILL.md') {
+    if (to === SKILL_FILE) {
       throw new HttpError(400, 'A supporting file cannot be named SKILL.md');
     }
     if (from === to) {
@@ -741,7 +745,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const entries: Record<string, Uint8Array> = {};
     if (existing.format === 'file') {
-      entries[`${name}.md`] = await readFile(path.join(this.skillsDir, existing.path));
+      entries[fileSkillPath(name)] = await readFile(path.join(this.skillsDir, existing.path));
     } else {
       const dir = this.skillRoot(existing);
       const collect = async (current: string): Promise<void> => {
@@ -765,7 +769,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(400, `Skill "${skill.name}" has no supporting files`);
     }
     const rel = this.safeSkillRelPath(skill.name, relPath);
-    if (rel === 'SKILL.md') {
+    if (rel === SKILL_FILE) {
       throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     return rel;
@@ -777,7 +781,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const raw = await readFile(fileFull, 'utf8');
     const dir = this.skillRoot(skill);
     await mkdir(dir, { recursive: true });
-    await this.writeTextAtomic(path.join(dir, 'SKILL.md'), raw);
+    await this.writeTextAtomic(path.join(dir, SKILL_FILE), raw);
     await rm(fileFull, { force: true });
   }
 
@@ -794,7 +798,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (escapesSkillDir) {
       throw new HttpError(400, `Unsafe file path "${relPath}"`, 'paths must stay within the skill directory');
     }
-    return rel.split(path.sep).join('/');
+    return toPosix(rel);
   }
 
   /** Remove now-empty directories from `dir` up to (but not including) `stopAt`. */
@@ -889,14 +893,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * differs from its folder name.
    */
   private skillRoot(skill: Skill): string {
-    const folder = skill.format === 'dir' ? path.dirname(skill.path) : skill.path.slice(0, -'.md'.length);
-    return path.join(this.skillsDir, folder);
+    return path.join(this.skillsDir, skillFolder(skill));
   }
 
   /** The `<folder>/SKILL.md` relative path a `dir` skill loads from — using its real on-disk folder, not its name. */
   private dirSkillRelPath(skill: Skill): string {
-    const folder = skill.format === 'dir' ? path.dirname(skill.path) : skill.path.slice(0, -'.md'.length);
-    return path.join(folder, 'SKILL.md');
+    return dirSkillPath(skillFolder(skill));
   }
 
   private async loadAll(): Promise<void> {
@@ -906,7 +908,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   private async loadSettings(): Promise<SettingsFile> {
-    const file = path.join(this.configDir, 'settings.json');
+    const file = this.settingsFile;
     let settings: SettingsFile;
     let dirty = false;
     if (existsSync(file)) {
@@ -939,11 +941,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       let relPath: string;
       let format: Skill['format'];
       if (entry.isDirectory()) {
-        const skillMd = path.join(this.skillsDir, entry.name, 'SKILL.md');
-        if (!existsSync(skillMd)) {
+        relPath = dirSkillPath(entry.name);
+        if (!existsSync(path.join(this.skillsDir, relPath))) {
           continue; // a directory without a SKILL.md is not a skill
         }
-        relPath = path.join(entry.name, 'SKILL.md');
         format = 'dir';
       } else if (isMarkdownFile(entry)) {
         relPath = entry.name;
@@ -975,7 +976,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const { frontmatter, body } = parseMarkdown(raw);
     const stats = await stat(fullPath);
     // The on-disk basename: the directory for a `dir` skill, the filename stem for a `file` skill.
-    const basename = format === 'dir' ? path.dirname(relPath) : relPath.slice(0, -'.md'.length);
+    const basename = skillFolder({ path: relPath, format });
     // Canonical identity is the frontmatter `name` when it is a valid slug (Agent Skills spec:
     // the folder is a storage detail, the declared name is the skill's identity). Fall back to the
     // on-disk basename so hand-written flat files without a `name` still load.
@@ -1014,7 +1015,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
           out.push({ path: rel, type: 'dir', size: 0 });
           await walk(full);
         } else if (entry.isFile()) {
-          if (rel === 'SKILL.md') {
+          if (rel === SKILL_FILE) {
             continue;
           }
           const stats = await stat(full);
