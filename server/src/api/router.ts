@@ -24,6 +24,7 @@ import { Router } from 'express';
 import { authDisabledByEnv } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
+import { resolveSkillName } from '../skills/skill-name.ts';
 import { SERVER_VERSION } from '../version.ts';
 
 /** What the management API needs from the process that mounts it. */
@@ -62,6 +63,24 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
  */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
   return { ...toSummary(store, skill), body: skill.body, frontmatter: skill.frontmatter };
+}
+
+/**
+ * Resolves the name of a skill being created or imported, answering 400 when the request yields none.
+ * @param request Parsed request body carrying an optional name and title.
+ * @param action Verb used in the error message.
+ * @returns A valid skill slug.
+ */
+function requireSkillName(request: { name?: string; title?: string }, action: 'create' | 'import'): string {
+  const name = resolveSkillName(request.name, request.title);
+  if (!name) {
+    throw new HttpError(400, `A "name" or "title" is required to ${action} a skill`);
+  }
+  const parsed = slugSchema.safeParse(name);
+  if (!parsed.success) {
+    throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
+  }
+  return parsed.data;
 }
 
 /**
@@ -112,16 +131,8 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.post('/skills', async (req, res) => {
     const request = createSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugify(request.title) : undefined);
-    if (!name) {
-      throw new HttpError(400, 'A "name" or "title" is required to create a skill');
-    }
-    const parsed = slugSchema.safeParse(name);
-    if (!parsed.success) {
-      throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
-    }
     const skill = await store.createSkill({
-      name: parsed.data,
+      name: requireSkillName(request, 'create'),
       description: request.description,
       body: request.body,
       format: request.format,
@@ -134,19 +145,12 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
   router.post('/skills/import', async (req, res) => {
     const request = importSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugify(request.title) : undefined);
-    if (!name) {
-      throw new HttpError(400, 'A "name" or "title" is required to import a skill');
-    }
-    const parsed = slugSchema.safeParse(name);
-    if (!parsed.success) {
-      throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
-    }
+    const name = requireSkillName(request, 'import');
     const files = request.files.map((file) => ({
       path: file.path,
       content: Buffer.from(file.content, file.encoding),
     }));
-    const skill = await store.importSkill({ name: parsed.data, format: request.format, files });
+    const skill = await store.importSkill({ name, format: request.format, files });
     res.status(201).json(toDetail(store, skill));
   });
 

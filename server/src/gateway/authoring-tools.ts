@@ -1,8 +1,9 @@
 import type { Skill } from '@mcp-skills/shared';
-import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugify, slugSchema } from '@mcp-skills/shared';
+import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
+import { resolveSkillName } from '../skills/skill-name.ts';
 
 /**
  * MCP tools that let an agent author and maintain skills over the same endpoint
@@ -191,7 +192,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(createArgs, args);
-        const resolved = input.name ?? (input.title ? slugify(input.title) : undefined);
+        const resolved = resolveSkillName(input.name, input.title);
         if (!resolved) {
           throw new Error('Provide a "name" or a "title" to create a skill');
         }
