@@ -1,94 +1,160 @@
 import type { SkillDetail } from '@mcp-skills/shared';
+import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { FilePreview } from '@/components/domain/skill/editor/file-preview';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { FilesPanel } from '@/components/domain/skill/editor/files-panel';
-import { ReadOnlyFileView } from '@/components/domain/skill/editor/read-only-file-view';
 import { SkillBodyEditor } from '@/components/domain/skill/editor/skill-body-editor';
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
 import type { ViewMode } from '@/components/domain/skill/editor/view-toggle';
+import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { SidebarLayout } from '@/components/split-layout';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 /**
- * Unified skill workspace: a file tree at the top (the skill's own Markdown plus every supporting
- * file and folder) and, below it, an editor for whatever is currently selected. Selecting the skill's
- * Markdown edits its description + body; selecting a `.md` file edits its contents; other files are read-only.
+ * One skill: its files in a list, and the selected one beside it. A file opens as a preview, and its
+ * Edit button swaps the preview for the editor; only the skill's Markdown and `.md` files have one.
+ * @param props.skill - The skill on screen.
+ * @param props.selected - The selected file's path relative to the skill root; absent, the skill's own Markdown.
+ * @param props.startEditing - Open the selected file in the editor rather than as a preview, once.
+ * @param props.onSelect - Called with the file to open, and whether to open it in the editor.
+ * @param props.onEditStarted - Called once `startEditing` has been acted on, so the caller can drop it.
+ * @param props.onRenamed - Called with the skill's new name once a rename has been saved.
  */
-export function SkillWorkspace({ skill }: { skill: SkillDetail }) {
-  const [selected, setSelected] = useState<string>(SKILL_MD_KEY);
-  // A selection held back until the reader decides what happens to their unsaved edits.
-  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>('split');
-  const [dirty, setDirty] = useState(false);
+export function SkillWorkspace({
+  skill,
+  selected,
+  startEditing,
+  onSelect,
+  onEditStarted,
+  onRenamed,
+}: {
+  skill: SkillDetail;
+  selected: string | undefined;
+  startEditing: boolean;
+  onSelect: (path: string | undefined, options?: { edit?: boolean }) => void;
+  onEditStarted: () => void;
+  onRenamed: (name: string) => void;
+}) {
+  const exists = selected !== undefined && skill.files.some((f) => f.type === 'file' && f.path === selected);
+  const path = exists ? selected : SKILL_MD_KEY;
 
   // If the open file is renamed or deleted out from under us, fall back to the skill's Markdown.
   useEffect(() => {
-    if (selected !== SKILL_MD_KEY && !skill.files.some((f) => f.type === 'file' && f.path === selected)) {
-      setSelected(SKILL_MD_KEY);
-      setDirty(false);
+    if (selected !== undefined && !exists) {
+      onSelect(undefined);
     }
-  }, [skill.files, selected]);
-
-  // Warn before leaving with unsaved edits (covers tab close / reload).
-  useEffect(() => {
-    if (!dirty) {
-      return;
-    }
-    const handler = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
-
-  const select = (next: string) => {
-    if (next === selected) {
-      return;
-    }
-    if (dirty) {
-      setPendingSelection(next);
-      return;
-    }
-    setSelected(next);
-  };
-
-  const discardAndSelect = () => {
-    if (pendingSelection !== null) {
-      setDirty(false);
-      setSelected(pendingSelection);
-    }
-    setPendingSelection(null);
-  };
+  }, [selected, exists, onSelect]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <SidebarLayout
+      className="md:h-full"
+      sidebarPosition="start"
+      sidebarWidth="md"
+      stackBelow="md"
+      divider="line"
+      sidebar={
+        <FilesPanel
+          skill={skill}
+          selected={path}
+          onSelect={(next, options) => onSelect(next === SKILL_MD_KEY ? undefined : next, options)}
+          onRenamed={onRenamed}
+        />
+      }
+      content={
+        <FilePane key={path} skill={skill} path={path} startEditing={startEditing} onEditStarted={onEditStarted} />
+      }
+    />
+  );
+}
+
+/** The selected file: its preview, or its editor, which asks before unsaved edits are left behind. */
+function FilePane({
+  skill,
+  path,
+  startEditing,
+  onEditStarted,
+}: {
+  skill: SkillDetail;
+  path: string;
+  startEditing: boolean;
+  onEditStarted: () => void;
+}) {
+  const editable = path === SKILL_MD_KEY || isMarkdownPath(path);
+  const [editing, setEditing] = useState(startEditing && editable);
+  const [view, setView] = useState<ViewMode>('split');
+  const [dirty, setDirty] = useState(false);
+  // Close was pressed over unsaved edits, and the reader has not yet said what happens to them.
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (startEditing) {
+      onEditStarted();
+    }
+  }, [startEditing, onEditStarted]);
+
+  // Opening another file, another skill or another page, and closing or reloading the tab.
+  const unsaved = editing && dirty;
+  const blocker = useBlocker({ shouldBlockFn: () => unsaved, enableBeforeUnload: () => unsaved, withResolver: true });
+
+  const stopEditing = () => {
+    setDirty(false);
+    setEditing(false);
+  };
+
+  const keepEditing = () => {
+    setClosing(false);
+    blocker.reset?.();
+  };
+
+  const discard = () => {
+    setClosing(false);
+    if (blocker.status === 'blocked') {
+      blocker.proceed();
+    } else {
+      stopEditing();
+    }
+  };
+
+  const close = () => (dirty ? setClosing(true) : stopEditing());
+
+  return (
+    <>
       <ConfirmDialog
-        open={pendingSelection !== null}
+        open={closing || blocker.status === 'blocked'}
         onOpenChange={(open) => {
           if (!open) {
-            setPendingSelection(null);
+            keepEditing();
           }
         }}
         title="Discard unsaved changes?"
-        description="The edits to the open file have not been saved, and opening another file loses them."
+        description="The edits to the open file have not been saved, and leaving the editor loses them."
         confirmLabel="Discard"
         cancelLabel="Keep editing"
-        onConfirm={discardAndSelect}
+        onConfirm={discard}
       />
 
-      <FilesPanel skill={skill} selected={selected} onSelect={select} />
-
-      {selected === SKILL_MD_KEY ? (
-        <SkillBodyEditor skill={skill} view={view} setView={setView} onDirtyChange={setDirty} />
-      ) : isMarkdownPath(selected) ? (
-        <SupportingFileEditor
-          key={selected}
-          skillName={skill.name}
-          path={selected}
-          view={view}
-          setView={setView}
-          onDirtyChange={setDirty}
-        />
+      {!editing ? (
+        <FilePreview skill={skill} path={path} onEdit={() => setEditing(true)} />
       ) : (
-        <ReadOnlyFileView key={selected} skillName={skill.name} path={selected} />
+        <StickyHeaderContentFooter
+          contentClassName="p-4"
+          content={
+            path === SKILL_MD_KEY ? (
+              <SkillBodyEditor skill={skill} view={view} setView={setView} onDirtyChange={setDirty} onClose={close} />
+            ) : (
+              <SupportingFileEditor
+                skillName={skill.name}
+                path={path}
+                view={view}
+                setView={setView}
+                onDirtyChange={setDirty}
+                onClose={close}
+              />
+            )
+          }
+        />
       )}
-    </div>
+    </>
   );
 }

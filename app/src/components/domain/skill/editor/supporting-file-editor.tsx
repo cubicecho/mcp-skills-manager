@@ -14,12 +14,14 @@ export function SupportingFileEditor({
   view,
   setView,
   onDirtyChange,
+  onClose,
 }: {
   skillName: string;
   path: string;
   view: ViewMode;
   setView: (view: ViewMode) => void;
   onDirtyChange: (dirty: boolean) => void;
+  onClose: () => void;
 }) {
   const toast = useToasts();
   const file = useSkillFileContent(skillName, path);
@@ -62,6 +64,7 @@ export function SupportingFileEditor({
       view={view}
       setView={setView}
       onSave={save}
+      onClose={onClose}
       saving={write.isPending}
       dirty={dirty}
       content={

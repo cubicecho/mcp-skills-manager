@@ -16,6 +16,7 @@ import { Pencil, Plus, Search, Trash2 } from '@/components/ui/icons';
 import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDate } from '@/lib/format';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
@@ -23,11 +24,6 @@ import { useToasts } from '@/lib/toast';
 export const Route = createFileRoute('/')({
   component: SkillsPage,
 });
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { dateStyle: 'medium' });
-}
 
 type ScopeFilter = 'all' | 'global' | 'scoped';
 type FormatFilter = 'all' | 'dir' | 'file';

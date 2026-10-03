@@ -19,11 +19,13 @@ export function SkillBodyEditor({
   view,
   setView,
   onDirtyChange,
+  onClose,
 }: {
   skill: SkillDetail;
   view: ViewMode;
   setView: (view: ViewMode) => void;
   onDirtyChange: (dirty: boolean) => void;
+  onClose: () => void;
 }) {
   const toast = useToasts();
   const update = useUpdateSkill(skill.name);
@@ -85,6 +87,7 @@ export function SkillBodyEditor({
       view={view}
       setView={setView}
       onSave={save}
+      onClose={onClose}
       saving={update.isPending}
       dirty={dirty}
       content={

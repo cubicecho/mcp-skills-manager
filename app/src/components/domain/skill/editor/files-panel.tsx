@@ -4,14 +4,15 @@ import { ActionButton } from '@/components/action-button';
 import { File, FilePlus, FileText, Folder, FolderPlus, FolderUp } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
 import { buildTree, isMarkdownPath, SKILL_MD_KEY, type TreeNode } from '@/components/domain/skill/editor/file-tree';
+import { RenameButton } from '@/components/domain/skill/editor/rename-button';
 import { type PathPrompt, PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
-import { Section } from '@/components/section';
+import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { Download, Pencil, Trash2, Upload } from '@/components/ui/icons';
 import { exportSkill } from '@/lib/api';
-import { formatBytes } from '@/lib/format';
+import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
 import { reported } from '@/lib/reported';
 import { fileToSkillFileContent } from '@/lib/skill-upload';
@@ -35,17 +36,23 @@ function pathHint(base: string): ReactNode {
 }
 
 /**
- * The file tree and its management toolbar: the skill's own Markdown (first, un-renamable) plus every
+ * The skill's file list and its toolbar: the skill's own Markdown (first, un-renamable) plus every
  * supporting file and folder, with create / upload / rename / delete / export actions.
+ * @param props.skill - The skill whose files are listed.
+ * @param props.selected - The open file's path, or `SKILL_MD_KEY` for the skill's own Markdown.
+ * @param props.onSelect - Called with the file to open; `edit` asks for it in the editor, as a new file is.
+ * @param props.onRenamed - Called with the skill's new name once a rename has been saved.
  */
 export function FilesPanel({
   skill,
   selected,
   onSelect,
+  onRenamed,
 }: {
   skill: SkillDetail;
   selected: string;
-  onSelect: (path: string) => void;
+  onSelect: (path: string, options?: { edit?: boolean }) => void;
+  onRenamed: (name: string) => void;
 }) {
   const toast = useToasts();
   const writeFile = useWriteSkillFile(skill.name);
@@ -101,7 +108,7 @@ export function FilesPanel({
       onSubmit: async (rel) => {
         const path = base ? `${base}/${rel}` : rel;
         await reported(writeFile.mutateAsync({ path, content: '', encoding: 'utf8' }), toast.apiError);
-        onSelect(path);
+        onSelect(path, { edit: isMarkdownPath(path) });
       },
     });
 
@@ -151,59 +158,75 @@ export function FilesPanel({
     }
   };
 
+  const fileCount = skill.files.filter((file) => file.type === 'file').length + 1;
+  const toolbar = { variant: 'ghost', size: 'icon-sm' } as const;
+
   return (
-    <Section
-      title="Files"
-      description={
-        <>
-          Files live under <Code>skills/{skill.name}/</Code>; you can also edit them on disk.
-        </>
+    <StickyHeaderContentFooter
+      header={
+        <PageHeader
+          level={2}
+          // A narrow pane: the skill's name keeps 10rem, not the page header's 16, before its buttons
+          // drop to a line of their own.
+          className="[&_[data-slot=page-header-titles]]:basis-40"
+          title={skill.name}
+          icon={skill.format === 'dir' ? <Folder /> : <FileText />}
+          description={
+            <>
+              {formatCount(fileCount, 'file')} under{' '}
+              <Code>{skill.format === 'dir' ? `skills/${skill.name}/` : `skills/${skill.path}`}</Code>
+            </>
+          }
+          action={
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
+              <ActionButton {...toolbar} label="New file" disabled={busy} onClick={() => newFile()}>
+                <FilePlus />
+              </ActionButton>
+              <ActionButton {...toolbar} label="New folder" disabled={busy} onClick={() => newFolder()}>
+                <FolderPlus />
+              </ActionButton>
+              <ActionButton
+                {...toolbar}
+                label="Add files"
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload />
+              </ActionButton>
+              <ActionButton
+                {...toolbar}
+                label="Add folder"
+                disabled={busy}
+                onClick={() => folderInputRef.current?.click()}
+              >
+                <FolderUp />
+              </ActionButton>
+              <ActionButton {...toolbar} label="Export .zip" onClick={runExport}>
+                <Download />
+              </ActionButton>
+              <RenameButton skill={skill} onRenamed={onRenamed} />
+            </div>
+          }
+        />
       }
+      contentClassName="px-2 pb-4"
       content={
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => newFile()}>
-              <FilePlus /> New file
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => newFolder()}>
-              <FolderPlus /> New folder
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload /> Add files
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => folderInputRef.current?.click()}
-            >
-              <FolderUp /> Add folder
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={runExport}>
-              <Download /> Export .zip
-            </Button>
-          </div>
           <input ref={fileInputRef} type="file" hidden multiple onChange={uploadPicked} />
           <input ref={folderInputRef} type="file" hidden multiple onChange={uploadPicked} />
 
-          <ul className="flex flex-col rounded-md border py-1">
+          <ul className="flex flex-col gap-0.5">
             {/* The skill's own Markdown — always first, and never renamable/deletable. */}
             <li
               className={cn(
-                'flex items-center gap-2 px-2 py-1 text-sm',
-                selected === SKILL_MD_KEY ? 'bg-accent' : 'hover:bg-muted/50',
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+                selected === SKILL_MD_KEY ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50',
               )}
             >
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                aria-current={selected === SKILL_MD_KEY ? 'page' : undefined}
                 onClick={() => onSelect(SKILL_MD_KEY)}
               >
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
@@ -257,8 +280,8 @@ function FileTreeNode({
     <>
       <li
         className={cn(
-          'group flex items-center gap-2 px-2 py-1 text-sm',
-          isSelected ? 'bg-accent' : 'hover:bg-muted/50',
+          'group flex items-center gap-2 rounded-md px-2 py-1 text-sm',
+          isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50',
         )}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
@@ -273,8 +296,8 @@ function FileTreeNode({
             <button
               type="button"
               className="min-w-0 truncate text-left font-mono"
+              aria-current={isSelected ? 'page' : undefined}
               onClick={() => onSelect(node.path)}
-              title={isMarkdownPath(node.path) ? 'Edit file' : 'View file (read-only)'}
             >
               {node.name}
             </button>

@@ -18,7 +18,7 @@ export function RenameButton({ skill, onRenamed }: { skill: SkillDetail; onRenam
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ActionButton variant="outline" size="icon" label="Rename skill" onClick={() => setOpen(true)}>
+      <ActionButton variant="ghost" size="icon-sm" label="Rename skill" onClick={() => setOpen(true)}>
         <Pencil />
       </ActionButton>
       {open && (
