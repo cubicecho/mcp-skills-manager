@@ -1,6 +1,7 @@
 import type { SkillFileContent } from '@mcp-skills/shared';
 import { slugify } from '@mcp-skills/shared';
 import { unzipSync } from 'fflate';
+import type { PickedFile } from '@/components/ui/file-picker-base';
 
 /**
  * Client-side normalization of a skill upload. An `.md` file, a picked folder,
@@ -67,14 +68,14 @@ function stripExtension(fileName: string, ext: string): string {
   return fileName.toLowerCase().endsWith(ext) ? fileName.slice(0, -ext.length) : fileName;
 }
 
-async function readRawFile(file: File): Promise<RawFile> {
-  return { path: file.webkitRelativePath || file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
+/** A file picked with `read="bytes"`: its folder-relative path when a folder was picked, else its name. */
+function toRawFile(file: PickedFile): RawFile {
+  return { path: file.path, bytes: file.bytes ?? new Uint8Array() };
 }
 
-/** Read a picked File into an import payload entry. Uses its folder-relative path when available. */
-export async function fileToSkillFileContent(file: File, relativePath?: string): Promise<SkillFileContent> {
-  const raw = await readRawFile(file);
-  return toContent({ path: relativePath ?? raw.path, bytes: raw.bytes });
+/** Turn a picked file (`read="bytes"`) into an import payload entry, at its folder-relative path. */
+export function pickedToSkillFileContent(file: PickedFile): SkillFileContent {
+  return toContent(toRawFile(file));
 }
 
 function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): NormalizedUpload {
@@ -100,11 +101,10 @@ function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): Normaliz
 }
 
 /** Normalize a single picked file: `.md` → a file skill, `.zip` → a directory skill. */
-export async function normalizeUploadFile(file: File): Promise<NormalizedUpload> {
+export function normalizeUploadFile(file: PickedFile): NormalizedUpload {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.zip')) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const entries = unzipSync(bytes);
+    const entries = unzipSync(toRawFile(file).bytes);
     const rawFiles: RawFile[] = Object.entries(entries)
       .filter(([name]) => !name.endsWith('/'))
       .map(([name, data]) => ({ path: name, bytes: data }));
@@ -114,11 +114,10 @@ export async function normalizeUploadFile(file: File): Promise<NormalizedUpload>
     return normalizeDirectory(rawFiles, stripExtension(file.name, '.zip'));
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
-    const raw = await readRawFile(file);
     return {
       format: 'file',
       defaultName: slugify(stripExtension(stripExtension(file.name, '.markdown'), '.md')),
-      files: [toContent({ path: 'SKILL.md', bytes: raw.bytes })],
+      files: [toContent({ path: 'SKILL.md', bytes: toRawFile(file).bytes })],
       paths: [file.name],
     };
   }
@@ -131,8 +130,7 @@ export async function normalizeUploadFile(file: File): Promise<NormalizedUpload>
   };
 }
 
-/** Normalize a picked folder (from a webkitdirectory input) into a directory skill. */
-export async function normalizeUploadFolder(fileList: FileList): Promise<NormalizedUpload> {
-  const rawFiles = await Promise.all([...fileList].map(readRawFile));
-  return normalizeDirectory(rawFiles, '');
+/** Normalize a picked folder into a directory skill. */
+export function normalizeUploadFolder(files: PickedFile[]): NormalizedUpload {
+  return normalizeDirectory(files.map(toRawFile), '');
 }

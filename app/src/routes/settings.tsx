@@ -5,10 +5,11 @@ import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { PageLayout } from '@/components/page-layout';
 import { SettingRow } from '@/components/setting-row';
 import { Button } from '@/components/ui/button';
-import { Code } from '@/components/ui/code';
+import { Code, CodeBlock } from '@/components/ui/code';
 import { RefreshCw } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
 import { reloadConfig } from '@/lib/api';
+import { formatDuration } from '@/lib/format';
 import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { useToasts } from '@/lib/toast';
@@ -161,7 +162,7 @@ function SettingsPage() {
                   content={[
                     <PropertyRow key="version" label="Version" value={data.version} />,
                     <PropertyRow key="port" label="Port" value={String(data.port)} />,
-                    <PropertyRow key="uptime" label="Uptime" value={`${data.uptimeSeconds}s`} />,
+                    <PropertyRow key="uptime" label="Uptime" value={formatDuration(data.uptimeSeconds)} />,
                     <PropertyRow key="skills" label="Skills" value={String(data.skillCount)} />,
                     <PropertyRow key="workspaces" label="Workspaces" value={String(data.workspaceCount)} />,
                     <PropertyRow key="auth" label="Auth" value={data.authEnabled ? 'bearer token' : 'disabled'} />,
@@ -192,9 +193,9 @@ function SettingsPage() {
             title="Connect over stdio"
             description="Run the server as a stdio MCP process instead of HTTP."
             content={
-              <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 text-xs">
-                <code>{`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a workspace's skills\nmcp-skills-stdio --data-dir /path/to/data --workspace backend`}</code>
-              </pre>
+              <CodeBlock
+                content={`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a workspace's skills\nmcp-skills-stdio --data-dir /path/to/data --workspace backend`}
+              />
             }
           />
         </div>

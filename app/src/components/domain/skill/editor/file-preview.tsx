@@ -1,14 +1,15 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { Layers, Lock } from '@/components/app-icons';
+import { Layers } from '@/components/app-icons';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
-import { MarkdownPreview } from '@/components/domain/skill/markdown-preview';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
-import { Pencil } from '@/components/ui/icons';
+import { CodeBlock } from '@/components/ui/code';
+import { Lock, Pencil } from '@/components/ui/icons';
 import { formatBytes, formatCount, formatDate } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
 
@@ -86,7 +87,7 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
           <span className="text-muted-foreground text-xs">{facts}</span>
         </div>
       }
-      content={<MarkdownPreview content={skill.body} />}
+      content={<Markdown content={skill.body} empty="This skill has no body yet." />}
     />
   );
 }
@@ -119,11 +120,9 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
           {data &&
             !data.binary &&
             (markdown ? (
-              <MarkdownPreview content={data.content} />
+              <Markdown content={data.content} empty="This file is empty." />
             ) : (
-              <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed">
-                {data.content}
-              </pre>
+              <CodeBlock content={data.content} />
             ))}
         </>
       }
