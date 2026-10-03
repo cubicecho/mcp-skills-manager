@@ -3,8 +3,9 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
-import { errorMessage } from '../errors.ts';
+import { closeQuietly } from './close-quietly.ts';
 
+/** One live stateful session: its skill server and the transport that carries it. */
 interface Session {
   server: Server;
   transport: StreamableHTTPServerTransport;
@@ -53,9 +54,7 @@ export class McpSessionManager {
       // we must reap solely on the GET stream, never on those.
       if (req.method === 'GET') {
         res.on('close', () => {
-          existing.transport
-            .close()
-            .catch((err: unknown) => console.warn(`MCP session close failed: ${errorMessage(err)}`));
+          void closeQuietly(existing.transport, 'MCP session');
         });
       }
       await existing.transport.handleRequest(req, res, req.body);
@@ -101,10 +100,6 @@ export class McpSessionManager {
   async closeAll(): Promise<void> {
     const open = [...this.sessions.values()];
     this.sessions.clear();
-    await Promise.all(
-      open.map((s) =>
-        s.transport.close().catch((err: unknown) => console.warn(`MCP session close failed: ${errorMessage(err)}`)),
-      ),
-    );
+    await Promise.all(open.map((s) => closeQuietly(s.transport, 'MCP session')));
   }
 }

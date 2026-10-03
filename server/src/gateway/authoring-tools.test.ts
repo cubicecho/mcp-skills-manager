@@ -224,6 +224,47 @@ describe('MCP authoring tools', () => {
     expect(firstText(res)).toContain('already exists');
   });
 
+  it('pins the error text of create_skill name failures', async () => {
+    const client = await connect(store);
+    const missing = await client.callTool({ name: 'create_skill', arguments: { body: 'b' } });
+    expect((missing as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(missing)).toMatchInlineSnapshot(`"Provide a "name" or a "title" to create a skill"`);
+    const emptySlug = await client.callTool({ name: 'create_skill', arguments: { title: '!!!' } });
+    expect(firstText(emptySlug)).toMatchInlineSnapshot(`"Provide a "name" or a "title" to create a skill"`);
+    const invalid = await client.callTool({ name: 'create_skill', arguments: { name: 'Not A Slug' } });
+    expect((invalid as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(invalid)).toMatchInlineSnapshot(
+      `"lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric"`,
+    );
+    const derived = await client.callTool({ name: 'create_skill', arguments: { title: 'My First Skill!' } });
+    expect(firstText(derived)).toContain('Created skill "my-first-skill"');
+    expect(store.getSkills().map((s) => s.name)).toEqual(['getting-started', 'my-first-skill']);
+  });
+
+  it('pins the error text of rename_skill with an invalid new name', async () => {
+    const client = await connect(store);
+    const res = await client.callTool({
+      name: 'rename_skill',
+      arguments: { name: 'getting-started', new_name: 'Not A Slug' },
+    });
+    expect((res as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(res)).toMatchInlineSnapshot(`"Invalid skill name "Not A Slug""`);
+    expect(store.getSkill('getting-started')).toBeDefined();
+  });
+
+  it('adds a renamed skill to the active workspace even when it was not a member', async () => {
+    await store.createSkill({ name: 'outsider', description: '', body: 'b', format: 'file' });
+    expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started']);
+    const client = await connect(store, 'examples');
+    const text = firstText(
+      await client.callTool({ name: 'rename_skill', arguments: { name: 'outsider', new_name: 'insider' } }),
+    );
+    expect(text).toMatchInlineSnapshot(
+      `"Renamed skill "outsider" to "insider". It is served globally on the root /mcp endpoint and included in workspace "examples". Load it by calling the tool named "insider"."`,
+    );
+    expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started', 'insider']);
+  });
+
   it('omits authoring tools when authoringEnabled is false', async () => {
     await store.updateSettings({ authoringEnabled: false });
     const client = await connect(store);

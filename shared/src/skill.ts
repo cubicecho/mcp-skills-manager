@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { slugSchema } from './slug.ts';
 
 /**
  * Schemas describing a skill: a Markdown document (with optional YAML
@@ -7,13 +8,6 @@ import { z } from 'zod';
  * `<name>/SKILL.md` directory that may carry supporting files alongside it.
  */
 
-/** A skill name doubles as its id, route filter value, tool/resource name and filename stem. */
-export const skillNameSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z0-9][a-z0-9._-]*$/, 'lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric');
-
 /**
  * On-disk layout of a skill:
  * - `file`: a single `skills/<name>.md`
@@ -21,6 +15,13 @@ export const skillNameSchema = z
  */
 export const skillFormatSchema = z.enum(['file', 'dir']);
 export type SkillFormat = z.infer<typeof skillFormatSchema>;
+
+/** A file or folder path relative to a skill's root, e.g. "scripts/run.py"; at most 255 characters. */
+export const skillRelPathSchema = z.string().min(1).max(255);
+
+/** How file content travels as a string: `utf8` for text, `base64` for binary. */
+export const fileEncodingSchema = z.enum(['utf8', 'base64']);
+export type FileEncoding = z.infer<typeof fileEncodingSchema>;
 
 /**
  * Recognised frontmatter keys. Unknown keys are preserved (passthrough) so a
@@ -110,7 +111,7 @@ export type SkillFile = z.infer<typeof skillFileSchema>;
 /** The canonical in-memory representation of a loaded skill. */
 export const skillSchema = z.object({
   /** Id / filename stem / route filter value. */
-  name: skillNameSchema,
+  name: slugSchema,
   /** One-line summary from frontmatter; surfaced as the MCP tool/resource description. */
   description: z.string().default(''),
   /** Markdown body with the frontmatter block stripped. */
@@ -132,13 +133,3 @@ export const skillSchema = z.object({
   tags: z.array(z.string()).default([]),
 });
 export type Skill = z.infer<typeof skillSchema>;
-
-/** Derive a URL/route-safe skill name from a free-form title. */
-export function slugifySkillName(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-') // non-slug chars → single dash
-    .replace(/^[^a-z0-9]+/, '') // must start alphanumeric
-    .replace(/[-.]+$/, '') // no trailing dash/dot
-    .slice(0, 64);
-}

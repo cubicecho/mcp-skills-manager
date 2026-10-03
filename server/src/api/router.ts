@@ -12,28 +12,34 @@ import {
   createWorkspaceRequestSchema,
   importSkillRequestSchema,
   moveSkillPathRequestSchema,
-  skillNameSchema,
   slugify,
-  slugifySkillName,
+  slugSchema,
   updateSettingsRequestSchema,
   updateSkillRequestSchema,
   updateWorkspaceRequestSchema,
   workspaceConfigSchema,
-  workspaceSlugSchema,
   writeSkillFileRequestSchema,
 } from '@mcp-skills/shared';
-import { Router } from 'express';
-import { authDisabledByEnv } from '../auth.ts';
+import { type Request, Router } from 'express';
+import { isAuthEffective } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { HttpError } from '../errors.ts';
+import { resolveSkillName } from '../skills/skill-name.ts';
 import { SERVER_VERSION } from '../version.ts';
 
+/** What the management API needs from the process that mounts it. */
 export interface ApiDeps {
   store: ConfigStore;
   /** The port the HTTP server is listening on, surfaced via GET /status. */
   port: number;
 }
 
+/**
+ * Builds the body-less API view of a skill.
+ * @param store Store supplying the usage stats.
+ * @param skill Skill to render.
+ * @returns The summary DTO.
+ */
 function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
   return {
     name: skill.name,
@@ -49,10 +55,53 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
   };
 }
 
+/**
+ * Builds the full API view of a skill.
+ * @param store Store supplying the usage stats.
+ * @param skill Skill to render.
+ * @returns The summary plus body and frontmatter.
+ */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
   return { ...toSummary(store, skill), body: skill.body, frontmatter: skill.frontmatter };
 }
 
+/**
+ * Reads the `path` query parameter of a supporting-file request, answering 400 when it is missing.
+ * @param req Request whose query string carries the path.
+ * @returns The non-empty path, relative to the skill root.
+ */
+function requirePathQuery(req: Request): string {
+  const relPath = req.query.path;
+  const isUsable = typeof relPath === 'string' && relPath !== '';
+  if (!isUsable) {
+    throw new HttpError(400, 'A "path" query parameter is required');
+  }
+  return relPath;
+}
+
+/**
+ * Resolves the name of a skill being created or imported, answering 400 when the request yields none.
+ * @param request Parsed request body carrying an optional name and title.
+ * @param action Verb used in the error message.
+ * @returns A valid skill slug.
+ */
+function requireSkillName(request: { name?: string; title?: string }, action: 'create' | 'import'): string {
+  const name = resolveSkillName(request.name, request.title);
+  if (!name) {
+    throw new HttpError(400, `A "name" or "title" is required to ${action} a skill`);
+  }
+  const parsed = slugSchema.safeParse(name);
+  if (!parsed.success) {
+    throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
+  }
+  return parsed.data;
+}
+
+/**
+ * Builds the management REST API mounted at /api.
+ * @param deps Store and listening port.
+ * @returns The router; errors thrown by its handlers reach the error middleware.
+ */
 export function createApiRouter(deps: ApiDeps): Router {
   const { store, port } = deps;
   const startedAt = Date.now();
@@ -66,8 +115,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     return skill;
   };
 
-  // --- status ---
-
   router.get('/status', (_req, res) => {
     const status: ServerStatus = {
       version: SERVER_VERSION,
@@ -76,13 +123,11 @@ export function createApiRouter(deps: ApiDeps): Router {
       workspaceCount: store.getWorkspaces().length,
       // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
       // matching the auth middleware in app.ts.
-      authEnabled: store.getSettings().authEnabled && !authDisabledByEnv(),
+      authEnabled: isAuthEffective(store.getSettings()),
       port,
     };
     res.json(status);
   });
-
-  // --- settings ---
 
   router.get('/settings', (_req, res) => {
     res.json(store.getSettingsView());
@@ -94,24 +139,14 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.json(store.getSettingsView());
   });
 
-  // --- skills ---
-
   router.get('/skills', (_req, res) => {
     res.json(store.getSkills().map((skill) => toSummary(store, skill)));
   });
 
   router.post('/skills', async (req, res) => {
     const request = createSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugifySkillName(request.title) : undefined);
-    if (!name) {
-      throw new HttpError(400, 'A "name" or "title" is required to create a skill');
-    }
-    const parsed = skillNameSchema.safeParse(name);
-    if (!parsed.success) {
-      throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
-    }
     const skill = await store.createSkill({
-      name: parsed.data,
+      name: requireSkillName(request, 'create'),
       description: request.description,
       body: request.body,
       format: request.format,
@@ -124,19 +159,12 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
   router.post('/skills/import', async (req, res) => {
     const request = importSkillRequestSchema.parse(req.body);
-    const name = request.name ?? (request.title ? slugifySkillName(request.title) : undefined);
-    if (!name) {
-      throw new HttpError(400, 'A "name" or "title" is required to import a skill');
-    }
-    const parsed = skillNameSchema.safeParse(name);
-    if (!parsed.success) {
-      throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
-    }
+    const name = requireSkillName(request, 'import');
     const files = request.files.map((file) => ({
       path: file.path,
       content: Buffer.from(file.content, file.encoding),
     }));
-    const skill = await store.importSkill({ name: parsed.data, format: request.format, files });
+    const skill = await store.importSkill({ name, format: request.format, files });
     res.status(201).json(toDetail(store, skill));
   });
 
@@ -155,8 +183,10 @@ export function createApiRouter(deps: ApiDeps): Router {
       readOnly: update.readOnly,
       tags: update.tags,
     });
-    if (update.name !== undefined && update.name !== name) {
-      skill = await store.renameSkill(name, update.name);
+    const newName = update.name;
+    const isRename = newName !== undefined && newName !== name;
+    if (isRename) {
+      skill = await store.renameSkill(name, newName);
     }
     res.json(toDetail(store, skill));
   });
@@ -180,11 +210,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.get('/skills/:name/files/content', async (req, res) => {
     const name = req.params.name;
     requireSkill(name);
-    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
-    if (!relPath) {
-      throw new HttpError(400, 'A "path" query parameter is required');
-    }
-    res.json(await store.readSupportingFile(name, relPath));
+    res.json(await store.readSupportingFile(name, requirePathQuery(req)));
   });
 
   // Add or overwrite a supporting file (promotes a `file` skill to a `dir`).
@@ -218,15 +244,9 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.delete('/skills/:name/files', async (req, res) => {
     const name = req.params.name;
     requireSkill(name);
-    const relPath = typeof req.query.path === 'string' ? req.query.path : '';
-    if (!relPath) {
-      throw new HttpError(400, 'A "path" query parameter is required');
-    }
-    const skill = await store.deleteSupportingFile(name, relPath);
+    const skill = await store.deleteSupportingFile(name, requirePathQuery(req));
     res.json(toDetail(store, skill));
   });
-
-  // --- workspaces ---
 
   const workspacePath = (slug: string): string => `/mcp/w/${slug}`;
   const toWorkspaceStatus = (workspace: WorkspaceConfig): WorkspaceStatus => ({
@@ -244,7 +264,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   };
 
   const requireValidSlug = (slug: string): string => {
-    const parsed = workspaceSlugSchema.safeParse(slug);
+    const parsed = slugSchema.safeParse(slug);
     if (!parsed.success) {
       throw new HttpError(400, `Invalid workspace slug "${slug}"`, 'derive a name that yields a valid URL slug');
     }
@@ -284,7 +304,8 @@ export function createApiRouter(deps: ApiDeps): Router {
     // slug when the name is unchanged so member-only edits never move the URL.
     const name = update.name ?? existing.name;
     const slug = update.name !== undefined ? requireValidSlug(slugify(name)) : existing.slug;
-    if (slug !== existing.slug && store.getWorkspace(slug)) {
+    const collidesWithAnother = slug !== existing.slug && store.getWorkspace(slug) !== undefined;
+    if (collidesWithAnother) {
       throw new HttpError(409, `Workspace "${slug}" already exists`);
     }
     // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.
@@ -311,8 +332,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     await store.deleteWorkspace(req.params.slug);
     res.status(204).end();
   });
-
-  // --- reload ---
 
   router.post('/reload', async (_req, res) => {
     const state = await store.reload();

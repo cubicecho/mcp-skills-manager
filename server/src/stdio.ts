@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConfigStore } from './config/store.ts';
 import { errorMessage } from './errors.ts';
+import { endpointDeps } from './gateway/endpoint.ts';
 import { createSkillServer } from './gateway/skill-server.ts';
 
 /**
@@ -33,40 +34,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const getSkills = workspaceSlug
-    ? () => {
-        const workspace = store.getWorkspace(workspaceSlug);
-        return workspace ? store.getSkillsForWorkspace(workspace) : [];
-      }
-    : () => store.getGlobalSkills();
-
-  const server = createSkillServer({
-    label: workspaceSlug ?? 'all',
-    getSkills,
-    authoring: { store, workspaceSlug },
-    // Mirror the HTTP workspace route: a --workspace endpoint honors that workspace's
-    // skillToolMode override, falling back to the global default.
-    getSkillToolMode: () => {
-      if (!workspaceSlug) {
-        return store.getSkillToolMode();
-      }
-      const workspace = store.getWorkspace(workspaceSlug);
-      return workspace ? store.getSkillToolModeForWorkspace(workspace) : store.getSkillToolMode();
-    },
-    readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
-    onSkillLoaded: (name) => store.recordSkillUse(name),
-    // Long-lived transport: push resources/list_changed + updated when the store
-    // reloads after an on-disk edit. (The stateless HTTP route omits this.)
-    onSkillsChanged: (listener) => {
-      store.on('change', listener);
-      return () => store.off('change', listener);
-    },
-  });
+  // stdio is a long-lived transport, so it can push live updates. (The stateless HTTP route cannot.)
+  const deps = endpointDeps(store, { workspaceSlug, liveUpdates: true });
+  const server = createSkillServer(deps);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // Log to stderr — stdout is the MCP transport channel and must stay clean.
   console.error(
-    `mcp-skills-manager stdio ready: serving ${getSkills().length} skill(s)` +
+    `mcp-skills-manager stdio ready: serving ${deps.getSkills().length} skill(s)` +
       `${workspaceSlug ? ` from workspace "${workspaceSlug}"` : ''} (data dir: ${dataDir})`,
   );
 

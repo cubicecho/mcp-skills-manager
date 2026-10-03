@@ -1,23 +1,42 @@
-import { CheckIcon } from 'lucide-react';
 import { Checkbox as CheckboxPrimitive } from 'radix-ui';
-import * as React from 'react';
+import type { ComponentPropsWithRef } from 'react';
+import { CHECKBOX_CLASS } from '@/components/ui/checkbox-base';
+import { Check } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
-function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+/**
+ * radix's props, with `className` re-declared for `exactOptionalPropertyTypes`. Every prop of the
+ * shared contract but `accessibilityLabel` is already one of radix's; a `() => void` is a DOM
+ * `onBlur`.
+ */
+export type CheckboxProps = Omit<ComponentPropsWithRef<typeof CheckboxPrimitive.Root>, 'className'> & {
+  className?: string | undefined;
+  /**
+   * The device half's name for the box, taken here so a call site shared across both halves —
+   * typechecked against the device half, so this is all it passes — still names it. It becomes
+   * `aria-label`; an `aria-label` of its own wins. Optional, because on the web a
+   * `<Label htmlFor={id}>` can name the box instead.
+   */
+  'aria-label'?: string | undefined;
+};
+
+function Checkbox({ className, 'aria-label': accessibilityLabel, 'aria-label': ariaLabel, ...props }: CheckboxProps) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
+      {...props}
+      aria-label={ariaLabel ?? accessibilityLabel}
       className={cn(
-        'peer size-4 shrink-0 rounded-[4px] border border-input shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-input/30 dark:aria-invalid:ring-destructive/40 dark:data-[state=checked]:bg-primary',
+        CHECKBOX_CLASS,
+        'peer flex border-input bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-selection data-[state=checked]:bg-selection data-[state=checked]:text-selection-foreground data-[state=indeterminate]:border-selection data-[state=indeterminate]:bg-selection data-[state=indeterminate]:text-selection-foreground',
         className,
       )}
-      {...props}
     >
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"
-        className="grid place-content-center text-current transition-none"
+        className="flex items-center justify-center text-current"
       >
-        <CheckIcon className="size-3.5" />
+        <Check className="h-3 w-3" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

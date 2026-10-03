@@ -20,9 +20,9 @@ export function errorMessage(err: unknown): string {
 }
 
 /**
- * Like errorMessage, but appends an HttpError's detail — the manager puts the
- * actual diagnostics (e.g. a child's stderr tail) there, while the message is
- * a generic one-liner like `Failed to connect to server "x"`.
+ * Like errorMessage, but appends an HttpError's detail, where the store puts the specifics of a failure.
+ * @param err The thrown value.
+ * @returns `message: detail` for an HttpError with a detail, else the plain message.
  */
 export function errorDetailMessage(err: unknown): string {
   if (err instanceof HttpError && err.detail) {

@@ -1,14 +1,19 @@
 import { z } from 'zod';
 import { skillToolModeSchema } from './settings.ts';
-import { skillFileSchema, skillFormatSchema, skillFrontmatterSchema, skillNameSchema } from './skill.ts';
-import { workspaceConfigSchema, workspaceSlugSchema } from './workspace.ts';
+import {
+  fileEncodingSchema,
+  skillFileSchema,
+  skillFormatSchema,
+  skillFrontmatterSchema,
+  skillRelPathSchema,
+} from './skill.ts';
+import { slugSchema } from './slug.ts';
+import { workspaceConfigSchema } from './workspace.ts';
 
 /**
  * DTOs for the management REST API (/api/*).
  * All endpoints require `Authorization: Bearer <token>` unless auth is disabled.
  */
-
-// --- skills ---
 
 /** Runtime usage stats for a skill: how often it has been loaded over MCP, and when last. */
 export const skillUsageSchema = z.object({
@@ -21,9 +26,9 @@ export type SkillUsage = z.infer<typeof skillUsageSchema>;
 
 /** A skill without its body — the shape returned by GET /api/skills. */
 export const skillSummarySchema = z.object({
-  name: skillNameSchema,
+  name: slugSchema,
   description: z.string(),
-  format: z.enum(['file', 'dir']),
+  format: skillFormatSchema,
   /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
   global: z.boolean().default(true),
   /** Whether agents are barred from modifying the skill over MCP (the web UI can still edit it). */
@@ -45,11 +50,10 @@ export const skillDetailSchema = skillSummarySchema.extend({
 });
 export type SkillDetail = z.infer<typeof skillDetailSchema>;
 
-// --- POST /api/skills ---
-
+/** Body of POST /api/skills. */
 export const createSkillRequestSchema = z.object({
   /** Id / route filter value; derived from `title` when omitted. */
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   /** Free-form title used to derive `name` when it is not given. */
   title: z.string().optional(),
   /** One-line summary, written to frontmatter. */
@@ -65,76 +69,70 @@ export const createSkillRequestSchema = z.object({
 });
 export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
 
-// --- POST /api/skills/import (upload an .md / directory / .zip) ---
-
 /**
  * One file in an upload payload. `content` is the raw file body, encoded as
  * `utf8` text or `base64` (used for binary supporting files). `path` is relative
  * to the skill's root, e.g. "SKILL.md" or "scripts/run.py".
  */
 export const skillFileContentSchema = z.object({
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']).default('utf8'),
+  encoding: fileEncodingSchema.default('utf8'),
 });
 export type SkillFileContent = z.infer<typeof skillFileContentSchema>;
 
 /**
- * Create a skill from an upload. The client normalizes an .md file, a picked
+ * Body of POST /api/skills/import: create a skill from an upload. The client normalizes an .md file, a picked
  * directory, or an unzipped .zip into this shape: a `format` plus a flat file
  * list. A `dir` import must include a `SKILL.md`; a `file` import carries the
  * single Markdown file written verbatim as `<name>.md`.
  */
 export const importSkillRequestSchema = z.object({
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   title: z.string().optional(),
   format: skillFormatSchema,
   files: z.array(skillFileContentSchema).min(1).max(500),
 });
 export type ImportSkillRequest = z.infer<typeof importSkillRequestSchema>;
 
-// --- PUT /api/skills/:name/files (add or replace a supporting file) ---
-
-/** Add or overwrite one supporting file under a skill's directory; promotes a `file` skill to `dir`. */
+/** Body of PUT /api/skills/:name/files: add or overwrite one supporting file; promotes a `file` skill to `dir`. */
 export const writeSkillFileRequestSchema = skillFileContentSchema;
 export type WriteSkillFileRequest = z.infer<typeof writeSkillFileRequestSchema>;
 
-// --- GET /api/skills/:name/files/content?path=… (read one supporting file) ---
-
-/** The content of a single supporting file. Binary files come back base64-encoded with `binary: true`. */
+/**
+ * Response of GET /api/skills/:name/files/content?path=…: one supporting file. Binary files come back
+ * base64-encoded with `binary: true`.
+ */
 export const skillFileReadSchema = z.object({
   path: z.string(),
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']),
+  encoding: fileEncodingSchema,
   size: z.number().int().nonnegative(),
   /** True when the file is not valid UTF-8 text and should not be opened in the text editor. */
   binary: z.boolean(),
 });
 export type SkillFileRead = z.infer<typeof skillFileReadSchema>;
 
-// --- POST /api/skills/:name/folders (create an empty sub-directory) ---
-
+/** Body of POST /api/skills/:name/folders: create an empty sub-directory. */
 export const createSkillFolderRequestSchema = z.object({
   /** Directory path relative to the skill root, e.g. "reference/examples". */
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
 });
 export type CreateSkillFolderRequest = z.infer<typeof createSkillFolderRequestSchema>;
 
-// --- POST /api/skills/:name/files/move (rename or move a file or folder) ---
-
+/** Body of POST /api/skills/:name/files/move: rename or move a file or folder. */
 export const moveSkillPathRequestSchema = z.object({
   /** Existing file/folder path, relative to the skill root. */
-  from: z.string().min(1).max(255),
+  from: skillRelPathSchema,
   /** New path, relative to the skill root. */
-  to: z.string().min(1).max(255),
+  to: skillRelPathSchema,
 });
 export type MoveSkillPathRequest = z.infer<typeof moveSkillPathRequestSchema>;
 
-// --- PATCH /api/skills/:name ---
-
+/** Body of PATCH /api/skills/:name. */
 export const updateSkillRequestSchema = z.object({
   /** Rename the skill (moves the file/dir). */
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   description: z.string().optional(),
   body: z.string().optional(),
   /** Toggle whether the skill is served on the root `/mcp` aggregate. */
@@ -146,9 +144,7 @@ export const updateSkillRequestSchema = z.object({
 });
 export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
 
-// --- /api/workspaces ---
-
-/** A workspace as returned by the API: its stored config plus the derived endpoint path. */
+/** A workspace as returned by /api/workspaces: its stored config plus the derived endpoint path. */
 export const workspaceStatusSchema = workspaceConfigSchema.extend({
   /** Endpoint path of the workspace's filtered aggregate, e.g. "/mcp/w/backend". */
   path: z.string(),
@@ -157,43 +153,47 @@ export const workspaceStatusSchema = workspaceConfigSchema.extend({
 });
 export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 
+/** Body of POST /api/workspaces. */
 export const createWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100),
   /** Slug for the URL; derived from `name` when omitted. */
-  slug: workspaceSlugSchema.optional(),
+  slug: slugSchema.optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
-  skills: z.array(skillNameSchema).optional(),
+  skills: z.array(slugSchema).optional(),
   /** Override the global skill-tool mode for this workspace's endpoint (omit to inherit). */
   skillToolMode: skillToolModeSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
 
+/** Body of PATCH /api/workspaces/:slug; a new name moves the slug with it. */
 export const updateWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   /** Full replacement of the member list when provided. */
-  skills: z.array(skillNameSchema).optional(),
+  skills: z.array(slugSchema).optional(),
   /** Set to override the global skill-tool mode, or `null` to clear the override and inherit. */
   skillToolMode: skillToolModeSchema.nullable().optional(),
 });
 export type UpdateWorkspaceRequest = z.infer<typeof updateWorkspaceRequestSchema>;
 
-// --- GET /api/status ---
-
-export interface ServerStatus {
-  version: string;
-  uptimeSeconds: number;
-  skillCount: number;
-  workspaceCount: number;
-  authEnabled: boolean;
+/** Response of GET /api/status. */
+export const serverStatusSchema = z.object({
+  version: z.string(),
+  /** Seconds since the server process started serving. */
+  uptimeSeconds: z.number(),
+  skillCount: z.number(),
+  workspaceCount: z.number(),
+  authEnabled: z.boolean(),
   /** The port the HTTP server is actually listening on. */
-  port: number;
-}
+  port: z.number(),
+});
+export type ServerStatus = z.infer<typeof serverStatusSchema>;
 
 /** Standard error envelope for non-2xx responses. */
-export interface ApiError {
-  error: string;
-  detail?: string;
-}
+export const apiErrorSchema = z.object({
+  error: z.string(),
+  detail: z.string().optional(),
+});
+export type ApiError = z.infer<typeof apiErrorSchema>;

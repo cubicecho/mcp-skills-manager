@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { Skill } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -5,7 +8,8 @@ import {
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ConfigStore } from '../config/store.ts';
 import { createSkillServer } from './skill-server.ts';
 
 function skill(overrides: Partial<Skill> & Pick<Skill, 'name'>): Skill {
@@ -547,5 +551,36 @@ describe('skill-server live updates (stdio)', () => {
 
     expect(listChanged).toBe(1);
     expect(updated).toEqual([]);
+  });
+});
+
+describe('skill-server advertised tools with authoring on', () => {
+  let dir: string;
+  let store: ConfigStore;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-tools-'));
+    store = new ConfigStore(dir);
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('pins every tool definition in per-skill mode', async () => {
+    const client = await connect(() => SKILLS, { authoring: { store } });
+    expect((await client.listTools()).tools).toMatchSnapshot();
+  });
+
+  it('pins every tool definition in loader mode', async () => {
+    const client = await connect(() => SKILLS, { authoring: { store }, getSkillToolMode: () => 'loader' });
+    expect((await client.listTools()).tools).toMatchSnapshot();
+  });
+
+  it('pins the authoring tools of a workspace endpoint', async () => {
+    const client = await connect(() => SKILLS, { authoring: { store, workspaceSlug: 'examples' } });
+    expect((await client.listTools()).tools).toMatchSnapshot();
   });
 });

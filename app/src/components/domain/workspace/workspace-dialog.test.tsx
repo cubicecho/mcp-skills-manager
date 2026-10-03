@@ -17,7 +17,7 @@ vi.mock('@/lib/queries', () => ({
   useUpdateWorkspace: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
 }));
 
-vi.mock('@/lib/toast', () => ({ toastApiError: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ useToasts: () => ({ success: vi.fn(), error: vi.fn(), apiError: vi.fn() }) }));
 
 describe('WorkspaceDialog', () => {
   beforeEach(() => {
@@ -39,8 +39,9 @@ describe('WorkspaceDialog', () => {
     render(<WorkspaceDialog open onOpenChange={onOpenChange} />);
 
     await userEvent.type(screen.getByLabelText(/^Name/), 'Backend');
-    await userEvent.click(screen.getByRole('checkbox', { name: /deploy/ }));
-    expect(screen.getByText('Skills (1 selected)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: /Skills/ }));
+    await userEvent.click(await screen.findByRole('option', { name: 'deploy' }));
+    await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));

@@ -3,6 +3,11 @@
 Read [SKILL.md](SKILL.md) first — the slot vocabulary and the "no children" rule are there and
 are not repeated here.
 
+**Web first.** `FormField` and the `@cubeui/app-form` fields are DOM components with no React
+Native half. `RadioGroupField` is one source compiled for both, with the same props on each. An
+Expo project has its own `useAppForm` with the same shape — see [On React Native](#on-react-native)
+at the end.
+
 **Every project using these runs TanStack Form.** Do not introduce a second form library, and do
 not write a form with `useState` and hand-rolled validation beside one written with these.
 
@@ -11,7 +16,7 @@ not write a form with `useState` and hand-rolled validation beside one written w
 A field is one line: the form, the name, and the label.
 
 ```tsx
-import { useAppForm, InputField, SelectField, SubmitButton } from "@/components/form/app-form";
+import { useAppForm, InputField, SelectField, SubmitButton } from "@/components/app-form";
 
 const form = useAppForm({
   defaultValues: { title: "", list: "", priority: "2" },
@@ -55,6 +60,14 @@ Each one takes everything `FormField` takes — `label`, `description`, `require
 `loading`, `orientation`, the `*ClassName` props — plus the props of the control it wraps, plus
 `validators`, `listeners` and `asyncDebounceMs`, in one flat list.
 
+`RadioGroupField` is the exception to "everything `FormField` takes": it is not built on
+`FormField`, because it has a React Native half and `FormField` does not. It takes `label`,
+`description`, `required`, `action`, `loading` and the `*ClassName` props (`labelClassName`,
+`descriptionClassName`, `errorClassName`, `loadingClassName`, `groupClassName`), plus the group's
+own `variant`, `orientation`, `disabled` and `loop`. There is no `descriptionPlacement`,
+`descriptionIcon`, `htmlFor` or `asGroup`: the description is always inline under the options, and
+the group is always named by its title.
+
 The four in their own files are there for the weight of what they import: a form of plain inputs
 installs `@cubeui/app-form` and pulls in no cmdk, no `react-day-picker`.
 
@@ -93,6 +106,11 @@ wires the trigger. Use it rather than assembling `SelectTrigger` and `SelectCont
 Outside a form the answer is the control it renders — `OptionSelect` from `@cubeui/option-select`, in
 [controls.md](controls.md), taking the same `options` array. Do not hand-write the primitives
 there either.
+
+**A field whose list is fetched takes `onOpenChange`.** Pair it with `enabled:` on the query and
+the server is asked when the menu opens, not when the form mounts — a form of twenty fields
+otherwise asks for eighteen lists nobody looks at. While it waits, a `{ note }` entry is the row
+that says so; it is not a disabled option, and [controls.md](controls.md) says why.
 
 **An option that is not a peer says so in the options array.** `group` puts a heading over the
 rows that share it, and a `{ separator: true }` entry draws a rule between them:
@@ -288,8 +306,11 @@ stays the character it is. Anything more is a markdown renderer and belongs behi
 `horizontal` puts the control first and the label beside it — the arrangement whose label is part
 of the control's hit target. Stacked, a 16px box sits on a line of its own above its own caption.
 
-A **settings row** — a title and a paragraph on the left, a switch pushed to the far right — is
-not this. That is a row, not a field; build it with `CardLayout` or `Section`.
+A **settings row** — a title and a paragraph on the left, a switch, select or button pushed to
+the far right — is not this. That is a row, not a field: use `SettingRow`
+([layout.md](layout.md#setting-rows)), inside a `Section` or `CardLayout`. A lone boolean with its
+caption beside it and no description is `SwitchField` (`@cubeui/switch-field`); anything more —
+another control, a description, the switch at the far end — is `SettingRow`.
 
 ### When the props belong on something nested
 
@@ -314,11 +335,16 @@ and put the props where they go:
 ```
 
 Everything whose root *is* the control — `Input`, `Textarea`, `Checkbox`, `Switch` — passes the
-element itself and needs none of this.
+element itself and needs none of this. An `Input` with a `leading` icon or a `trailing` button is
+still one of them: its root becomes a box around the field, but `id` and every `aria-*` land on the
+field itself, where the label points.
 
-Every cubeui picker already knows where its own trigger is: `OptionSelect`, `MultiSelect`, `DatePicker`
-and `ColorPicker` take the rest of a `<button>`'s props and put them there, so the function form
+Every cubeui picker already knows where its own trigger is: `OptionSelect`, `MultiSelect` and
+`DatePicker` take the rest of a `<button>`'s props and put them there, so the function form
 spreads onto the control and stops — `control={(props) => <OptionSelect {...props} options={LISTS} … />}`.
+`ColorPicker` has no trigger — it is the swatch row and the hex field, drawn inline — so it splits
+the same props: `id` goes to the hex field, and `aria-label`, `aria-labelledby`,
+`aria-describedby`, `aria-invalid` and `aria-required` go to the swatch row's `radiogroup`.
 The primitive version above is what that saves.
 
 `htmlFor` is **not** the answer here, even though it looks like it: it points the label at the
@@ -333,8 +359,22 @@ association silently, so the default wiring produces a field that looks wired in
 is not. Any grouped control needs it: a radio group, a segmented control, a swatch grid used as
 the field itself.
 
-`RadioGroupField` already passes it. You only reach for `asGroup` when writing a new grouped
-control by hand.
+`RadioGroupField` already names its group that way. You only reach for `asGroup` when writing a
+new grouped control by hand. A segmented control's group is `SegmentedGroup`, which takes the
+`aria-labelledby` and the rest of the control props on its `role="group"` row:
+
+```tsx
+<FormField
+  label="Scale view"
+  asGroup
+  control={(props) => (
+    <SegmentedGroup {...props} value={view} onValueChange={setView}>
+      <SegmentedButton value="relative">Relative</SegmentedButton>
+      <SegmentedButton value="parallel">Parallel</SegmentedButton>
+    </SegmentedGroup>
+  )}
+/>
+```
 
 ```tsx
 <RadioGroupField
@@ -349,7 +389,38 @@ control by hand.
 />
 ```
 
-Each option gets a real `<label htmlFor>` of its own, so clicking the option's text chooses it.
+Each option is one control — the circle, the label and the description are all inside the
+`role="radio"` — so clicking the option's text chooses it, and the description describes that
+option only. The keyboard is done: one tab stop (the checked option, or the first), arrow keys
+that move and select. Do not add an `onKeyDown`.
+
+`variant="card"` draws the options as tiles across a row, each with an `icon` over its label and a
+`hint` for the hover title — a theme picker, a layout choice:
+
+```tsx
+<RadioGroupField
+  form={form}
+  name="theme"
+  label="Theme"
+  variant="card"
+  options={[
+    { value: "light", label: "Light", icon: <Sun />, hint: "Always light" },
+    { value: "dark", label: "Dark", icon: <Moon />, hint: "Always dark" },
+    { value: "system", label: "System", icon: <Monitor />, hint: "Follow the device" },
+  ]}
+/>
+```
+
+`variant="segmented"` draws the options as one framed, input-height row of equal segments
+across the container's width, like `SegmentedGroup` but still radios, with one tab stop and arrow
+keys. A segment shows its `icon`, its `label` or both, and draws no `description`. For an
+icon-only segment, leave `label` out and pass `aria-label` on `RadioGroupItem`. That becomes the
+radio's name and, when no `hint` is given, its web tooltip. On device, give the icon its colour
+yourself (`text-selection-foreground` when checked, `text-muted-foreground` otherwise), because a
+native icon has no `currentColor` to inherit.
+
+Outside a form, the same thing is `RadioGroup` and `RadioGroupItem` from `@cubeui/radio-group`,
+controlled with `value` / `onValueChange`.
 
 ## Fields on one row
 
@@ -415,3 +486,70 @@ export const CurrencyField = bindToForm<CurrencyFieldProps, number>(BoundCurrenc
 
 `app-form.tsx` is the only file allowed to import `@tanstack/react-form`. A field it does not
 hold is still bound through it.
+
+## On React Native
+
+`@cubeui/form` is the native form: one file with `Form`, `Field` and its parts, and `useAppForm`
+built with TanStack `createFormHook` — the web hook's name and shape. Fields are components on
+`field.*` inside `form.AppField`; `SubmitButton` is on the form.
+
+```tsx
+import { createAppForm, Form } from "@/components/ui/form";
+import { DateTimeField } from "@/components/ui/date-time-field";
+import { ColorField } from "@/components/ui/color-picker-field";
+
+// Once, in a module of its own: the two heavy fields join the light ones on `field.*`.
+export const { useAppForm, withForm } = createAppForm({ DateTimeField, ColorField });
+
+const form = useAppForm({ defaultValues: { title: "", done: false, due: null, color: "" }, onSubmit });
+
+<form.AppForm>
+  <Form>
+    <form.AppField name="title" validators={{ onChange: required }}>
+      {(field) => <field.InputField label="Title" />}
+    </form.AppField>
+    <form.AppField name="due">
+      {(field) => <field.DateTimeField label="Due" mode="date" clearable />}
+    </form.AppField>
+    <form.SubmitButton createLabel="Save" disabled={saving} />
+  </Form>
+</form.AppForm>
+```
+
+| Field | Writes | Comes from |
+| --- | --- | --- |
+| `InputField`, `TextAreaField` (`TextareaField`), `SelectField` | `string` | `@cubeui/form` |
+| `CheckboxField`, `SwitchField` | `boolean` | `@cubeui/form` |
+| `DateTimeField` | `Date \| null` | `@cubeui/date-time-field` |
+| `ColorField` | `string` | `@cubeui/color-picker-field` |
+| `RadioGroupField` | `string` | `@cubeui/radio-group-field` |
+
+`useAppForm` from `@cubeui/form` has the first five. `DateTimeField` and `ColorField` are their
+own items for the weight of the calendar and the picker, as on the web; add them with
+`createAppForm`, or render them inside `form.AppField` as they are. `color-picker-field` is not
+`color-field` because that is the web item's name.
+
+`CheckboxField`, `SwitchField`, `DateTimeField` and `ColorField` take `label`, `description`,
+`required`, `orientation`, `asGroup` and the `*ClassName` props, plus the control's own.
+`DateTimeField` passes `mode`, `clearable` and `placeholder` through. `InputField`,
+`TextAreaField` and `SelectField` take `label` and the control's props.
+
+How each is named:
+
+- **`DateTimeField`** is `asGroup`: the trigger is `aria-labelledby` the label and then its own
+  date text — "Due September 15th, 2026". The time box is "Due time".
+- **`ColorField`**: the label is `htmlFor` the hex box; the swatch row is a `radiogroup`, which a
+  label cannot name, so it takes `aria-labelledby` the label's id.
+- **`CheckboxField`, `SwitchField`**: `label` is also the control's `accessibilityLabel`. Device
+  has no `htmlFor`.
+
+`Field asGroup` is the same switch as `FormField`'s: `FieldLabel` gets an id and `FieldControl`
+puts `aria-labelledby` on the control in place of `htmlFor`. Use it for a trigger or a group.
+`useFieldIds()` gives `labelId` to a control nested too deep for `FieldControl` to reach.
+
+`SubmitButton`'s `disabled` is OR-ed with `!canSubmit || isSubmitting`. `disabled={false}` never
+enables an invalid form. The label props are `createLabel`, `editLabel` with `isEdit`, and
+`savingLabel`.
+
+`useFieldError`, `splitProps`, `FieldWrapper` and `bindToForm` are exported for a field the
+registry does not ship, as on the web. `bindToForm` makes the one-line `form`/`name` spelling.

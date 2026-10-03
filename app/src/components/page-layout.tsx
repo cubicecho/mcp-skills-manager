@@ -1,47 +1,45 @@
-import type { ComponentProps, ReactNode, Ref } from 'react';
+import type { ReactNode } from 'react';
 
-import { type HeaderContentFooter, StickyHeaderContentFooter } from '@/components/header-content-footer';
-import { PageHeader } from '@/components/page-header';
+import { type HeaderContentFooterProps, StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { PageHeader, type PageHeaderLevel } from '@/components/page-header';
 
-type PageHeaderProps = ComponentProps<typeof PageHeader>;
-
-type PageLayoutProps = {
+export type PageLayoutProps = {
   /** The page. The only slot that scrolls. */
   content: ReactNode;
   /** What the page is called. Required for the same reason it is on {@link PageHeader}. */
   title: ReactNode;
   /** One line on what the page is for. */
-  description?: ReactNode;
+  description?: ReactNode | undefined;
   /** Sits before the title, sized from `level`. Pass a bare `<Users />`. */
-  icon?: ReactNode;
+  icon?: ReactNode | undefined;
   /** The header's far end: the page's buttons, a status pill, a menu. */
-  action?: ReactNode;
+  action?: ReactNode | undefined;
   /** The line above the title: a breadcrumb trail, or a back link. */
-  breadcrumbs?: ReactNode;
+  breadcrumbs?: ReactNode | undefined;
   /**
    * The row under the title: a search field, a filter row, tabs. It is `PageHeader`'s `content`
    * slot, named for the part it belongs to because this component's own `content` is the page.
    *
    * Passing it also removes the rule under the header — see `PageHeader`, which derives that.
    */
-  headerContent?: ReactNode;
+  headerContent?: ReactNode | undefined;
   /** Whether the *title* is still being fetched. The body is the caller's to place. */
-  loading?: boolean;
+  loading?: boolean | undefined;
   /** Which heading the title is. `1` unless this page is nested inside another's chrome. */
-  level?: PageHeaderProps['level'];
+  level?: PageHeaderLevel | undefined;
   /** Pinned under the body: paging, totals, a save bar. Absent, no row is drawn. */
-  footer?: ReactNode;
+  footer?: ReactNode | undefined;
   /**
    * The column the header and body share. `page` for a list or a board, `prose` for settings, a
    * detail page or a form, `full` for a pane that is already inside someone else's column.
    */
-  width?: ComponentProps<typeof HeaderContentFooter>['width'];
+  width?: HeaderContentFooterProps['width'];
   /** The scrolling body, for a caller that has to reach it — restoring a scroll position. */
-  contentRef?: Ref<HTMLDivElement>;
-  className?: string;
-  headerClassName?: string;
-  contentClassName?: string;
-  footerClassName?: string;
+  contentRef?: HeaderContentFooterProps['contentRef'];
+  className?: string | undefined;
+  headerClassName?: string | undefined;
+  contentClassName?: string | undefined;
+  footerClassName?: string | undefined;
 };
 
 /**

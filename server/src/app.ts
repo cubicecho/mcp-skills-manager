@@ -3,10 +3,11 @@ import path from 'node:path';
 import express from 'express';
 import { errorMiddleware } from './api/error-middleware.ts';
 import { createApiRouter } from './api/router.ts';
-import { authDisabledByEnv, createAuthMiddleware } from './auth.ts';
+import { createAuthMiddleware, isAuthEffective } from './auth.ts';
 import type { ConfigStore } from './config/store.ts';
 import { createMcpRouter } from './gateway/routes.ts';
 
+/** What the HTTP app needs to be built. */
 export interface AppDeps {
   store: ConfigStore;
   /** The port the server will listen on; reported via GET /api/status. */
@@ -26,7 +27,7 @@ export function buildApp(deps: AppDeps): express.Express {
   const auth = createAuthMiddleware(() => {
     const settings = store.getSettings();
     return {
-      enabled: settings.authEnabled && !authDisabledByEnv(),
+      enabled: isAuthEffective(settings),
       token: process.env.MCP_SKILLS_TOKEN ?? settings.authToken,
     };
   });

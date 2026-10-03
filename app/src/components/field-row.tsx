@@ -21,15 +21,15 @@ type FieldRowProps = {
    * The fields. Each one is given a cell of its own, so they share the row evenly however many
    * there are, and a `{cond && <FormField/>}` that renders nothing leaves no empty cell behind.
    */
-  content?: ReactNode;
+  content?: ReactNode | undefined;
   /**
    * How many fit on a line before the row wraps. `2` is nearly always right — it is the shape a
    * form reaches for when two values belong together, a priority beside a duration, a start date
    * beside an end date.
    */
-  perRow?: keyof typeof CELL_FLOOR;
-  className?: string;
-  cellClassName?: string;
+  perRow?: keyof typeof CELL_FLOOR | undefined;
+  className?: string | undefined;
+  cellClassName?: string | undefined;
 };
 
 /**

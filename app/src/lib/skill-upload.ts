@@ -1,5 +1,5 @@
 import type { SkillFileContent } from '@mcp-skills/shared';
-import { slugifySkillName } from '@mcp-skills/shared';
+import { slugify } from '@mcp-skills/shared';
 import { unzipSync } from 'fflate';
 
 /**
@@ -81,7 +81,7 @@ function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): Normaliz
   const nonEmpty = rawFiles.filter((f) => f.path && !f.path.endsWith('/'));
   const { root, files: stripped } = stripCommonRoot(nonEmpty);
   const withSkillMd = ensureSkillMd(stripped);
-  const defaultName = slugifySkillName(root ?? fallbackName);
+  const defaultName = slugify(root ?? fallbackName);
   if (!withSkillMd) {
     return {
       format: 'dir',
@@ -117,7 +117,7 @@ export async function normalizeUploadFile(file: File): Promise<NormalizedUpload>
     const raw = await readRawFile(file);
     return {
       format: 'file',
-      defaultName: slugifySkillName(stripExtension(stripExtension(file.name, '.markdown'), '.md')),
+      defaultName: slugify(stripExtension(stripExtension(file.name, '.markdown'), '.md')),
       files: [toContent({ path: 'SKILL.md', bytes: raw.bytes })],
       paths: [file.name],
     };

@@ -1,17 +1,18 @@
 import type { SkillFormat } from '@mcp-skills/shared';
-import { slugifySkillName } from '@mcp-skills/shared';
+import { slugify } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
-import { FileTextIcon, FolderIcon, UploadIcon } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { InputField, TextareaField, useAppForm } from '@/components/app-form';
+import { FileText, Folder } from '@/components/app-icons';
 import { DialogLayout } from '@/components/dialog-layout';
-import { FormField } from '@/components/form-field';
+import { RadioGroupField } from '@/components/radio-group-field';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
+import { Upload } from '@/components/ui/icons';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCreateSkill } from '@/lib/queries';
-import { toastApiError } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { useToasts } from '@/lib/toast';
 import { UPLOAD_SKILL_FORM_ID, UploadSkillForm, type UploadStatus } from './upload-skill-dialog';
 
 const CREATE_SKILL_FORM_ID = 'create-skill-form';
@@ -22,7 +23,7 @@ const IDLE_UPLOAD: UploadStatus = { ready: false, pending: false, dirty: false }
 
 /** A title must slugify to a usable skill id. */
 export function validateSkillTitle({ value }: { value: string }): string | undefined {
-  return slugifySkillName(value) ? undefined : 'Enter a title with at least one letter or digit.';
+  return slugify(value) ? undefined : 'Enter a title with at least one letter or digit.';
 }
 
 /**
@@ -30,6 +31,7 @@ export function validateSkillTitle({ value }: { value: string }): string | undef
  * editor), or upload an existing file/folder/`.zip`.
  */
 export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const toast = useToasts();
   const navigate = useNavigate();
   const create = useCreateSkill();
   const [tab, setTab] = useState<Tab>('create');
@@ -38,7 +40,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const form = useAppForm({
     defaultValues: { title: '', description: '', format: 'file' as SkillFormat },
     onSubmit: async ({ value }) => {
-      const name = slugifySkillName(value.title);
+      const name = slugify(value.title);
       try {
         const skill = await create.mutateAsync({
           title: value.title,
@@ -49,7 +51,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         handleOpenChange(false);
         navigate({ to: '/skills/$name', params: { name: skill.name } });
       } catch (error) {
-        toastApiError(error);
+        toast.apiError(error);
       }
     },
   });
@@ -87,7 +89,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                   void form.handleSubmit();
                 }}
               >
-                <form.Subscribe selector={(state) => slugifySkillName(state.values.title)}>
+                <form.Subscribe selector={(state) => slugify(state.values.title)}>
                   {(name) => (
                     <>
                       <InputField
@@ -101,7 +103,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                         description={
                           name ? (
                             <>
-                              Skill id: <code className="font-mono">{name}</code>
+                              Skill id: <Code>{name}</Code>
                             </>
                           ) : undefined
                         }
@@ -113,38 +115,31 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                         placeholder="One line telling the agent when to use this skill."
                         rows={2}
                       />
-                      <form.Field name="format">
-                        {(field) => (
-                          <FormField
-                            asGroup
-                            label="Layout"
-                            description={
-                              <>
-                                A directory can hold supporting files alongside its{' '}
-                                <code className="font-mono">SKILL.md</code>.
-                              </>
-                            }
-                            control={(wired) => (
-                              <fieldset {...wired} className="grid min-w-0 grid-cols-2 gap-2">
-                                <FormatOption
-                                  active={field.state.value === 'file'}
-                                  onClick={() => field.handleChange('file')}
-                                  icon={<FileTextIcon className="size-4" />}
-                                  title="Single file"
-                                  hint={`skills/${name || 'name'}.md`}
-                                />
-                                <FormatOption
-                                  active={field.state.value === 'dir'}
-                                  onClick={() => field.handleChange('dir')}
-                                  icon={<FolderIcon className="size-4" />}
-                                  title="Directory"
-                                  hint={`skills/${name || 'name'}/SKILL.md`}
-                                />
-                              </fieldset>
-                            )}
-                          />
-                        )}
-                      </form.Field>
+                      <RadioGroupField
+                        form={form}
+                        name="format"
+                        label="Layout"
+                        variant="card"
+                        description={
+                          <>
+                            A directory can hold supporting files alongside its <Code>SKILL.md</Code>.
+                          </>
+                        }
+                        options={[
+                          {
+                            value: 'file',
+                            label: 'Single file',
+                            icon: <FileText className="size-4" />,
+                            description: `skills/${name || 'name'}.md`,
+                          },
+                          {
+                            value: 'dir',
+                            label: 'Directory',
+                            icon: <Folder className="size-4" />,
+                            description: `skills/${name || 'name'}/SKILL.md`,
+                          },
+                        ]}
+                      />
                     </>
                   )}
                 </form.Subscribe>
@@ -166,44 +161,12 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </form.SubmitButton>
             ) : (
               <Button type="submit" form={UPLOAD_SKILL_FORM_ID} disabled={!upload.ready || upload.pending}>
-                <UploadIcon /> {upload.pending ? 'Importing…' : 'Import skill'}
+                <Upload /> {upload.pending ? 'Importing…' : 'Import skill'}
               </Button>
             )}
           </>
         )}
       />
     </form.AppForm>
-  );
-}
-
-function FormatOption({
-  active,
-  onClick,
-  icon,
-  title,
-  hint,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: ReactNode;
-  title: string;
-  hint: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'flex flex-col gap-1 rounded-md border p-3 text-left transition-colors',
-        active ? 'border-primary bg-accent' : 'hover:bg-accent/50',
-      )}
-    >
-      <span className="flex items-center gap-2 text-sm font-medium">
-        {icon}
-        {title}
-      </span>
-      <span className="truncate font-mono text-xs text-muted-foreground">{hint}</span>
-    </button>
   );
 }

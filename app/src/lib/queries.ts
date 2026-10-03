@@ -4,14 +4,16 @@ import type {
   CreateWorkspaceRequest,
   ImportSkillRequest,
   MoveSkillPathRequest,
+  SkillDetail,
   UpdateSettingsRequest,
   UpdateSkillRequest,
   UpdateWorkspaceRequest,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './api';
 
+/** TanStack Query keys for every cached API resource. */
 export const queryKeys = {
   status: ['status'] as const,
   settings: ['settings'] as const,
@@ -21,8 +23,32 @@ export const queryKeys = {
   workspace: (slug: string) => ['workspaces', slug] as const,
 };
 
-// --- queries ---
+/**
+ * Cache a just-created skill and refresh the lists and counts that now include it.
+ * @param queryClient - The query client holding the cache.
+ * @param skill - The skill the server returned.
+ */
+function cacheNewSkill(queryClient: QueryClient, skill: SkillDetail): void {
+  queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+  queryClient.setQueryData(queryKeys.skill(skill.name), skill);
+  queryClient.invalidateQueries({ queryKey: queryKeys.status });
+}
 
+/**
+ * Cache a skill whose supporting files changed and refresh the skill list, which shows file counts.
+ * @param queryClient - The query client holding the cache.
+ * @param name - The slug the skill is cached under.
+ * @param skill - The skill the server returned.
+ */
+function cacheSkillAfterFileChange(queryClient: QueryClient, name: string, skill: SkillDetail): void {
+  queryClient.setQueryData(queryKeys.skill(name), skill);
+  queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+}
+
+/**
+ * Polls the server status every 15 seconds.
+ * @returns The status query.
+ */
 export function useServerStatus() {
   return useQuery({
     queryKey: queryKeys.status,
@@ -31,6 +57,10 @@ export function useServerStatus() {
   });
 }
 
+/**
+ * Reads the token-free settings.
+ * @returns The settings query.
+ */
 export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings,
@@ -38,6 +68,10 @@ export function useSettings() {
   });
 }
 
+/**
+ * Polls the skill list every 10 seconds.
+ * @returns The skill-summaries query.
+ */
 export function useSkills() {
   return useQuery({
     queryKey: queryKeys.skills,
@@ -46,6 +80,11 @@ export function useSkills() {
   });
 }
 
+/**
+ * Reads one skill with its body.
+ * @param name Skill slug.
+ * @returns The skill-detail query.
+ */
 export function useSkill(name: string) {
   return useQuery({
     queryKey: queryKeys.skill(name),
@@ -64,6 +103,10 @@ export function useSkillFileContent(name: string, filePath: string | null) {
   });
 }
 
+/**
+ * Polls the workspace list every 10 seconds.
+ * @returns The workspaces query.
+ */
 export function useWorkspaces() {
   return useQuery({
     queryKey: queryKeys.workspaces,
@@ -72,8 +115,10 @@ export function useWorkspaces() {
   });
 }
 
-// --- settings mutations ---
-
+/**
+ * Patches the settings and refreshes the status.
+ * @returns The mutation.
+ */
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -85,29 +130,27 @@ export function useUpdateSettings() {
   });
 }
 
-// --- skill mutations ---
-
+/**
+ * Creates a skill and caches its detail.
+ * @returns The mutation.
+ */
 export function useCreateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateSkillRequest) => api.createSkill(body),
-    onSuccess: (skill) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-      queryClient.setQueryData(queryKeys.skill(skill.name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.status });
-    },
+    onSuccess: (skill) => cacheNewSkill(queryClient, skill),
   });
 }
 
+/**
+ * Imports an uploaded skill and caches its detail.
+ * @returns The mutation.
+ */
 export function useImportSkill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ImportSkillRequest) => api.importSkill(body),
-    onSuccess: (skill) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-      queryClient.setQueryData(queryKeys.skill(skill.name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.status });
-    },
+    onSuccess: (skill) => cacheNewSkill(queryClient, skill),
   });
 }
 
@@ -116,46 +159,54 @@ export function useWriteSkillFile(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: WriteSkillFileRequest) => api.writeSkillFile(name, body),
-    onSuccess: (skill) => {
-      queryClient.setQueryData(queryKeys.skill(name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-    },
+    onSuccess: (skill) => cacheSkillAfterFileChange(queryClient, name, skill),
   });
 }
 
+/**
+ * Creates an empty folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useCreateSkillFolder(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateSkillFolderRequest) => api.createSkillFolder(name, body),
-    onSuccess: (skill) => {
-      queryClient.setQueryData(queryKeys.skill(name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-    },
+    onSuccess: (skill) => cacheSkillAfterFileChange(queryClient, name, skill),
   });
 }
 
+/**
+ * Renames or moves a file or folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useMoveSkillPath(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: MoveSkillPathRequest) => api.moveSkillPath(name, body),
-    onSuccess: (skill) => {
-      queryClient.setQueryData(queryKeys.skill(name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-    },
+    onSuccess: (skill) => cacheSkillAfterFileChange(queryClient, name, skill),
   });
 }
 
+/**
+ * Deletes a file or folder inside a skill.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
 export function useDeleteSkillFile(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (filePath: string) => api.deleteSkillFile(name, filePath),
-    onSuccess: (skill) => {
-      queryClient.setQueryData(queryKeys.skill(name), skill);
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-    },
+    onSuccess: (skill) => cacheSkillAfterFileChange(queryClient, name, skill),
   });
 }
 
+/**
+ * Patches a skill; a rename moves its cache entry to the new name.
+ * @param name Current skill slug.
+ * @returns The mutation.
+ */
 export function useUpdateSkill(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -168,6 +219,10 @@ export function useUpdateSkill(name: string) {
   });
 }
 
+/**
+ * Deletes a skill and refreshes the lists that showed it.
+ * @returns The mutation.
+ */
 export function useDeleteSkill() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -180,8 +235,10 @@ export function useDeleteSkill() {
   });
 }
 
-// --- workspace mutations ---
-
+/**
+ * Creates a workspace.
+ * @returns The mutation.
+ */
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -193,6 +250,11 @@ export function useCreateWorkspace() {
   });
 }
 
+/**
+ * Patches a workspace.
+ * @param slug Current workspace slug.
+ * @returns The mutation.
+ */
 export function useUpdateWorkspace(slug: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -203,6 +265,10 @@ export function useUpdateWorkspace(slug: string) {
   });
 }
 
+/**
+ * Deletes a workspace.
+ * @returns The mutation.
+ */
 export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({

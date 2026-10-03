@@ -1,8 +1,10 @@
 import type { Skill } from '@mcp-skills/shared';
-import { skillNameSchema, slugifySkillName } from '@mcp-skills/shared';
+import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
+import { resolveSkillName } from '../skills/skill-name.ts';
+import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 
 /**
  * MCP tools that let an agent author and maintain skills over the same endpoint
@@ -20,11 +22,6 @@ import { errorDetailMessage, HttpError } from '../errors.ts';
  * folder — refuses. The flag itself is deliberately not settable from here, so an
  * agent cannot lift the protection; it is toggled over the REST API / web UI.
  */
-
-/** MCP tool-name → conventional `[A-Za-z0-9_-]` (mirrors skill-server's toolName). */
-function toToolName(name: string): string {
-  return name.replace(/[^A-Za-z0-9_-]/g, '_');
-}
 
 const JSON_STRING = { type: 'string' } as const;
 const JSON_STRING_ARRAY = { type: 'array', items: { type: 'string' } } as const;
@@ -44,10 +41,20 @@ export interface AuthoringTool {
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
+/** What the authoring tools need from the endpoint that exposes them. */
 export interface AuthoringDeps {
   store: ConfigStore;
   /** Set when serving a workspace endpoint — new skills are scoped to this workspace. */
   workspaceSlug?: string;
+}
+
+/**
+ * Join a validation error's issue messages into one line an agent can read.
+ * @param error - The zod error to summarize.
+ * @returns The issue messages, separated by `; `.
+ */
+function issueSummary(error: z.ZodError): string {
+  return error.issues.map((i) => i.message).join('; ');
 }
 
 /**
@@ -60,7 +67,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (err) {
     if (err instanceof z.ZodError) {
-      throw new Error(err.issues.map((i) => i.message).join('; '));
+      throw new Error(issueSummary(err));
     }
     if (err instanceof HttpError) {
       throw new Error(errorDetailMessage(err));
@@ -73,14 +80,14 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
 function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
   const result = schema.safeParse(args);
   if (!result.success) {
-    throw new Error(result.error.issues.map((i) => i.message).join('; '));
+    throw new Error(issueSummary(result.error));
   }
   return result.data;
 }
 
 /** How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace). */
 function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
-  const load = `Load it by calling the tool named "${toToolName(skill.name)}".`;
+  const load = `Load it by calling the tool named "${skillToolName(skill.name)}".`;
   const parts = [
     skill.global ? 'served globally on the root /mcp endpoint' : 'hidden from the root /mcp endpoint (global:false)',
   ];
@@ -92,21 +99,19 @@ function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
 
 /** Short human/agent-readable summary of a skill's current supporting files. */
 function fileSummary(skill: Skill): string {
-  const files = skill.files.filter((f) => f.type === 'file');
+  const files = bundledFiles(skill);
   if (files.length === 0) {
     return 'It has no supporting files.';
   }
   return `Supporting files: ${files.map((f) => f.path).join(', ')}.`;
 }
 
-// --- argument schemas ---
-
 const createArgs = z.object({
-  name: skillNameSchema.optional(),
+  name: slugSchema.optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   body: z.string().optional(),
-  format: z.enum(['file', 'dir']).optional(),
+  format: skillFormatSchema.optional(),
   global: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -121,18 +126,17 @@ const renameArgs = z.object({ name: z.string(), new_name: z.string() });
 const deleteArgs = z.object({ name: z.string() });
 const writeFileArgs = z.object({
   skill: z.string(),
-  path: z.string().min(1).max(255),
+  path: skillRelPathSchema,
   content: z.string(),
-  encoding: z.enum(['utf8', 'base64']).optional(),
+  encoding: fileEncodingSchema.optional(),
 });
-const readFileArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
-const folderArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
+/** Arguments of every tool that addresses one path inside a skill's folder. */
+const skillPathArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
 const moveArgs = z.object({
   skill: z.string(),
-  from: z.string().min(1).max(255),
-  to: z.string().min(1).max(255),
+  from: skillRelPathSchema,
+  to: skillRelPathSchema,
 });
-const deleteFileArgs = z.object({ skill: z.string(), path: z.string().min(1).max(255) });
 
 /** Build the authoring tool set for an endpoint (root or a single workspace). */
 export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
@@ -192,11 +196,11 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(createArgs, args);
-        const resolved = input.name ?? (input.title ? slugifySkillName(input.title) : undefined);
+        const resolved = resolveSkillName(input.name, input.title);
         if (!resolved) {
           throw new Error('Provide a "name" or a "title" to create a skill');
         }
-        const parsedName = skillNameSchema.safeParse(resolved);
+        const parsedName = slugSchema.safeParse(resolved);
         if (!parsedName.success) {
           throw new Error(
             `Invalid skill name "${resolved}" — lowercase alphanumerics, dots, dashes, underscores, must start alphanumeric`,
@@ -282,7 +286,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       run: async (args) => {
         const input = parseArgs(renameArgs, args);
         requireWritable(input.name);
-        const target = skillNameSchema.safeParse(input.new_name);
+        const target = slugSchema.safeParse(input.new_name);
         if (!target.success) {
           throw new Error(`Invalid skill name "${input.new_name}"`);
         }
@@ -359,7 +363,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(readFileArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         const file = await guard(() => store.readSupportingFile(input.skill, input.path));
         if (file.binary) {
           return `${input.path} (${file.size} bytes, binary, base64):\n${file.content}`;
@@ -385,7 +389,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(folderArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         requireWritable(input.skill);
         const skill = await guard(() => store.createSupportingFolder(input.skill, input.path));
         return `Created folder "${input.path}" in skill "${skill.name}".`;
@@ -428,7 +432,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         },
       },
       run: async (args) => {
-        const input = parseArgs(deleteFileArgs, args);
+        const input = parseArgs(skillPathArgs, args);
         requireWritable(input.skill);
         const skill = await guard(() => store.deleteSupportingFile(input.skill, input.path));
         return `Deleted "${input.path}" from skill "${skill.name}". ${fileSummary(skill)}`;

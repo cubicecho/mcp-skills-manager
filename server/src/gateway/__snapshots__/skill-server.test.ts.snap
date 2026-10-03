@@ -1,0 +1,906 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`skill-server advertised tools with authoring on > pins every tool definition in loader mode 1`] = `
+[
+  {
+    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call \`load_skill\` with the \`name\` of each entry to fetch that skill’s full contents.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "list_skills",
+  },
+  {
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Free-text search; every whitespace-separated term must match.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Only skills carrying at least one of these tags.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
+    "name": "search_skills",
+  },
+  {
+    "description": "Load one skill by name and return its full Markdown contents. Pass the \`name\` of a skill from \`list_skills\`. Use this instead of a per-skill tool — the catalogue is advertised by \`list_skills\`.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The skill name (slug) to load, as listed by list_skills.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "load_skill",
+  },
+  {
+    "description": "Author a new skill (a Markdown playbook/reference other agents can load). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The skill Markdown body (no frontmatter — it is generated).",
+          "type": "string",
+        },
+        "description": {
+          "description": "One-line summary shown in the skill catalogue.",
+          "type": "string",
+        },
+        "format": {
+          "description": "On-disk layout. \`dir\` → <name>/SKILL.md (default, supports ref files); \`file\` → <name>.md.",
+          "enum": [
+            "dir",
+            "file",
+          ],
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Defaults to true on the root endpoint and false (workspace-scoped only) on a workspace endpoint. Set true from a workspace to also serve globally.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Skill slug: lowercase alphanumerics, dots, dashes, underscores.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Optional tags/categories for organising and filtering skills.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "title": {
+          "description": "Free-form title; a slug is derived from it when \`name\` is omitted.",
+          "type": "string",
+        },
+      },
+      "required": [],
+      "type": "object",
+    },
+    "name": "create_skill",
+  },
+  {
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "New full Markdown body (omit to keep the current one).",
+          "type": "string",
+        },
+        "description": {
+          "description": "New one-line summary (omit to keep the current one).",
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Set false to hide from root (workspace-scoped only), true to promote a scoped skill to global. Omit to leave unchanged.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Slug of the skill to update.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Replace the skill tags/categories (empty list clears them). Omit to leave unchanged.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "update_skill",
+  },
+  {
+    "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Current slug of the skill.",
+          "type": "string",
+        },
+        "new_name": {
+          "description": "New slug (lowercase alphanumerics, dots, dashes, underscores).",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "new_name",
+      ],
+      "type": "object",
+    },
+    "name": "rename_skill",
+  },
+  {
+    "description": "Delete a skill and all its supporting files. This cannot be undone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the skill to delete.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill",
+  },
+  {
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "description": "File contents (text, or base64 when encoding is base64).",
+          "type": "string",
+        },
+        "encoding": {
+          "description": "Encoding of \`content\`. Default utf8.",
+          "enum": [
+            "utf8",
+            "base64",
+          ],
+          "type": "string",
+        },
+        "path": {
+          "description": "Path relative to the skill directory, e.g. "scripts/run.py".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill to attach the file to.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+        "content",
+      ],
+      "type": "object",
+    },
+    "name": "write_skill_file",
+  },
+  {
+    "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill directory.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "read_skill_file",
+  },
+  {
+    "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Directory path relative to the skill root, e.g. "reference/examples".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "create_skill_folder",
+  },
+  {
+    "description": "Rename or move a supporting file or folder within a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "description": "Existing path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+        "to": {
+          "description": "New path relative to the skill root.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "from",
+        "to",
+      ],
+      "type": "object",
+    },
+    "name": "move_skill_file",
+  },
+  {
+    "description": "Delete a supporting file or folder (folders recursively) from a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill_file",
+  },
+]
+`;
+
+exports[`skill-server advertised tools with authoring on > pins every tool definition in per-skill mode 1`] = `
+[
+  {
+    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call the tool named in each entry's \`tool\` field to fetch that skill's full contents.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "list_skills",
+  },
+  {
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Free-text search; every whitespace-separated term must match.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Only skills carrying at least one of these tags.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
+    "name": "search_skills",
+  },
+  {
+    "description": "Author a new skill (a Markdown playbook/reference other agents can load). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The skill Markdown body (no frontmatter — it is generated).",
+          "type": "string",
+        },
+        "description": {
+          "description": "One-line summary shown in the skill catalogue.",
+          "type": "string",
+        },
+        "format": {
+          "description": "On-disk layout. \`dir\` → <name>/SKILL.md (default, supports ref files); \`file\` → <name>.md.",
+          "enum": [
+            "dir",
+            "file",
+          ],
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Defaults to true on the root endpoint and false (workspace-scoped only) on a workspace endpoint. Set true from a workspace to also serve globally.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Skill slug: lowercase alphanumerics, dots, dashes, underscores.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Optional tags/categories for organising and filtering skills.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "title": {
+          "description": "Free-form title; a slug is derived from it when \`name\` is omitted.",
+          "type": "string",
+        },
+      },
+      "required": [],
+      "type": "object",
+    },
+    "name": "create_skill",
+  },
+  {
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "New full Markdown body (omit to keep the current one).",
+          "type": "string",
+        },
+        "description": {
+          "description": "New one-line summary (omit to keep the current one).",
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Set false to hide from root (workspace-scoped only), true to promote a scoped skill to global. Omit to leave unchanged.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Slug of the skill to update.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Replace the skill tags/categories (empty list clears them). Omit to leave unchanged.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "update_skill",
+  },
+  {
+    "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Current slug of the skill.",
+          "type": "string",
+        },
+        "new_name": {
+          "description": "New slug (lowercase alphanumerics, dots, dashes, underscores).",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "new_name",
+      ],
+      "type": "object",
+    },
+    "name": "rename_skill",
+  },
+  {
+    "description": "Delete a skill and all its supporting files. This cannot be undone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the skill to delete.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill",
+  },
+  {
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "description": "File contents (text, or base64 when encoding is base64).",
+          "type": "string",
+        },
+        "encoding": {
+          "description": "Encoding of \`content\`. Default utf8.",
+          "enum": [
+            "utf8",
+            "base64",
+          ],
+          "type": "string",
+        },
+        "path": {
+          "description": "Path relative to the skill directory, e.g. "scripts/run.py".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill to attach the file to.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+        "content",
+      ],
+      "type": "object",
+    },
+    "name": "write_skill_file",
+  },
+  {
+    "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill directory.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "read_skill_file",
+  },
+  {
+    "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Directory path relative to the skill root, e.g. "reference/examples".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "create_skill_folder",
+  },
+  {
+    "description": "Rename or move a supporting file or folder within a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "description": "Existing path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+        "to": {
+          "description": "New path relative to the skill root.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "from",
+        "to",
+      ],
+      "type": "object",
+    },
+    "name": "move_skill_file",
+  },
+  {
+    "description": "Delete a supporting file or folder (folders recursively) from a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill_file",
+  },
+  {
+    "description": "Write conventional commit messages.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "commit_messages",
+  },
+  {
+    "description": "Fill and inspect PDF forms.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "pdf-forms",
+  },
+]
+`;
+
+exports[`skill-server advertised tools with authoring on > pins the authoring tools of a workspace endpoint 1`] = `
+[
+  {
+    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call the tool named in each entry's \`tool\` field to fetch that skill's full contents.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "list_skills",
+  },
+  {
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Free-text search; every whitespace-separated term must match.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Only skills carrying at least one of these tags.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
+    "name": "search_skills",
+  },
+  {
+    "description": "Author a new skill (a Markdown playbook/reference other agents can load) (scoped to workspace "examples"). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The skill Markdown body (no frontmatter — it is generated).",
+          "type": "string",
+        },
+        "description": {
+          "description": "One-line summary shown in the skill catalogue.",
+          "type": "string",
+        },
+        "format": {
+          "description": "On-disk layout. \`dir\` → <name>/SKILL.md (default, supports ref files); \`file\` → <name>.md.",
+          "enum": [
+            "dir",
+            "file",
+          ],
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Defaults to true on the root endpoint and false (workspace-scoped only) on a workspace endpoint. Set true from a workspace to also serve globally.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Skill slug: lowercase alphanumerics, dots, dashes, underscores.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Optional tags/categories for organising and filtering skills.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "title": {
+          "description": "Free-form title; a slug is derived from it when \`name\` is omitted.",
+          "type": "string",
+        },
+      },
+      "required": [],
+      "type": "object",
+    },
+    "name": "create_skill",
+  },
+  {
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "New full Markdown body (omit to keep the current one).",
+          "type": "string",
+        },
+        "description": {
+          "description": "New one-line summary (omit to keep the current one).",
+          "type": "string",
+        },
+        "global": {
+          "description": "Serve on the root /mcp aggregate. Set false to hide from root (workspace-scoped only), true to promote a scoped skill to global. Omit to leave unchanged.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Slug of the skill to update.",
+          "type": "string",
+        },
+        "tags": {
+          "description": "Replace the skill tags/categories (empty list clears them). Omit to leave unchanged.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "update_skill",
+  },
+  {
+    "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Current slug of the skill.",
+          "type": "string",
+        },
+        "new_name": {
+          "description": "New slug (lowercase alphanumerics, dots, dashes, underscores).",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "new_name",
+      ],
+      "type": "object",
+    },
+    "name": "rename_skill",
+  },
+  {
+    "description": "Delete a skill and all its supporting files. This cannot be undone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the skill to delete.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill",
+  },
+  {
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "description": "File contents (text, or base64 when encoding is base64).",
+          "type": "string",
+        },
+        "encoding": {
+          "description": "Encoding of \`content\`. Default utf8.",
+          "enum": [
+            "utf8",
+            "base64",
+          ],
+          "type": "string",
+        },
+        "path": {
+          "description": "Path relative to the skill directory, e.g. "scripts/run.py".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill to attach the file to.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+        "content",
+      ],
+      "type": "object",
+    },
+    "name": "write_skill_file",
+  },
+  {
+    "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill directory.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "read_skill_file",
+  },
+  {
+    "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Directory path relative to the skill root, e.g. "reference/examples".",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "create_skill_folder",
+  },
+  {
+    "description": "Rename or move a supporting file or folder within a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "description": "Existing path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+        "to": {
+          "description": "New path relative to the skill root.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "from",
+        "to",
+      ],
+      "type": "object",
+    },
+    "name": "move_skill_file",
+  },
+  {
+    "description": "Delete a supporting file or folder (folders recursively) from a skill.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path relative to the skill root.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Slug of the skill.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "skill",
+        "path",
+      ],
+      "type": "object",
+    },
+    "name": "delete_skill_file",
+  },
+  {
+    "description": "Write conventional commit messages.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "commit_messages",
+  },
+  {
+    "description": "Fill and inspect PDF forms.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "pdf-forms",
+  },
+]
+`;
