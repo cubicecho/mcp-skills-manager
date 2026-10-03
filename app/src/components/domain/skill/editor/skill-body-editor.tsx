@@ -1,9 +1,8 @@
 import { normalizeTags, type SkillDetail } from '@mcp-skills/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
-import { MarkdownEditor } from '@/components/domain/skill/editor/markdown-editor';
-import type { ViewMode } from '@/components/domain/skill/editor/view-toggle';
 import { FormField } from '@/components/form-field';
+import { MarkdownEditor } from '@/components/markdown-editor';
 import { MultiSelect } from '@/components/multi-select';
 import { SettingRow } from '@/components/setting-row';
 import { Code } from '@/components/ui/code';
@@ -16,14 +15,10 @@ import { useSaveShortcut } from '@/lib/use-save-shortcut';
 /** Edit the skill's own Markdown: its frontmatter description plus its body. */
 export function SkillBodyEditor({
   skill,
-  view,
-  setView,
   onDirtyChange,
   onClose,
 }: {
   skill: SkillDetail;
-  view: ViewMode;
-  setView: (view: ViewMode) => void;
   onDirtyChange: (dirty: boolean) => void;
   onClose: () => void;
 }) {
@@ -84,8 +79,6 @@ export function SkillBodyEditor({
   return (
     <EditorFrame
       path={path}
-      view={view}
-      setView={setView}
       onSave={save}
       onClose={onClose}
       saving={update.isPending}
@@ -167,7 +160,13 @@ export function SkillBodyEditor({
               />
             )}
           />
-          <MarkdownEditor value={body} onChange={setBody} view={view} placeholder="# My skill…" />
+          <MarkdownEditor
+            aria-label="Skill body"
+            value={body}
+            onValueChange={setBody}
+            placeholder="# My skill…"
+            empty="Nothing to preview yet."
+          />
         </>
       }
     />

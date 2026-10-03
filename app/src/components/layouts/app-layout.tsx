@@ -1,15 +1,15 @@
 import type { SkillSummary } from '@mcp-skills/shared';
-import { createLink, Link, useLocation, useMatchRoute } from '@tanstack/react-router';
+import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { BookMarked, FileText, Folder, Layers, Lock } from '@/components/app-icons';
+import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
 import { EmptyState } from '@/components/page';
 import { QueryState } from '@/components/query-state';
-import { Sidebar, SidebarNavItem, type SidebarNavItemStatus, SidebarSection } from '@/components/sidebar';
+import { BarNavItem, Sidebar, SidebarNavItem, type SidebarNavItemStatus, SidebarSection } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
-import { Plus, Settings } from '@/components/ui/icons';
+import { FileText, Folder, Lock, Plus, Settings } from '@/components/ui/icons';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus, useSkills } from '@/lib/queries';
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
 type NavTo = (typeof NAV_ITEMS)[number]['to'];
 
 const SidebarLink = createLink(SidebarNavItem);
+const BarLink = createLink(BarNavItem);
 
 /** Skills owns the skill route too, so its button stays lit while a skill is open. */
 function isActive(to: NavTo, pathname: string): boolean {
@@ -158,17 +159,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       }
       brand={<Brand compact />}
       nav={NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <ActionButton
-          key={to}
-          asChild
-          variant={isActive(to, pathname) ? 'secondary' : 'ghost'}
-          size="icon-sm"
-          label={label}
-        >
-          <Link to={to}>
-            <Icon />
-          </Link>
-        </ActionButton>
+        <BarLink key={to} to={to} label={label} icon={<Icon />} active={isActive(to, pathname)} />
       ))}
       navLabel="Main"
       action={

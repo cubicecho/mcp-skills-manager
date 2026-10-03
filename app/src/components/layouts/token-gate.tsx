@@ -1,11 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, type ReactNode, useState } from 'react';
-import { KeyRound } from '@/components/app-icons';
 import { CenteredLayout } from '@/components/centered-layout';
 import { FormField } from '@/components/form-field';
 import { PasswordInput } from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
+import { KeyRound } from '@/components/ui/icons';
 import { setToken, useNeedsAuth } from '@/lib/auth';
 
 const TOKEN_FORM_ID = 'token-gate-form';
