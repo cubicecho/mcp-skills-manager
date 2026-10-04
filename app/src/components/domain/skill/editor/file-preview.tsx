@@ -1,9 +1,10 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { Layers } from '@/components/app-icons';
+import { GitBranch, Layers } from '@/components/app-icons';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
+import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
@@ -66,9 +67,14 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
       title={skill.name}
       path={skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`}
       description={skill.description || undefined}
-      action={<EditButton onEdit={onEdit} />}
+      action={skill.source ? undefined : <EditButton onEdit={onEdit} />}
       badges={
         <div className="flex flex-wrap items-center gap-1.5">
+          {skill.source && (
+            <Badge variant="outline" className="gap-1 font-normal" title="Synced from a git repo; not edited here">
+              <GitBranch className="size-3" /> Git
+            </Badge>
+          )}
           {skill.readOnly && (
             <Badge variant="outline" className="gap-1 font-normal" title="Agents cannot modify this skill over MCP">
               <Lock className="size-3" /> Read-only
@@ -87,7 +93,12 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
           <span className="text-muted-foreground text-xs">{facts}</span>
         </div>
       }
-      content={<Markdown content={skill.body} empty="This skill has no body yet." />}
+      content={
+        <>
+          {skill.source && <SourcePanel skill={skill} source={skill.source} />}
+          <Markdown content={skill.body} empty="This skill has no body yet." />
+        </>
+      }
     />
   );
 }
@@ -103,10 +114,17 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
       path={`skills/${skill.name}/${path}`}
       description={data ? formatBytes(data.size) : undefined}
       action={
-        markdown ? (
+        markdown && !skill.source ? (
           <EditButton onEdit={onEdit} />
         ) : (
-          <Badge variant="outline" title="Only Markdown (.md) files can be edited here">
+          <Badge
+            variant="outline"
+            title={
+              skill.source
+                ? 'This skill is synced from a git repo; unlink it to edit it here'
+                : 'Only Markdown (.md) files can be edited here'
+            }
+          >
             Read-only
           </Badge>
         )

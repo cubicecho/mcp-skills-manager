@@ -143,8 +143,17 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const { store, workspaceSlug } = deps;
   const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
-  /** Refuse to touch a skill a human has marked read-only. An unknown name falls through to the store's 404. */
+  /**
+   * Refuse to touch a skill a human has marked read-only, or one whose content is owned by a git source.
+   * An unknown name falls through to the store's 404.
+   */
   const requireWritable = (name: string): void => {
+    if (store.getSkill(name)?.source) {
+      throw new Error(
+        `Skill "${name}" is managed from a git source and cannot be modified, renamed or deleted over MCP. ` +
+          'Only a human can sync or unlink it in the web UI — do not retry; create a new skill instead if you need a variant.',
+      );
+    }
     if (store.getSkill(name)?.readOnly) {
       throw new Error(
         `Skill "${name}" is read-only and cannot be modified, renamed or deleted over MCP. ` +

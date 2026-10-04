@@ -2,6 +2,8 @@ import type {
   CreateSkillFolderRequest,
   CreateSkillRequest,
   CreateWorkspaceRequest,
+  GitSource,
+  ImportGitSkillRequest,
   ImportSkillRequest,
   MoveSkillPathRequest,
   SkillDetail,
@@ -42,6 +44,19 @@ function cacheNewSkill(queryClient: QueryClient, skill: SkillDetail): void {
  */
 function cacheSkillAfterFileChange(queryClient: QueryClient, name: string, skill: SkillDetail): void {
   queryClient.setQueryData(queryKeys.skill(name), skill);
+  queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+}
+
+/**
+ * Cache a skill whose whole folder was replaced from (or cut loose from) its git source: every
+ * cached file of it is stale, and the lists show its link.
+ * @param queryClient - The query client holding the cache.
+ * @param name - The slug the skill is cached under.
+ * @param skill - The skill the server returned.
+ */
+function cacheSkillAfterSourceChange(queryClient: QueryClient, name: string, skill: SkillDetail): void {
+  queryClient.setQueryData(queryKeys.skill(name), skill);
+  queryClient.invalidateQueries({ queryKey: queryKeys.skill(name) });
   queryClient.invalidateQueries({ queryKey: queryKeys.skills });
 }
 
@@ -151,6 +166,57 @@ export function useImportSkill() {
   return useMutation({
     mutationFn: (body: ImportSkillRequest) => api.importSkill(body),
     onSuccess: (skill) => cacheNewSkill(queryClient, skill),
+  });
+}
+
+/**
+ * Imports a skill from a folder in a git repo and caches its detail.
+ * @returns The mutation.
+ */
+export function useImportGitSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ImportGitSkillRequest) => api.importGitSkill(body),
+    onSuccess: (skill) => cacheNewSkill(queryClient, skill),
+  });
+}
+
+/**
+ * Links a skill to a git source, replacing its content from it.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
+export function useLinkSkillSource(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GitSource) => api.linkSkillSource(name, body),
+    onSuccess: (skill) => cacheSkillAfterSourceChange(queryClient, name, skill),
+  });
+}
+
+/**
+ * Drops a skill's git link, keeping its content.
+ * @param name Skill slug.
+ * @returns The mutation.
+ */
+export function useUnlinkSkillSource(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.unlinkSkillSource(name),
+    onSuccess: (skill) => cacheSkillAfterSourceChange(queryClient, name, skill),
+  });
+}
+
+/**
+ * Refetches a linked skill from its git source.
+ * @param name Skill slug.
+ * @returns The mutation; it resolves with the skill and whether the source had moved on.
+ */
+export function useSyncSkill(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.syncSkill(name),
+    onSuccess: ({ skill }) => cacheSkillAfterSourceChange(queryClient, name, skill),
   });
 }
 

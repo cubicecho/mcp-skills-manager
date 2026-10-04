@@ -22,10 +22,15 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-# Unlike a proxy/gateway, this server never spawns child processes or installs
-# packages at runtime — it only reads flat files from /data and serves markdown.
-# A slim node image is all it needs.
+# The server reads flat files from /data and serves markdown; it installs nothing
+# at runtime. The one child process it spawns is `git`, to sync a skill linked to
+# a folder in a git repo — so the slim node image gets git, CA certificates for
+# https remotes and an ssh client for SSH ones.
 FROM node:26-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

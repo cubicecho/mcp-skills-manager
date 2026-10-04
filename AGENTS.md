@@ -39,6 +39,21 @@ skill and its whole folder. The check lives in the MCP layer only — the
 `ConfigStore` mutators and REST API stay unrestricted so a human can still edit —
 and no authoring tool can set or clear the flag.
 
+A skill can be **linked to a folder in a git repo** (frontmatter `source: { repo,
+ref?, path?, commit, syncedAt }` → `Skill.source`; schemas in
+`shared/src/skill-source.ts`). `ConfigStore.importSkillFromSource` /
+`linkSkillSource` / `syncSkill` / `unlinkSkillSource` fetch the folder with the
+git CLI (`server/src/sources/git-fetch.ts`, no shell, injected as the store's
+`fetchSource` option so tests use a fake), stage it under `DATA_DIR/.sync` —
+outside the watched dirs — and swap it in for the skill's folder. Sync is manual
+(`POST /api/skills/:name/sync`); it forces the local `name` and carries
+`global`/`readonly` over, so identity and workspace membership survive. A linked
+skill's content is **locked**: the REST content routes answer 409
+(`requireUnlinked` in `router.ts`) and every mutating authoring tool refuses it
+(`requireWritable`), while `global`, `readOnly`, rename and delete stay allowed
+over REST. Repo URLs are https/SSH only with no embedded credentials — the URL
+is written into SKILL.md and served to agents.
+
 Monorepo (npm workspaces): `shared/` (zod schemas + types — the contract),
 `server/` (Express 5 + MCP TS SDK), `app/` (React + Vite + shadcn/ui).
 

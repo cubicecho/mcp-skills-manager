@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { ConfigStore } from './store.ts';
 
 const skillMd = (name: string, description: string) =>
@@ -682,5 +683,146 @@ describe('ConfigStore read-only skills', () => {
     const skill = store.getSkill('hand');
     expect(skill?.readOnly).toBe(true);
     expect(skill?.description).toBe('by hand');
+  });
+});
+
+describe('ConfigStore git-linked skills', () => {
+  const source = { repo: 'https://example.com/acme/skills.git', ref: 'main', path: 'skills/demo' };
+  let dir: string;
+  let store: ConfigStore;
+  /** What the fake repo currently holds: file contents by path, and the commit they are at. */
+  let upstream: { commit: string; files: Record<string, string> };
+  /** Set to hold the next fetch open until the returned function is called. */
+  let gate: Promise<void> | null;
+
+  const fetchSource: SkillSourceFetcher = async (_source, destDir) => {
+    await gate;
+    for (const [rel, content] of Object.entries(upstream.files)) {
+      await mkdir(path.dirname(path.join(destDir, rel)), { recursive: true });
+      await writeFile(path.join(destDir, rel), content);
+    }
+    return { commit: upstream.commit };
+  };
+
+  beforeEach(async () => {
+    gate = null;
+    upstream = {
+      commit: 'c1',
+      files: {
+        'SKILL.md': '---\nname: demo\ndescription: Upstream demo\ntags: [ui]\n---\n\nv1\n',
+        'reference/notes.md': 'notes v1',
+        'old.md': 'stale soon',
+      },
+    };
+    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-test-'));
+    store = new ConfigStore(dir, { fetchSource });
+    await store.init();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('imports a linked dir skill named after the upstream frontmatter and records the commit', async () => {
+    const skill = await store.importSkillFromSource({ source });
+    expect(skill.name).toBe('demo');
+    expect(skill.format).toBe('dir');
+    expect(skill.description).toBe('Upstream demo');
+    expect(skill.tags).toEqual(['ui']);
+    expect(skill.source).toMatchObject({ ...source, commit: 'c1' });
+    expect(skill.source?.syncedAt).toBeTruthy();
+    expect(filePaths(skill)).toEqual(['old.md', 'reference/notes.md']);
+    // The staging area is emptied and never shows up as a skill.
+    expect(await readdir(path.join(dir, '.sync'))).toEqual([]);
+    await store.reload();
+    expect(store.getSkill('demo')?.source?.commit).toBe('c1');
+  });
+
+  it('falls back to the source folder name, and refuses a taken name', async () => {
+    upstream.files['SKILL.md'] = 'no frontmatter\n';
+    const skill = await store.importSkillFromSource({ source: { ...source, path: 'skills/Fancy Skill' } });
+    expect(skill.name).toBe('fancy-skill');
+    await expect(store.importSkillFromSource({ source, name: 'fancy-skill' })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('syncs to the newest copy, dropping stale files and reporting whether anything moved', async () => {
+    await store.importSkillFromSource({ source });
+    expect((await store.syncSkill('demo')).changed).toBe(false);
+
+    upstream = {
+      commit: 'c2',
+      files: { 'SKILL.md': '---\nname: demo\ndescription: Upstream v2\n---\n\nv2\n', 'new.md': 'fresh' },
+    };
+    const { skill, changed } = await store.syncSkill('demo');
+    expect(changed).toBe(true);
+    expect(skill.description).toBe('Upstream v2');
+    expect(skill.body.trim()).toBe('v2');
+    expect(skill.source).toMatchObject({ ...source, commit: 'c2' });
+    expect(filePaths(skill)).toEqual(['new.md']);
+    expect(existsSync(path.join(dir, 'skills/demo/old.md'))).toBe(false);
+  });
+
+  it('keeps the local name, visibility, read-only flag and workspace membership across a sync', async () => {
+    await store.importSkillFromSource({ source, name: 'local-name', global: false });
+    await store.updateSkill('local-name', { readOnly: true });
+    await store.addSkillToWorkspace('examples', 'local-name');
+
+    upstream.commit = 'c2';
+    const { skill } = await store.syncSkill('local-name');
+    expect(skill.name).toBe('local-name');
+    expect(skill.global).toBe(false);
+    expect(skill.readOnly).toBe(true);
+    expect(store.getSkill('demo')).toBeUndefined();
+    await store.reload();
+    expect(store.getWorkspace('examples')?.skills).toContain('local-name');
+  });
+
+  it('leaves the skill untouched when the source no longer has a SKILL.md', async () => {
+    await store.importSkillFromSource({ source });
+    upstream = { commit: 'c2', files: { 'README.md': 'moved away' } };
+    await expect(store.syncSkill('demo')).rejects.toMatchObject({ status: 400 });
+    expect(store.getSkill('demo')?.source?.commit).toBe('c1');
+    expect(existsSync(path.join(dir, 'skills/demo/reference/notes.md'))).toBe(true);
+  });
+
+  it('links an existing flat-file skill, converting it to a folder', async () => {
+    await store.createSkill({ name: 'flat', description: 'local', body: 'local body', format: 'file' });
+    const skill = await store.linkSkillSource('flat', source);
+    expect(skill.name).toBe('flat');
+    expect(skill.format).toBe('dir');
+    expect(skill.path).toBe('flat/SKILL.md');
+    expect(skill.body.trim()).toBe('v1');
+    expect(existsSync(path.join(dir, 'skills/flat.md'))).toBe(false);
+  });
+
+  it('unlinks without touching the content, after which a sync is refused', async () => {
+    await store.importSkillFromSource({ source });
+    const skill = await store.unlinkSkillSource('demo');
+    expect(skill.source).toBeUndefined();
+    expect(skill.frontmatter).not.toHaveProperty('source');
+    expect(skill.body.trim()).toBe('v1');
+    expect(filePaths(skill)).toEqual(['old.md', 'reference/notes.md']);
+    await expect(store.syncSkill('demo')).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('refuses a second sync while one is in flight', async () => {
+    await store.importSkillFromSource({ source });
+    let release = () => {};
+    gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = store.syncSkill('demo');
+    await expect(store.syncSkill('demo')).rejects.toMatchObject({ status: 409 });
+    release();
+    await expect(first).resolves.toMatchObject({ changed: false });
+  });
+
+  it('treats a malformed hand-edited link as not linked', async () => {
+    await store.createSkill({ name: 'plain', description: '', body: 'b', format: 'dir' });
+    await writeFile(path.join(dir, 'skills/plain/SKILL.md'), '---\nname: plain\nsource: just-a-string\n---\n\nb\n');
+    await store.reload();
+    expect(store.getSkill('plain')).toBeDefined();
+    expect(store.getSkill('plain')?.source).toBeUndefined();
   });
 });

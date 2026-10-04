@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { skillSourceSchema } from './skill-source.ts';
 import { slugSchema } from './slug.ts';
 
 /**
@@ -61,6 +62,12 @@ export const skillFrontmatterSchema = z
      * failing validation — see {@link isReadOnlyFlag}.
      */
     readonly: z.union([z.boolean(), z.string()]).optional(),
+    /**
+     * The git folder the skill is linked to and synced from (see `skillSourceSchema`).
+     * Left untyped here so a hand-edited, malformed link never fails the load — the
+     * skill is then simply treated as not linked.
+     */
+    source: z.unknown().optional(),
   })
   .passthrough();
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
@@ -131,5 +138,7 @@ export const skillSchema = z.object({
   files: z.array(skillFileSchema).default([]),
   /** Normalized tags/categories (from frontmatter `tags`), for organising and filtering. */
   tags: z.array(z.string()).default([]),
+  /** The git folder the skill is linked to (frontmatter `source`); absent for an ordinary, locally edited skill. */
+  source: skillSourceSchema.optional(),
 });
 export type Skill = z.infer<typeof skillSchema>;

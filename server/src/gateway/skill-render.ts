@@ -69,8 +69,9 @@ function indexEntry(skill: Skill) {
     files: bundledFiles(skill).map((f) => f.path),
     updatedAt: skill.updatedAt,
     ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
-    // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill.
-    ...(skill.readOnly ? { readOnly: true } : {}),
+    // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill —
+    // because a human marked it read-only, or because its content is owned by a git source.
+    ...(skill.readOnly || skill.source ? { readOnly: true } : {}),
     ...skillMeta(skill),
   };
 }

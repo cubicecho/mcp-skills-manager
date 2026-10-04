@@ -2,7 +2,7 @@ import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { BookMarked } from '@/components/app-icons';
+import { BookMarked, GitBranch } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
@@ -256,6 +256,12 @@ function SkillsPage() {
                           <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
                             {skill.name}
                           </Link>
+                          {skill.source && (
+                            <GitBranch
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                              aria-label="Synced from a git repo"
+                            />
+                          )}
                           {skill.readOnly && (
                             <Lock
                               className="size-3.5 shrink-0 text-muted-foreground"

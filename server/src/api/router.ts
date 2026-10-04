@@ -3,6 +3,7 @@ import type {
   Skill,
   SkillDetail,
   SkillSummary,
+  SyncSkillResponse,
   WorkspaceConfig,
   WorkspaceStatus,
 } from '@mcp-skills/shared';
@@ -10,6 +11,8 @@ import {
   createSkillFolderRequestSchema,
   createSkillRequestSchema,
   createWorkspaceRequestSchema,
+  gitSourceSchema,
+  importGitSkillRequestSchema,
   importSkillRequestSchema,
   moveSkillPathRequestSchema,
   slugify,
@@ -51,6 +54,7 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
     updatedAt: skill.updatedAt,
     files: skill.files,
     tags: skill.tags,
+    source: skill.source,
     usage: store.getUsage(skill.name),
   };
 }
@@ -115,6 +119,17 @@ export function createApiRouter(deps: ApiDeps): Router {
     return skill;
   };
 
+  /** Refuse a content edit to a skill whose content is owned by its git source. */
+  const requireUnlinked = (name: string): void => {
+    if (requireSkill(name).source) {
+      throw new HttpError(
+        409,
+        `Skill "${name}" is linked to a git source`,
+        'its content comes from the repo; sync it, or unlink it to edit it here',
+      );
+    }
+  };
+
   router.get('/status', (_req, res) => {
     const status: ServerStatus = {
       version: SERVER_VERSION,
@@ -168,6 +183,13 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.status(201).json(toDetail(store, skill));
   });
 
+  // Create a skill linked to a folder in a git repo, fetching it right away.
+  router.post('/skills/import-git', async (req, res) => {
+    const { name, global, ...source } = importGitSkillRequestSchema.parse(req.body);
+    const skill = await store.importSkillFromSource({ name, source, global });
+    res.status(201).json(toDetail(store, skill));
+  });
+
   router.get('/skills/:name', (req, res) => {
     res.json(toDetail(store, requireSkill(req.params.name)));
   });
@@ -176,6 +198,11 @@ export function createApiRouter(deps: ApiDeps): Router {
     const name = req.params.name;
     requireSkill(name);
     const update = updateSkillRequestSchema.parse(req.body);
+    // A linked skill keeps its local-only settings (name, global, read-only) editable; its content is the repo's.
+    const editsContent = update.description !== undefined || update.body !== undefined || update.tags !== undefined;
+    if (editsContent) {
+      requireUnlinked(name);
+    }
     let skill = await store.updateSkill(name, {
       description: update.description,
       body: update.body,
@@ -194,6 +221,30 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.delete('/skills/:name', async (req, res) => {
     await store.deleteSkill(req.params.name);
     res.status(204).end();
+  });
+
+  // Link a skill to a folder in a git repo and replace its content with that folder.
+  router.put('/skills/:name/source', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const source = gitSourceSchema.parse(req.body);
+    res.json(toDetail(store, await store.linkSkillSource(name, source)));
+  });
+
+  // Drop a skill's git link; its content stays as last synced and becomes editable again.
+  router.delete('/skills/:name/source', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    res.json(toDetail(store, await store.unlinkSkillSource(name)));
+  });
+
+  // Replace a linked skill's folder with the newest copy from its source.
+  router.post('/skills/:name/sync', async (req, res) => {
+    const name = req.params.name;
+    requireSkill(name);
+    const { skill, changed } = await store.syncSkill(name);
+    const response: SyncSkillResponse = { skill: toDetail(store, skill), changed };
+    res.json(response);
   });
 
   // Export a skill as a .zip download.
@@ -216,7 +267,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Add or overwrite a supporting file (promotes a `file` skill to a `dir`).
   router.put('/skills/:name/files', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    requireUnlinked(name);
     const request = writeSkillFileRequestSchema.parse(req.body);
     const skill = await store.writeSupportingFile(name, request.path, Buffer.from(request.content, request.encoding));
     res.json(toDetail(store, skill));
@@ -225,7 +276,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Create an empty sub-directory under a skill (promotes a `file` skill to a `dir`).
   router.post('/skills/:name/folders', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    requireUnlinked(name);
     const request = createSkillFolderRequestSchema.parse(req.body);
     const skill = await store.createSupportingFolder(name, request.path);
     res.json(toDetail(store, skill));
@@ -234,7 +285,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Rename or move a supporting file or folder.
   router.post('/skills/:name/files/move', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    requireUnlinked(name);
     const request = moveSkillPathRequestSchema.parse(req.body);
     const skill = await store.moveSupportingPath(name, request.from, request.to);
     res.json(toDetail(store, skill));
@@ -243,7 +294,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Delete a supporting file or folder: DELETE /skills/:name/files?path=<relative path>
   router.delete('/skills/:name/files', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    requireUnlinked(name);
     const skill = await store.deleteSupportingFile(name, requirePathQuery(req));
     res.json(toDetail(store, skill));
   });

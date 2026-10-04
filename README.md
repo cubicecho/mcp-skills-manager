@@ -45,6 +45,8 @@ clients.
 - 📝 **Markdown editor** in the web UI with live split-pane preview
 - 🗂️ **Skill CRUD** — create, rename, edit, delete, import (`.md`/dir/`.zip`),
   and export skills; drag-and-drop supporting files for directory-format skills
+- 🌿 **Git-linked skills** — point a skill at a folder in a git repo and pull
+  the newest version with **Sync now**
 - 🧩 **Workspaces** — group skills into filtered endpoints
 - 🔍 **Discovery meta-tools** — `list_skills` and `search_skills` on every
   endpoint, plus `tags` on skills for organising and filtering
@@ -148,6 +150,52 @@ skills and feeds the `search_skills` filter. `readonly: true` stops agents from
 modifying the skill over MCP (the web UI and REST API can still edit it).
 Unknown frontmatter keys are preserved across round-trips.
 
+### Git-linked skills
+
+A skill can be linked to a folder in a git repo — a published skill you want
+this server to track rather than copy once. In the web UI use **New skill →
+From Git**, or the **Link to Git source** button on an existing skill (which
+replaces its content). Give a clone URL, optionally a branch or tag (blank
+follows the default branch) and the folder holding the `SKILL.md` (blank is the
+repo root); pasting a GitHub/GitLab folder link such as
+`https://github.com/owner/repo/tree/main/skills/my-skill` fills all three.
+
+The link is stored in the skill's frontmatter, with the commit the last sync
+fetched:
+
+```markdown
+---
+name: my-skill
+description: …
+source:
+  repo: https://github.com/owner/repo
+  ref: main            # optional
+  path: skills/my-skill  # optional
+  commit: 4f2a9c1…     # written by sync
+  syncedAt: 2026-10-04T12:00:00.000Z
+---
+```
+
+- **Sync is manual.** *Sync now* (or `POST /api/skills/:name/sync`) replaces the
+  skill's whole folder with the repo's copy; files removed upstream are removed
+  here. Nothing syncs on a timer.
+- **Linked skills are locked.** Their content cannot be edited in the web UI,
+  over the REST API or by agents over MCP. **Unlink** keeps the current content
+  and makes the skill a normal, editable one again.
+- **Local settings survive a sync:** the skill's id here (even when the repo's
+  `SKILL.md` names it differently), `global`, `readonly` and workspace
+  membership. The skill can still be renamed and deleted.
+- **Repo URLs** must be `https://…`, `ssh://…` or `user@host:path`. An https URL
+  may not embed a username or token — the URL is written into `SKILL.md`, which
+  agents read. Symlinks in the repo folder are skipped, and a folder may hold at
+  most 500 files.
+- **Private repos** use the credentials of the machine (or container) running
+  the server: an SSH key the server's user can read, or a git credential helper
+  for https. git never prompts — a repo it cannot read fails the sync with git's
+  own error. With Docker, mount a key and `known_hosts` (e.g.
+  `-v ~/.ssh:/root/.ssh:ro`).
+- **`git` must be on the server's `PATH`.** The Docker image ships it.
+
 ## Workspaces
 
 A workspace is a JSON file at `DATA_DIR/config/workspaces/<slug>.json`:
@@ -213,9 +261,13 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 | `GET` | `/api/skills` | List skills (summaries) |
 | `POST` | `/api/skills` | Create a skill |
 | `POST` | `/api/skills/import` | Import an uploaded `.md` / directory / `.zip` |
+| `POST` | `/api/skills/import-git` | Create a skill linked to a folder in a git repo |
 | `GET` | `/api/skills/:name` | Get a skill (with body) |
 | `PATCH` | `/api/skills/:name` | Update body/description/tags/global/readOnly, or rename |
 | `DELETE` | `/api/skills/:name` | Delete a skill |
+| `PUT` | `/api/skills/:name/source` | Link a skill to a git source and replace its content from it |
+| `DELETE` | `/api/skills/:name/source` | Unlink it, keeping its content |
+| `POST` | `/api/skills/:name/sync` | Re-fetch a linked skill → `{ skill, changed }` |
 | `GET` | `/api/skills/:name/export` | Download the skill as a `.zip` |
 | `GET` | `/api/skills/:name/files/content?path=` | Read one supporting file |
 | `PUT` | `/api/skills/:name/files` | Add/overwrite a supporting file (promotes to a dir) |
