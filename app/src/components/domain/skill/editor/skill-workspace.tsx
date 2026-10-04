@@ -79,7 +79,8 @@ function FilePane({
   startEditing: boolean;
   onEditStarted: () => void;
 }) {
-  const editable = path === SKILL_MD_KEY || isMarkdownPath(path);
+  // A skill linked to a git source is read here, never edited: its content is the repo's.
+  const editable = !skill.source && (path === SKILL_MD_KEY || isMarkdownPath(path));
   const [editing, setEditing] = useState(startEditing && editable);
   const [dirty, setDirty] = useState(false);
   // Close was pressed over unsaved edits, and the reader has not yet said what happens to them.
@@ -92,7 +93,7 @@ function FilePane({
   }, [startEditing, onEditStarted]);
 
   // Opening another file, another skill or another page, and closing or reloading the tab.
-  const unsaved = editing && dirty;
+  const unsaved = editing && editable && dirty;
   const blocker = useBlocker({ shouldBlockFn: () => unsaved, enableBeforeUnload: () => unsaved, withResolver: true });
 
   const stopEditing = () => {
@@ -132,7 +133,7 @@ function FilePane({
         onConfirm={discard}
       />
 
-      {!editing ? (
+      {!editing || !editable ? (
         <FilePreview skill={skill} path={path} onEdit={() => setEditing(true)} />
       ) : (
         <StickyHeaderContentFooter

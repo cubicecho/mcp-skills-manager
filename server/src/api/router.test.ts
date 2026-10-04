@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
+import type { SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { errorMiddleware } from './error-middleware.ts';
 import { createApiRouter } from './router.ts';
 
@@ -38,12 +39,24 @@ describe('management REST API', () => {
   let dir: string;
   let store: ConfigStore;
   let api: express.Express;
+  /** Commit the fake git source reports; bump it to simulate an upstream change. */
+  let upstreamCommit: string;
+
+  const fetchSource: SkillSourceFetcher = async (_source, destDir) => {
+    await writeFile(
+      path.join(destDir, 'SKILL.md'),
+      `---\nname: demo\ndescription: At ${upstreamCommit}\n---\n\nbody\n`,
+    );
+    await writeFile(path.join(destDir, 'notes.md'), 'notes');
+    return { commit: upstreamCommit };
+  };
 
   beforeEach(async () => {
     vi.stubEnv('SECURE_LOCAL_NET', '');
     vi.spyOn(console, 'log').mockImplementation(() => {});
     dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-api-'));
-    store = new ConfigStore(dir);
+    upstreamCommit = 'c1';
+    store = new ConfigStore(dir, { fetchSource });
     await store.init(); // seeds getting-started + examples workspace
     api = buildApi(store);
   });
@@ -318,6 +331,84 @@ describe('management REST API', () => {
         error: 'Unsafe file path "../x"',
         detail: 'paths must stay within the skill directory',
       });
+    });
+  });
+
+  describe('git-linked skills', () => {
+    const source = { repo: 'https://example.com/acme/skills.git', path: 'skills/demo' };
+
+    it('imports a linked skill, syncs it and unlinks it', async () => {
+      const created = await request(api).post('/api/skills/import-git').send(source);
+      expect(created.status).toBe(201);
+      expect(created.body).toMatchObject({ name: 'demo', format: 'dir', source: { ...source, commit: 'c1' } });
+
+      const listed = await request(api).get('/api/skills');
+      expect(listed.body.find((s: { name: string }) => s.name === 'demo').source.commit).toBe('c1');
+
+      const unchanged = await request(api).post('/api/skills/demo/sync');
+      expect(unchanged.body).toMatchObject({ changed: false, skill: { name: 'demo' } });
+
+      upstreamCommit = 'c2';
+      const synced = await request(api).post('/api/skills/demo/sync');
+      expect(synced.status).toBe(200);
+      expect(synced.body).toMatchObject({ changed: true, skill: { description: 'At c2', source: { commit: 'c2' } } });
+
+      const unlinked = await request(api).delete('/api/skills/demo/source');
+      expect(unlinked.status).toBe(200);
+      expect(unlinked.body).not.toHaveProperty('source');
+      expect((await request(api).post('/api/skills/demo/sync')).status).toBe(400);
+    });
+
+    it('links an existing skill, replacing its content', async () => {
+      const res = await request(api).put('/api/skills/getting-started/source').send(source);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ name: 'getting-started', description: 'At c1', source: { commit: 'c1' } });
+      expect((await request(api).put('/api/skills/nope/source').send(source)).status).toBe(404);
+    });
+
+    it("locks a linked skill's content while leaving its local settings editable", async () => {
+      await request(api).post('/api/skills/import-git').send(source);
+
+      const blocked = [
+        await request(api).patch('/api/skills/demo').send({ body: 'edited' }),
+        await request(api).patch('/api/skills/demo').send({ description: 'edited' }),
+        await request(api)
+          .patch('/api/skills/demo')
+          .send({ tags: ['x'] }),
+        await request(api).put('/api/skills/demo/files').send({ path: 'new.md', content: 'x' }),
+        await request(api).post('/api/skills/demo/folders').send({ path: 'extra' }),
+        await request(api).post('/api/skills/demo/files/move').send({ from: 'notes.md', to: 'moved.md' }),
+        await request(api).delete('/api/skills/demo/files').query({ path: 'notes.md' }),
+      ];
+      for (const res of blocked) {
+        expect(res.status).toBe(409);
+        expect(res.body.error).toContain('linked to a git source');
+      }
+
+      const flags = await request(api).patch('/api/skills/demo').send({ global: false, readOnly: true });
+      expect(flags.body).toMatchObject({ global: false, readOnly: true, source: { commit: 'c1' } });
+      const renamed = await request(api).patch('/api/skills/demo').send({ name: 'renamed' });
+      expect(renamed.body).toMatchObject({ name: 'renamed', source: { commit: 'c1' } });
+      expect((await request(api).get('/api/skills/renamed/files/content').query({ path: 'notes.md' })).status).toBe(
+        200,
+      );
+    });
+
+    it('rejects sources the server must not clone', async () => {
+      expectValidationFailure(
+        await request(api).post('/api/skills/import-git').send({ repo: 'https://user:secret@example.com/r.git' }),
+        'without embedded credentials',
+      );
+      expectValidationFailure(
+        await request(api).post('/api/skills/import-git').send({ repo: 'file:///etc' }),
+        'without embedded credentials',
+      );
+      expectValidationFailure(
+        await request(api)
+          .put('/api/skills/getting-started/source')
+          .send({ ...source, path: '../outside' }),
+        'inside the repo',
+      );
     });
   });
 

@@ -3,6 +3,8 @@ import type {
   CreateSkillFolderRequest,
   CreateSkillRequest,
   CreateWorkspaceRequest,
+  GitSource,
+  ImportGitSkillRequest,
   ImportSkillRequest,
   MoveSkillPathRequest,
   ServerStatus,
@@ -10,6 +12,7 @@ import type {
   SkillDetail,
   SkillFileRead,
   SkillSummary,
+  SyncSkillResponse,
   UpdateSettingsRequest,
   UpdateSkillRequest,
   UpdateWorkspaceRequest,
@@ -159,6 +162,43 @@ export function createSkill(body: CreateSkillRequest): Promise<SkillDetail> {
  */
 export function importSkill(body: ImportSkillRequest): Promise<SkillDetail> {
   return request('/api/skills/import', { method: 'POST', body });
+}
+
+/**
+ * POST /api/skills/import-git.
+ * @param body Repo, ref and folder to fetch, plus an optional local skill id.
+ * @returns The created skill, linked to its source.
+ */
+export function importGitSkill(body: ImportGitSkillRequest): Promise<SkillDetail> {
+  return request('/api/skills/import-git', { method: 'POST', body });
+}
+
+/**
+ * PUT /api/skills/:name/source: links a skill to a git source and replaces its content from it.
+ * @param name Skill slug.
+ * @param body Repo, ref and folder to fetch.
+ * @returns The skill as synced.
+ */
+export function linkSkillSource(name: string, body: GitSource): Promise<SkillDetail> {
+  return request(`${skillUrl(name)}/source`, { method: 'PUT', body });
+}
+
+/**
+ * DELETE /api/skills/:name/source: drops the link, keeping the content.
+ * @param name Skill slug.
+ * @returns The skill, editable again.
+ */
+export function unlinkSkillSource(name: string): Promise<SkillDetail> {
+  return request(`${skillUrl(name)}/source`, { method: 'DELETE' });
+}
+
+/**
+ * POST /api/skills/:name/sync: refetches a linked skill from its git source.
+ * @param name Skill slug.
+ * @returns The skill as synced, and whether the source had moved on.
+ */
+export function syncSkill(name: string): Promise<SyncSkillResponse> {
+  return request(`${skillUrl(name)}/sync`, { method: 'POST' });
 }
 
 /**

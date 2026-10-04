@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -35,7 +35,14 @@ describe('MCP authoring tools', () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-authoring-'));
-    store = new ConfigStore(dir);
+    store = new ConfigStore(dir, {
+      // Stands in for git: every source resolves to the same tiny skill folder.
+      fetchSource: async (_source, destDir) => {
+        await writeFile(path.join(destDir, 'SKILL.md'), '---\nname: upstream\n---\n\nupstream\n');
+        await writeFile(path.join(destDir, 'notes.md'), 'notes');
+        return { commit: 'c1' };
+      },
+    });
     await store.init(); // seeds getting-started + examples workspace
   });
 
@@ -196,6 +203,34 @@ describe('MCP authoring tools', () => {
     };
     expect(catalogue.skills.find((s) => s.name === 'locked')?.readOnly).toBe(true);
     expect(catalogue.skills.find((s) => s.name === 'getting-started')).not.toHaveProperty('readOnly');
+  });
+
+  it('refuses every mutating tool on a git-linked skill, and flags it in the catalogue', async () => {
+    await store.importSkillFromSource({ source: { repo: 'https://example.com/acme/skills.git' }, name: 'linked' });
+    const client = await connect(store);
+
+    const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
+      { name: 'update_skill', arguments: { name: 'linked', body: 'hacked' } },
+      { name: 'update_skill', arguments: { name: 'linked', global: false } },
+      { name: 'rename_skill', arguments: { name: 'linked', new_name: 'unlinked' } },
+      { name: 'delete_skill', arguments: { name: 'linked' } },
+      { name: 'write_skill_file', arguments: { skill: 'linked', path: 'new.md', content: 'new' } },
+      { name: 'create_skill_folder', arguments: { skill: 'linked', path: 'extra' } },
+      { name: 'delete_skill_file', arguments: { skill: 'linked', path: 'notes.md' } },
+    ];
+    for (const attempt of attempts) {
+      const res = await client.callTool(attempt);
+      expect((res as { isError?: boolean }).isError, attempt.name).toBe(true);
+      expect(firstText(res)).toContain('managed from a git source');
+    }
+    expect(store.getSkill('linked')?.body.trim()).toBe('upstream');
+    expect(store.getSkill('linked')?.files.map((f) => f.path)).toEqual(['notes.md']);
+
+    expect(firstText(await client.callTool({ name: 'linked' }))).toContain('upstream');
+    const catalogue = JSON.parse(firstText(await client.callTool({ name: 'list_skills' }))) as {
+      skills: Array<{ name: string; readOnly?: boolean }>;
+    };
+    expect(catalogue.skills.find((s) => s.name === 'linked')?.readOnly).toBe(true);
   });
 
   it('gives agents no way to lift the read-only flag, and allows edits again once a human does', async () => {

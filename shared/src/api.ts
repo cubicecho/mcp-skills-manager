@@ -7,6 +7,7 @@ import {
   skillFrontmatterSchema,
   skillRelPathSchema,
 } from './skill.ts';
+import { gitSourceSchema, skillSourceSchema } from './skill-source.ts';
 import { slugSchema } from './slug.ts';
 import { workspaceConfigSchema } from './workspace.ts';
 
@@ -38,6 +39,8 @@ export const skillSummarySchema = z.object({
   files: z.array(skillFileSchema),
   /** Normalized tags/categories for organising and filtering. */
   tags: z.array(z.string()).default([]),
+  /** The git folder the skill is linked to; a linked skill's content is locked until it is unlinked. */
+  source: skillSourceSchema.optional(),
   /** Load-usage stats for the skill. */
   usage: skillUsageSchema.default({ count: 0, lastUsedAt: null }),
 });
@@ -95,6 +98,15 @@ export const importSkillRequestSchema = z.object({
 });
 export type ImportSkillRequest = z.infer<typeof importSkillRequestSchema>;
 
+/** Body of POST /api/skills/import-git: create a skill linked to a folder in a git repo, fetching it right away. */
+export const importGitSkillRequestSchema = gitSourceSchema.extend({
+  /** Id for the new skill; the upstream frontmatter `name` (else the folder name) when omitted. */
+  name: slugSchema.optional(),
+  /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → workspace-scoped only. */
+  global: z.boolean().optional(),
+});
+export type ImportGitSkillRequest = z.infer<typeof importGitSkillRequestSchema>;
+
 /** Body of PUT /api/skills/:name/files: add or overwrite one supporting file; promotes a `file` skill to `dir`. */
 export const writeSkillFileRequestSchema = skillFileContentSchema;
 export type WriteSkillFileRequest = z.infer<typeof writeSkillFileRequestSchema>;
@@ -143,6 +155,14 @@ export const updateSkillRequestSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
+
+/** Response of POST /api/skills/:name/sync. */
+export const syncSkillResponseSchema = z.object({
+  skill: skillDetailSchema,
+  /** False when the source was already at the commit the skill was last synced from. */
+  changed: z.boolean(),
+});
+export type SyncSkillResponse = z.infer<typeof syncSkillResponseSchema>;
 
 /** A workspace as returned by /api/workspaces: its stored config plus the derived endpoint path. */
 export const workspaceStatusSchema = workspaceConfigSchema.extend({
