@@ -1,13 +1,13 @@
 import { slugSchema } from '@mcp-skills/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
-import { FileArchive, FileText, Folder } from '@/components/app-icons';
+import { useEffect, useState } from 'react';
+import { FileArchive } from '@/components/app-icons';
 import { FormField } from '@/components/form-field';
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
+import { FilePickerButton } from '@/components/ui/file-picker';
+import { FileText, Folder } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
@@ -40,16 +40,8 @@ export function UploadSkillForm({
   const toast = useToasts();
   const navigate = useNavigate();
   const importSkill = useImportSkill();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   const [upload, setUpload] = useState<NormalizedUpload | null>(null);
   const [name, setName] = useState('');
-  const [reading, setReading] = useState(false);
-
-  // webkitdirectory is not in the React input typings; set it imperatively.
-  useEffect(() => {
-    folderInputRef.current?.setAttribute('webkitdirectory', '');
-  }, []);
 
   const nameValid = slugSchema.safeParse(name).success;
   const ready = upload !== null && !upload.error && nameValid;
@@ -60,17 +52,15 @@ export function UploadSkillForm({
   // Switching tabs unmounts this form and drops what was picked, so the dialog must stop guarding it.
   useEffect(() => () => onStatusChange({ ready: false, pending: false, dirty: false }), [onStatusChange]);
 
-  const handle = async (normalize: () => Promise<NormalizedUpload>) => {
-    setReading(true);
+  const stage = (normalize: () => NormalizedUpload) => {
     try {
-      const result = await normalize();
+      const result = normalize();
       setUpload(result);
       setName(result.defaultName);
     } catch (error) {
+      // A corrupt archive throws while it is unpacked.
       toast.apiError(error);
       setUpload(null);
-    } finally {
-      setReading(false);
     }
   };
 
@@ -104,44 +94,23 @@ export function UploadSkillForm({
         <Code>.zip</Code> archive that is unpacked into a directory skill.
       </p>
       <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" disabled={reading} onClick={() => fileInputRef.current?.click()}>
-          <FileText /> Choose .md or .zip
-        </Button>
-        <Button type="button" variant="outline" disabled={reading} onClick={() => folderInputRef.current?.click()}>
-          <Folder /> Choose folder
-        </Button>
+        <FilePickerButton
+          variant="outline"
+          label="Choose .md or .zip"
+          icon={<FileText />}
+          accept=".md,.markdown,.zip,application/zip"
+          read="bytes"
+          onPickMany={([file]) => file && stage(() => normalizeUploadFile(file))}
+        />
+        <FilePickerButton
+          variant="outline"
+          label="Choose folder"
+          icon={<Folder />}
+          directory
+          read="bytes"
+          onPickMany={(files) => files.length > 0 && stage(() => normalizeUploadFolder(files))}
+        />
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".md,.markdown,.zip,application/zip"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            void handle(() => normalizeUploadFile(file));
-          }
-        }}
-      />
-      <input
-        ref={folderInputRef}
-        type="file"
-        hidden
-        multiple
-        onChange={(event) => {
-          const files = event.target.files;
-          if (files && files.length > 0) {
-            void handle(() => normalizeUploadFolder(files));
-          }
-        }}
-      />
-
-      {reading && (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner label="Reading files" /> Reading files…
-        </p>
-      )}
 
       {upload?.error && (
         <Alert variant="destructive" title="This upload can’t be imported" description={upload.error} />

@@ -1,7 +1,7 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { File, FilePlus, FileText, Folder, FolderPlus, FolderUp } from '@/components/app-icons';
+import { File, FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
 import { buildTree, isMarkdownPath, SKILL_MD_KEY, type TreeNode } from '@/components/domain/skill/editor/file-tree';
 import { RenameButton } from '@/components/domain/skill/editor/rename-button';
@@ -10,12 +10,14 @@ import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Code } from '@/components/ui/code';
-import { Download, Pencil, Trash2, Upload } from '@/components/ui/icons';
+import { FilePickerButton } from '@/components/ui/file-picker';
+import type { PickedFile } from '@/components/ui/file-picker-base';
+import { Download, FileText, Folder, Pencil, Trash2 } from '@/components/ui/icons';
 import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
 import { reported } from '@/lib/reported';
-import { fileToSkillFileContent } from '@/lib/skill-upload';
+import { pickedToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
 import { cn, HOVER_REVEAL } from '@/lib/utils';
 
@@ -59,42 +61,27 @@ export function FilesPanel({
   const createFolder = useCreateSkillFolder(skill.name);
   const movePath = useMoveSkillPath(skill.name);
   const deleteEntry = useDeleteSkillFile(skill.name);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [prompt, setPrompt] = useState<PathPrompt | null>(null);
-
-  useEffect(() => {
-    folderInputRef.current?.setAttribute('webkitdirectory', '');
-  }, []);
 
   const tree = buildTree(skill.files);
   const mainLabel = skill.format === 'dir' ? 'SKILL.md' : `${skill.name}.md`;
 
-  const upload = async (files: FileList) => {
+  const upload = async (files: PickedFile[]) => {
+    if (busy) {
+      return;
+    }
     setBusy(true);
     try {
       // Sequential: each write reloads the skill, and the first promotes a file skill to a dir.
-      for (const file of [...files]) {
-        await writeFile.mutateAsync(await fileToSkillFileContent(file));
+      for (const file of files) {
+        await writeFile.mutateAsync(pickedToSkillFileContent(file));
       }
-      toast.success(`Added ${files.length} file${files.length === 1 ? '' : 's'}`);
+      toast.success(`Added ${formatCount(files.length, 'file')}`);
     } catch (error) {
       toast.apiError(error);
     } finally {
       setBusy(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (folderInputRef.current) {
-        folderInputRef.current.value = '';
-      }
-    }
-  };
-
-  const uploadPicked = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files?.length) {
-      void upload(event.target.files);
     }
   };
 
@@ -185,22 +172,15 @@ export function FilesPanel({
               <ActionButton {...toolbar} label="New folder" disabled={busy} onClick={() => newFolder()}>
                 <FolderPlus />
               </ActionButton>
-              <ActionButton
-                {...toolbar}
-                label="Add files"
-                disabled={busy}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload />
-              </ActionButton>
-              <ActionButton
+              <FilePickerButton {...toolbar} label="Add files" multiple read="bytes" onPickMany={upload} />
+              <FilePickerButton
                 {...toolbar}
                 label="Add folder"
-                disabled={busy}
-                onClick={() => folderInputRef.current?.click()}
-              >
-                <FolderUp />
-              </ActionButton>
+                icon={<FolderUp />}
+                directory
+                read="bytes"
+                onPickMany={upload}
+              />
               <ActionButton {...toolbar} label="Export .zip" onClick={runExport}>
                 <Download />
               </ActionButton>
@@ -212,9 +192,6 @@ export function FilesPanel({
       contentClassName="px-2 pb-4"
       content={
         <>
-          <input ref={fileInputRef} type="file" hidden multiple onChange={uploadPicked} />
-          <input ref={folderInputRef} type="file" hidden multiple onChange={uploadPicked} />
-
           <ul className="flex flex-col gap-0.5">
             {/* The skill's own Markdown — always first, and never renamable/deletable. */}
             <li

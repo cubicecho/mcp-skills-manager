@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
-import { MarkdownEditor } from '@/components/domain/skill/editor/markdown-editor';
-import type { ViewMode } from '@/components/domain/skill/editor/view-toggle';
+import { MarkdownEditor } from '@/components/markdown-editor';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
@@ -11,15 +10,11 @@ import { useSaveShortcut } from '@/lib/use-save-shortcut';
 export function SupportingFileEditor({
   skillName,
   path,
-  view,
-  setView,
   onDirtyChange,
   onClose,
 }: {
   skillName: string;
   path: string;
-  view: ViewMode;
-  setView: (view: ViewMode) => void;
   onDirtyChange: (dirty: boolean) => void;
   onClose: () => void;
 }) {
@@ -61,8 +56,6 @@ export function SupportingFileEditor({
   return (
     <EditorFrame
       path={path}
-      view={view}
-      setView={setView}
       onSave={save}
       onClose={onClose}
       saving={write.isPending}
@@ -74,7 +67,12 @@ export function SupportingFileEditor({
             describeBinary={(size) => `This file is binary (${size}) and cannot be edited here.`}
           />
           {data && !data.binary && content !== null && (
-            <MarkdownEditor value={content} onChange={setContent} view={view} />
+            <MarkdownEditor
+              aria-label={path}
+              value={content}
+              onValueChange={setContent}
+              empty="Nothing to preview yet."
+            />
           )}
         </>
       }

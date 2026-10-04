@@ -349,13 +349,14 @@ type SidebarLayoutNarrow =
       brand?: never;
       nav?: never;
       navLabel?: never;
+      status?: never;
       action?: never;
     }
   | ({
       /**
-       * Under this width the sidebar pane is not drawn and the bar — `brand`, `nav`, `action` —
-       * is drawn over `content` in its place; from it up, the other way round. For an app's
-       * navigation rail, which has no room on a phone and does not stack.
+       * Under this width the sidebar pane is not drawn and the bar — `brand`, `nav`, `status`,
+       * `action` — is drawn over `content` in its place; from it up, the other way round. For an
+       * app's navigation rail, which has no room on a phone and does not stack.
        *
        * Hidden is `display: none`, so the rail leaves the accessibility tree rather than staying a
        * landmark with nothing visible in it, and the bar is a banner only where it is on screen.
@@ -372,6 +373,14 @@ type SidebarLayoutNarrow =
       divider?: 'space' | 'none' | undefined;
       /** The bar's start: the app's mark and name, as the rail's header shows them. */
       brand?: ReactNode | undefined;
+      /**
+       * One line saying what state the app is in — "3/5 servers running" — between the `nav` and
+       * the `action`. It gets the width the rest of the bar leaves and no more, so on a narrow
+       * bar it is the first thing to give way: a string is cut short with an ellipsis, down to
+       * nothing, before the brand, a place or an action loses a pixel. A node is clipped to the
+       * same box and truncates itself.
+       */
+      status?: ReactNode | undefined;
       /** The bar's far end: the theme switch, sign out — the rail's footer, in one row. */
       action?: ReactNode | undefined;
     } & SidebarLayoutNav);
@@ -417,7 +426,13 @@ type SidebarLayoutProps = {
  * links and the rail's footer buttons in a row. The two halves were two class strings that had to
  * name the same breakpoint, and the bar's `<nav>` had a name in some copies and not in others.
  * Here the breakpoint is said once and both halves read it, and the bar is a `header` — the
- * banner — with the navigation landmark inside it, named.
+ * banner — with the navigation landmark inside it, named. The places in it are `BarNavItem`s
+ * (`sidebar.tsx`), the rail's rows with only the icon drawn.
+ *
+ * **`status` is the bar's one line of words**, and the part that yields. The brand, the places and
+ * the actions keep their width; the status takes what is left between the `nav` and the `action`,
+ * so on a 390px phone it shortens, and on a narrower bar still it is gone, rather than pushing an
+ * action off the edge. Without the slot an app put the line in `action`, which never shrinks.
  *
  * It holds no state: nothing opens, nothing is remembered, and which of the two is drawn is a
  * media query in the stylesheet rather than a width read in JavaScript. On device NativeWind reads
@@ -436,6 +451,7 @@ export function SidebarLayout({
   brand,
   nav,
   navLabel,
+  status,
   action,
   className,
   contentClassName,
@@ -445,7 +461,7 @@ export function SidebarLayout({
   // Rule 5 — the bar, and the column it sits in, are drawn only when there is something in the
   // bar. Without one the content pane holds the caller's node exactly as it always has.
   const main =
-    sidebarHideBelow && (brand || nav || action) ? (
+    sidebarHideBelow && (brand || nav || status || action) ? (
       <div data-slot="sidebar-layout-main" className={cn('cube-rn-view', COLUMN)}>
         <header
           data-slot="sidebar-layout-header"
@@ -469,6 +485,18 @@ export function SidebarLayout({
             >
               {nav}
             </nav>
+          ) : null}
+          {status ? (
+            // `flex-1` is a zero basis: the status asks for no width of its own and is handed
+            // what the others leave, which is what makes it the one that gives way. Everything
+            // else in the bar is `shrink-0` or a view, which does not shrink either.
+            <div data-slot="sidebar-layout-status" className="cube-rn-view min-w-0 flex-1 overflow-hidden">
+              {typeof status === 'string' || typeof status === 'number' ? (
+                <span className="cube-rn-text truncate text-right text-muted-foreground text-sm">{status}</span>
+              ) : (
+                status
+              )}
+            </div>
           ) : null}
           {action ? (
             // `ml-auto` rather than a spacer, so the action keeps the far end with no `nav` before it.

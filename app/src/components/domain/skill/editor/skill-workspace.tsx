@@ -6,7 +6,6 @@ import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/f
 import { FilesPanel } from '@/components/domain/skill/editor/files-panel';
 import { SkillBodyEditor } from '@/components/domain/skill/editor/skill-body-editor';
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
-import type { ViewMode } from '@/components/domain/skill/editor/view-toggle';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { SidebarLayout } from '@/components/split-layout';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -82,7 +81,6 @@ function FilePane({
 }) {
   const editable = path === SKILL_MD_KEY || isMarkdownPath(path);
   const [editing, setEditing] = useState(startEditing && editable);
-  const [view, setView] = useState<ViewMode>('split');
   const [dirty, setDirty] = useState(false);
   // Close was pressed over unsaved edits, and the reader has not yet said what happens to them.
   const [closing, setClosing] = useState(false);
@@ -141,16 +139,9 @@ function FilePane({
           contentClassName="p-4"
           content={
             path === SKILL_MD_KEY ? (
-              <SkillBodyEditor skill={skill} view={view} setView={setView} onDirtyChange={setDirty} onClose={close} />
+              <SkillBodyEditor skill={skill} onDirtyChange={setDirty} onClose={close} />
             ) : (
-              <SupportingFileEditor
-                skillName={skill.name}
-                path={path}
-                view={view}
-                setView={setView}
-                onDirtyChange={setDirty}
-                onClose={close}
-              />
+              <SupportingFileEditor skillName={skill.name} path={path} onDirtyChange={setDirty} onClose={close} />
             )
           }
         />
