@@ -1,6 +1,6 @@
-import { File } from '@/components/app-icons';
 import { EmptyState } from '@/components/page';
 import { QueryError } from '@/components/query-state';
+import { File } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatBytes } from '@/lib/format';
 import type { useSkillFileContent } from '@/lib/queries';
