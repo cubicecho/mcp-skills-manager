@@ -218,7 +218,7 @@ export function FilesPanel({
       contentClassName="px-2 pb-4"
       content={
         <>
-          <FileTree
+          <FileTree<FileEntry>
             label="Skill files"
             // The skill's own Markdown — always first, and never renamable/deletable.
             pinned={[main]}
