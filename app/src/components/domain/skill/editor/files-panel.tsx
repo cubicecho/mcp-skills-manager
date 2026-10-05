@@ -1,13 +1,14 @@
-import type { SkillDetail } from '@mcp-skills/shared';
+import type { SkillDetail, SkillFile } from '@mcp-skills/shared';
 import { type ReactNode, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { File, FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
+import { FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
-import { buildTree, isMarkdownPath, SKILL_MD_KEY, type TreeNode } from '@/components/domain/skill/editor/file-tree';
+import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { LinkSourceButton } from '@/components/domain/skill/editor/link-source-button';
 import { RenameButton } from '@/components/domain/skill/editor/rename-button';
 import { useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
 import { type PathPrompt, PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
+import { FileTree } from '@/components/file-tree';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,10 @@ import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSki
 import { reported } from '@/lib/reported';
 import { pickedToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
-import { cn, HOVER_REVEAL } from '@/lib/utils';
+import type { TreeNode } from '@/lib/tree';
+
+/** A row of the file tree: a supporting file or folder, or the skill's own Markdown pinned above them. */
+type FileEntry = SkillFile & { main?: boolean };
 
 /**
  * Describe where a new file or folder will be created.
@@ -68,10 +72,11 @@ export function FilesPanel({
   const [busy, setBusy] = useState(false);
   const [prompt, setPrompt] = useState<PathPrompt | null>(null);
 
-  const tree = buildTree(skill.files);
   // A linked skill's content is the repo's: nothing here may add to it, rename in it or delete from it.
   const linked = skill.source !== undefined;
   const mainLabel = skill.format === 'dir' ? 'SKILL.md' : `${skill.name}.md`;
+  // The skill's own Markdown is pinned under its file name; everywhere else it is `SKILL_MD_KEY`.
+  const main: FileEntry = { path: mainLabel, type: 'file', size: 0, main: true };
 
   const upload = async (files: PickedFile[]) => {
     if (busy) {
@@ -115,7 +120,7 @@ export function FilesPanel({
       onSubmit: (rel) => reported(createFolder.mutateAsync({ path: base ? `${base}/${rel}` : rel }), toast.apiError),
     });
 
-  const rename = (node: TreeNode) =>
+  const rename = (node: TreeNode<FileEntry>) =>
     setPrompt({
       title: `Rename ${node.type === 'dir' ? 'folder' : 'file'}`,
       description: 'A path relative to the skill root; changing the folders moves it.',
@@ -128,7 +133,7 @@ export function FilesPanel({
       },
     });
 
-  const remove = (node: TreeNode) => {
+  const remove = (node: TreeNode<FileEntry>) => {
     deleteEntry.mutate(node.path, {
       onSuccess: () => toast.success(`Deleted ${node.path}`),
       onError: toast.apiError,
@@ -213,40 +218,31 @@ export function FilesPanel({
       contentClassName="px-2 pb-4"
       content={
         <>
-          <ul className="flex flex-col gap-0.5">
-            {/* The skill's own Markdown — always first, and never renamable/deletable. */}
-            <li
-              className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                selected === SKILL_MD_KEY ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50',
-              )}
-            >
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                aria-current={selected === SKILL_MD_KEY ? 'page' : undefined}
-                onClick={() => onSelect(SKILL_MD_KEY)}
-              >
-                <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate font-mono">{mainLabel}</span>
-                <Badge variant="secondary">main</Badge>
-              </button>
-            </li>
-            {tree.map((node) => (
-              <FileTreeNode
-                key={node.path}
-                node={node}
-                depth={0}
-                locked={linked}
-                selected={selected}
-                onSelect={onSelect}
-                onNewFile={newFile}
-                onNewFolder={newFolder}
-                onRename={rename}
-                onDelete={remove}
-              />
-            ))}
-          </ul>
+          <FileTree
+            label="Skill files"
+            // The skill's own Markdown — always first, and never renamable/deletable.
+            pinned={[main]}
+            entries={skill.files}
+            selected={selected === SKILL_MD_KEY ? mainLabel : selected}
+            onSelect={(path) => onSelect(path === mainLabel ? SKILL_MD_KEY : path)}
+            meta={(node) => {
+              if (node.entry?.main) {
+                return <Badge variant="secondary">main</Badge>;
+              }
+              return node.type === 'file' && node.entry ? formatBytes(node.entry.size) : null;
+            }}
+            actionSlot={(node) =>
+              linked || node.entry?.main ? null : (
+                <FileActions
+                  node={node}
+                  onNewFile={newFile}
+                  onNewFolder={newFolder}
+                  onRename={rename}
+                  onDelete={remove}
+                />
+              )
+            }
+          />
           {prompt && <PathPromptDialog prompt={prompt} onClose={() => setPrompt(null)} />}
         </>
       }
@@ -254,114 +250,54 @@ export function FilesPanel({
   );
 }
 
-function FileTreeNode({
+/**
+ * A file's or folder's buttons at the end of its row: new file and new folder inside a folder, then
+ * rename and delete.
+ * @param props.node - The row's file or folder.
+ */
+function FileActions({
   node,
-  depth,
-  locked,
-  selected,
-  onSelect,
   onNewFile,
   onNewFolder,
   onRename,
   onDelete,
 }: {
-  node: TreeNode;
-  depth: number;
-  /** The skill's content cannot be changed here, so the row draws no actions. */
-  locked: boolean;
-  selected: string;
-  onSelect: (path: string) => void;
+  node: TreeNode<FileEntry>;
   onNewFile: (base: string) => void;
   onNewFolder: (base: string) => void;
-  onRename: (node: TreeNode) => void;
-  onDelete: (node: TreeNode) => void;
+  onRename: (node: TreeNode<FileEntry>) => void;
+  onDelete: (node: TreeNode<FileEntry>) => void;
 }) {
   const isDir = node.type === 'dir';
-  const isSelected = !isDir && selected === node.path;
+  const button = { variant: 'ghost', size: 'icon-xs' } as const;
   return (
     <>
-      <li
-        className={cn(
-          'group flex items-center gap-2 rounded-md px-2 py-1 text-sm',
-          isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50',
-        )}
+      {isDir && (
+        <>
+          <ActionButton {...button} label={`New file in ${node.path}`} onClick={() => onNewFile(node.path)}>
+            <FilePlus />
+          </ActionButton>
+          <ActionButton {...button} label={`New folder in ${node.path}`} onClick={() => onNewFolder(node.path)}>
+            <FolderPlus />
+          </ActionButton>
+        </>
+      )}
+      <ActionButton {...button} label={`Rename ${node.path}`} onClick={() => onRename(node)}>
+        <Pencil />
+      </ActionButton>
+      <ConfirmButton
+        {...button}
+        label={`Delete ${node.path}`}
+        title={`Delete ${isDir ? 'folder' : 'file'} "${node.path}"?`}
+        description={
+          isDir
+            ? 'Every file inside the folder is deleted with it, on disk as well as here.'
+            : 'The file is deleted from the skill on disk, and anything linking to it breaks.'
+        }
+        onConfirm={() => onDelete(node)}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
-          {isDir ? (
-            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <File className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          {isDir ? (
-            <span className="min-w-0 truncate font-mono">{node.name}</span>
-          ) : (
-            <button
-              type="button"
-              className="min-w-0 truncate text-left font-mono"
-              aria-current={isSelected ? 'page' : undefined}
-              onClick={() => onSelect(node.path)}
-            >
-              {node.name}
-            </button>
-          )}
-          {!isDir && <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(node.size)}</span>}
-        </span>
-        {!locked && (
-          <span className={cn('flex shrink-0 items-center gap-0.5 focus-within:opacity-100', HOVER_REVEAL)}>
-            {isDir && (
-              <>
-                <ActionButton
-                  variant="ghost"
-                  size="icon-sm"
-                  label={`New file in ${node.path}`}
-                  onClick={() => onNewFile(node.path)}
-                >
-                  <FilePlus />
-                </ActionButton>
-                <ActionButton
-                  variant="ghost"
-                  size="icon-sm"
-                  label={`New folder in ${node.path}`}
-                  onClick={() => onNewFolder(node.path)}
-                >
-                  <FolderPlus />
-                </ActionButton>
-              </>
-            )}
-            <ActionButton variant="ghost" size="icon-sm" label={`Rename ${node.path}`} onClick={() => onRename(node)}>
-              <Pencil />
-            </ActionButton>
-            <ConfirmButton
-              variant="ghost"
-              size="icon-sm"
-              label={`Delete ${node.path}`}
-              title={`Delete ${isDir ? 'folder' : 'file'} "${node.path}"?`}
-              description={
-                isDir
-                  ? 'Every file inside the folder is deleted with it, on disk as well as here.'
-                  : 'The file is deleted from the skill on disk, and anything linking to it breaks.'
-              }
-              onConfirm={() => onDelete(node)}
-            >
-              <Trash2 />
-            </ConfirmButton>
-          </span>
-        )}
-      </li>
-      {node.children.map((child) => (
-        <FileTreeNode
-          key={child.path}
-          node={child}
-          depth={depth + 1}
-          locked={locked}
-          selected={selected}
-          onSelect={onSelect}
-          onNewFile={onNewFile}
-          onNewFolder={onNewFolder}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-      ))}
+        <Trash2 />
+      </ConfirmButton>
     </>
   );
 }

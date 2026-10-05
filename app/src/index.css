@@ -29,6 +29,10 @@
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
+  /* The file tree's selected and hovered rows, in this palette rather than cubeui's tint. */
+  --active: var(--accent);
+  --active-foreground: var(--accent-foreground);
+  --hover: var(--muted);
 }
 
 .dark {
@@ -56,6 +60,10 @@
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
+  /* The file tree's selected and hovered rows, in this palette rather than cubeui's tint. */
+  --active: var(--accent);
+  --active-foreground: var(--accent-foreground);
+  --hover: var(--muted);
 }
 
 @theme inline {
