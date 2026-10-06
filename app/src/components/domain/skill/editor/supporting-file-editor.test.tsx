@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupportingFileEditor } from './supporting-file-editor';
@@ -79,7 +79,8 @@ describe('SupportingFileEditor', () => {
 
     await userEvent.type(editor(), '!');
     pressSaveChord();
-    expect(mutate).toHaveBeenCalledTimes(1);
+    // The form submits on the next tick.
+    await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
   });
 
   it('offers no editor for a binary file', () => {

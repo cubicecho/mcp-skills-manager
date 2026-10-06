@@ -1,5 +1,5 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SkillBodyEditor } from './skill-body-editor';
@@ -104,7 +104,8 @@ describe('SkillBodyEditor', () => {
 
     await userEvent.type(screen.getByLabelText('Skill body'), '!');
     pressSaveChord();
-    expect(mutate).toHaveBeenCalledTimes(1);
+    // The form submits on the next tick.
+    await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
     expect(mutate.mock.calls[0]?.[0]).toMatchObject({ body: '# Commits!' });
   });
 

@@ -1,12 +1,12 @@
 import { normalizeTags, type SkillDetail } from '@mcp-skills/shared';
-import { useEffect, useMemo, useState } from 'react';
+import { useStore } from '@tanstack/react-form';
+import { useEffect, useMemo } from 'react';
+import { InputField, useAppForm } from '@/components/app-form';
 import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
-import { FormField } from '@/components/form-field';
 import { MarkdownEditor } from '@/components/markdown-editor';
-import { MultiSelect } from '@/components/multi-select';
+import { MultiSelectField } from '@/components/multi-select-field';
 import { Code } from '@/components/ui/code';
-import { Input } from '@/components/ui/input';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
@@ -23,10 +23,15 @@ export function SkillBodyEditor({
 }) {
   const toast = useToasts();
   const update = useUpdateSkill(skill.name);
-  const [description, setDescription] = useState(skill.description);
-  const [body, setBody] = useState(skill.body);
-  const [tags, setTags] = useState<string[]>(skill.tags);
   const { data: allSkills } = useSkills();
+
+  const form = useAppForm({
+    defaultValues: { description: skill.description, body: skill.body, tags: skill.tags },
+    onSubmit: ({ value }) => {
+      update.mutate(value, { onSuccess: () => toast.success('Skill saved'), onError: toast.apiError });
+    },
+  });
+  const { description, body, tags } = useStore(form.store, (state) => state.values);
 
   // Every tag already in use, so an existing one is picked rather than retyped with a new spelling.
   const tagOptions = useMemo(
@@ -38,15 +43,12 @@ export function SkillBodyEditor({
   );
   const tagsDirty = tags.join('\0') !== skill.tags.join('\0');
 
+  // Measured against the skill as last loaded, not the form's defaults: a save refetches the skill, and the
+  // editor is clean again once what it holds is what was saved.
   const dirty = description !== skill.description || body !== skill.body || tagsDirty;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
-  const save = () => {
-    update.mutate(
-      { description, body, tags },
-      { onSuccess: () => toast.success('Skill saved'), onError: toast.apiError },
-    );
-  };
+  const save = () => void form.handleSubmit();
 
   useSaveShortcut(save, dirty && !update.isPending);
 
@@ -61,48 +63,44 @@ export function SkillBodyEditor({
       dirty={dirty}
       content={
         <>
-          <FormField
+          <InputField
+            form={form}
+            name="description"
             label="Description"
             description="Surfaced as the MCP tool and resource description."
-            control={
-              <Input
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="One line telling the agent when to use this skill."
-              />
-            }
+            placeholder="One line telling the agent when to use this skill."
           />
-          <FormField
+          <MultiSelectField
+            form={form}
+            name="tags"
             label="Tags"
             description={
               <>
                 Categories for organising and filtering skills. Written to the frontmatter <Code>tags</Code> key.
               </>
             }
-            control={(wired) => (
-              <MultiSelect
-                {...wired}
-                options={tagOptions}
-                value={tags}
-                onValueChange={setTags}
-                onCreateOption={(tag) => setTags(normalizeTags([...tags, tag]))}
-                createLabel="Add tag"
-                placeholder="Add tags…"
-                searchPlaceholder="Find or add a tag…"
-                searchLabel="Find or add a tag"
-                popoverLabel="Tags"
-                emptyMessage="No tags yet. Type one to add it."
-              />
-            )}
+            options={tagOptions}
+            onCreateOption={(tag) => form.setFieldValue('tags', normalizeTags([...tags, tag]))}
+            createLabel="Add tag"
+            placeholder="Add tags…"
+            searchPlaceholder="Find or add a tag…"
+            searchLabel="Find or add a tag"
+            popoverLabel="Tags"
+            emptyMessage="No tags yet. Type one to add it."
           />
           <SkillFlags skill={skill} />
-          <MarkdownEditor
-            aria-label="Skill body"
-            value={body}
-            onValueChange={setBody}
-            placeholder="# My skill…"
-            empty="Nothing to preview yet."
-          />
+          <form.AppField name="body">
+            {(field) => (
+              <MarkdownEditor
+                aria-label="Skill body"
+                value={field.state.value}
+                onValueChange={field.handleChange}
+                onBlur={field.handleBlur}
+                placeholder="# My skill…"
+                empty="Nothing to preview yet."
+              />
+            )}
+          </form.AppField>
         </>
       }
     />

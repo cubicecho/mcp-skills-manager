@@ -1,4 +1,6 @@
+import { useStore } from '@tanstack/react-form';
 import { useEffect, useState } from 'react';
+import { useAppForm } from '@/components/app-form';
 import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { MarkdownEditor } from '@/components/markdown-editor';
@@ -22,34 +24,39 @@ export function SupportingFileEditor({
   const file = useSkillFileContent(skillName, path);
   const { data } = file;
   const write = useWriteSkillFile(skillName);
-  const [content, setContent] = useState<string | null>(null);
-  const [baseline, setBaseline] = useState<string | null>(null);
+  const text = data && !data.binary ? data.content : undefined;
+  // The file's text as last loaded or written: what an edit is measured against. Unset until the file arrives.
+  const [saved, setSaved] = useState<string>();
 
+  const form = useAppForm({
+    defaultValues: { content: saved ?? '' },
+    onSubmit: ({ value }) => {
+      write.mutate(
+        { path, content: value.content, encoding: 'utf8' },
+        {
+          onSuccess: () => {
+            toast.success(`Saved ${path}`);
+            setSaved(value.content);
+          },
+          onError: toast.apiError,
+        },
+      );
+    },
+  });
+
+  // The file arrives after the form exists, and again when a refetch finds it changed.
   useEffect(() => {
-    if (data && !data.binary) {
-      setContent(data.content);
-      setBaseline(data.content);
+    if (text !== undefined) {
+      setSaved(text);
+      form.reset({ content: text });
     }
-  }, [data]);
+  }, [text, form]);
 
-  const dirty = content !== null && baseline !== null && content !== baseline;
+  const content = useStore(form.store, (state) => state.values.content);
+  const dirty = saved !== undefined && content !== saved;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
-  const save = () => {
-    if (content === null) {
-      return;
-    }
-    write.mutate(
-      { path, content, encoding: 'utf8' },
-      {
-        onSuccess: () => {
-          toast.success(`Saved ${path}`);
-          setBaseline(content);
-        },
-        onError: toast.apiError,
-      },
-    );
-  };
+  const save = () => void form.handleSubmit();
 
   useSaveShortcut(save, dirty && !write.isPending);
 
@@ -66,13 +73,18 @@ export function SupportingFileEditor({
             file={file}
             describeBinary={(size) => `This file is binary (${size}) and cannot be edited here.`}
           />
-          {data && !data.binary && content !== null && (
-            <MarkdownEditor
-              aria-label={path}
-              value={content}
-              onValueChange={setContent}
-              empty="Nothing to preview yet."
-            />
+          {saved !== undefined && (
+            <form.AppField name="content">
+              {(field) => (
+                <MarkdownEditor
+                  aria-label={path}
+                  value={field.state.value}
+                  onValueChange={field.handleChange}
+                  onBlur={field.handleBlur}
+                  empty="Nothing to preview yet."
+                />
+              )}
+            </form.AppField>
           )}
         </>
       }
