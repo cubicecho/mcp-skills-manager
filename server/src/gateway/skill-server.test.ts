@@ -5,6 +5,7 @@ import type { Skill } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
+  PromptListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -485,6 +486,170 @@ describe('skill-server resource pagination', () => {
     const client = await connect(() => many);
     // "Zm9v" is base64url for "foo" — decodes to a non-numeric offset.
     await expect(client.listResources({ cursor: 'Zm9v' })).rejects.toMatchObject({ code: -32602 });
+  });
+});
+
+describe('skill-server prompts', () => {
+  const REFACTOR_PROMPT = [
+    '---',
+    'description: Refactor a scope',
+    'arguments:',
+    '  - name: scope',
+    '    description: What to refactor',
+    '  - name: depth',
+    '    required: true',
+    '---',
+    'Refactor: {{scope}}',
+    '',
+    'Depth: {{ depth }}. Keep {{untouched}} as written.',
+    '',
+  ].join('\n');
+
+  /** Prompt file contents by `<skill>/<path>`, standing in for the skills directory. */
+  const FILES: Record<string, string> = {
+    'standards/prompts/refactor.md': REFACTOR_PROMPT,
+    'standards/prompts/plain.md': 'Just do the thing.\n',
+    'tickets/prompts/refactor.md': '---\ndescription: Refactor from a ticket\n---\nTicket refactor.',
+  };
+
+  const dirSkill = (name: string, paths: string[]): Skill =>
+    skill({
+      name,
+      format: 'dir',
+      path: `${name}/SKILL.md`,
+      files: paths.map((filePath) => ({ path: filePath, type: 'file' as const, size: 1 })),
+    });
+
+  // Listed out of name order, so the collision rule is shown to sort rather than follow input order.
+  const PROMPT_SKILLS: Skill[] = [
+    dirSkill('tickets', ['prompts/refactor.md']),
+    dirSkill('standards', [
+      'prompts/refactor.md',
+      'prompts/plain.md',
+      'prompts/nested/deep.md',
+      'prompts/notes.txt',
+      'prompts/bad name.md',
+      'reference.md',
+    ]),
+  ];
+
+  const reader = {
+    readSupportingFile: async (skillName: string, relPath: string) => {
+      const content = FILES[`${skillName}/${relPath}`];
+      if (content === undefined) {
+        throw new Error('no such file');
+      }
+      return { path: relPath, content, encoding: 'utf8' as const, size: content.length, binary: false };
+    },
+  };
+
+  /** The text of a prompt result's only message. */
+  function promptText(res: { messages: Array<{ role: string; content: unknown }> }): string {
+    expect(res.messages).toHaveLength(1);
+    expect(res.messages[0]?.role).toBe('user');
+    return (res.messages[0]?.content as { text: string }).text;
+  }
+
+  it('does not advertise prompts when the endpoint cannot read skill files', async () => {
+    const client = await connect(() => PROMPT_SKILLS);
+    expect(client.getServerCapabilities()?.prompts).toBeUndefined();
+  });
+
+  it('advertises prompts without listChanged on a stateless endpoint', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    expect(client.getServerCapabilities()?.prompts).toEqual({});
+  });
+
+  it('returns an empty list when no served skill has a prompt', async () => {
+    const client = await connect(() => SKILLS, reader);
+    expect(await client.listPrompts()).toEqual({ prompts: [] });
+  });
+
+  it('lists each prompts/<name>.md with its declared description and arguments', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    const { prompts } = await client.listPrompts();
+    expect(prompts).toEqual([
+      {
+        name: 'refactor',
+        description: 'Refactor a scope',
+        arguments: [
+          { name: 'scope', description: 'What to refactor', required: false },
+          { name: 'depth', required: true },
+        ],
+      },
+      { name: 'plain', description: 'Prompt from the "standards" skill.', arguments: [] },
+      { name: 'tickets__refactor', description: 'Refactor from a ticket', arguments: [] },
+    ]);
+  });
+
+  it('gives the bare name to the first skill by sorted name and qualifies the later one', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    expect(promptText(await client.getPrompt({ name: 'refactor', arguments: { depth: '1' } }))).toContain('Depth: 1.');
+    expect(promptText(await client.getPrompt({ name: 'tickets__refactor' }))).toBe('Ticket refactor.');
+  });
+
+  it('substitutes declared arguments and leaves other placeholders as written', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    const res = await client.getPrompt({ name: 'refactor', arguments: { scope: 'src/{{depth}}', depth: 'deep' } });
+    expect(res.description).toBe('Refactor a scope');
+    // A value is inserted as given: a placeholder inside it is not filled in a second pass.
+    expect(promptText(res)).toBe('Refactor: src/{{depth}}\n\nDepth: deep. Keep {{untouched}} as written.');
+  });
+
+  it('fills an optional argument that was left out with an empty string', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    const text = promptText(await client.getPrompt({ name: 'refactor', arguments: { depth: 'deep' } }));
+    expect(text).toBe('Refactor: \n\nDepth: deep. Keep {{untouched}} as written.');
+  });
+
+  it('rejects a get that leaves out a required argument', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    await expect(client.getPrompt({ name: 'refactor', arguments: { scope: 'src' } })).rejects.toThrow(
+      /missing required argument: depth/,
+    );
+  });
+
+  it('rejects an unknown prompt', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    await expect(client.getPrompt({ name: 'nope' })).rejects.toThrow(/Unknown prompt "nope"/);
+  });
+
+  it('serves only the prompts of the skills this endpoint serves', async () => {
+    const client = await connect(() => PROMPT_SKILLS.filter((s) => s.name === 'tickets'), reader);
+    const { prompts } = await client.listPrompts();
+    // With "standards" out of scope nothing collides, so the name is bare here.
+    expect(prompts.map((p) => p.name)).toEqual(['refactor']);
+    expect(promptText(await client.getPrompt({ name: 'refactor' }))).toBe('Ticket refactor.');
+    await expect(client.getPrompt({ name: 'plain' })).rejects.toThrow(/Unknown prompt/);
+  });
+
+  it('leaves prompt files out of the loaded skill footer but keeps them readable', async () => {
+    const client = await connect(() => PROMPT_SKILLS, reader);
+    const text = firstText(await client.callTool({ name: 'standards' }));
+    expect(text).toContain('- reference.md');
+    expect(text).toContain('- prompts/notes.txt');
+    expect(text).not.toContain('prompts/refactor.md');
+    const { resources } = await client.listResources();
+    expect(resources.map((r) => r.uri)).toContain('skill://standards/prompts/refactor.md');
+  });
+
+  it('announces a changed prompt list on a live endpoint', async () => {
+    let fire = (): void => {};
+    const client = await connect(() => PROMPT_SKILLS, {
+      ...reader,
+      onSkillsChanged: (listener) => {
+        fire = listener;
+        return () => {};
+      },
+    });
+    expect(client.getServerCapabilities()?.prompts).toEqual({ listChanged: true });
+    let listChanged = 0;
+    client.setNotificationHandler(PromptListChangedNotificationSchema, async () => {
+      listChanged += 1;
+    });
+    fire();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(listChanged).toBe(1);
   });
 });
 

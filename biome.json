@@ -85,6 +85,7 @@
         "app/src/components/page.tsx",
         "app/src/components/page-header.tsx",
         "app/src/components/page-layout.tsx",
+        "app/src/components/password-field.tsx",
         "app/src/components/password-input.tsx",
         "app/src/components/query-state.tsx",
         "app/src/components/radio-group-field.tsx",

@@ -1,13 +1,13 @@
 import { slugSchema } from '@mcp-skills/shared';
+import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { InputField, useAppForm } from '@/components/app-form';
 import { FileArchive } from '@/components/app-icons';
-import { FormField } from '@/components/form-field';
 import { Alert } from '@/components/ui/alert';
 import { Code } from '@/components/ui/code';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import { FileText, Folder } from '@/components/ui/icons';
-import { Input } from '@/components/ui/input';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
@@ -22,6 +22,13 @@ export interface UploadStatus {
   pending: boolean;
   /** Something has been picked, so closing would lose it. */
   dirty: boolean;
+}
+
+/** A skill id must be a slug. */
+export function validateSkillId({ value }: { value: string }): string | undefined {
+  return slugSchema.safeParse(value).success
+    ? undefined
+    : 'Must be a lowercase slug (letters, digits, dots, dashes, underscores).';
 }
 
 /**
@@ -41,9 +48,27 @@ export function UploadSkillForm({
   const navigate = useNavigate();
   const importSkill = useImportSkill();
   const [upload, setUpload] = useState<NormalizedUpload | null>(null);
-  const [name, setName] = useState('');
+  const form = useAppForm({
+    defaultValues: { name: '' },
+    onSubmit: ({ value }) => {
+      if (!upload || upload.error || importSkill.isPending) {
+        return;
+      }
+      importSkill.mutate(
+        { name: value.name, format: upload.format, files: upload.files },
+        {
+          onSuccess: (skill) => {
+            onImported();
+            navigate({ to: '/skills/$name', params: { name: skill.name } });
+          },
+          onError: toast.apiError,
+        },
+      );
+    },
+  });
+  const name = useStore(form.store, (state) => state.values.name);
 
-  const nameValid = slugSchema.safeParse(name).success;
+  const nameValid = validateSkillId({ value: name }) === undefined;
   const ready = upload !== null && !upload.error && nameValid;
   const pending = importSkill.isPending;
   const dirty = upload !== null;
@@ -56,28 +81,12 @@ export function UploadSkillForm({
     try {
       const result = normalize();
       setUpload(result);
-      setName(result.defaultName);
+      form.setFieldValue('name', result.defaultName);
     } catch (error) {
       // A corrupt archive throws while it is unpacked.
       toast.apiError(error);
       setUpload(null);
     }
-  };
-
-  const submit = () => {
-    if (!upload || upload.error || !nameValid || pending) {
-      return;
-    }
-    importSkill.mutate(
-      { name, format: upload.format, files: upload.files },
-      {
-        onSuccess: (skill) => {
-          onImported();
-          navigate({ to: '/skills/$name', params: { name: skill.name } });
-        },
-        onError: toast.apiError,
-      },
-    );
   };
 
   return (
@@ -86,7 +95,7 @@ export function UploadSkillForm({
       className="flex flex-col gap-4 py-4"
       onSubmit={(event) => {
         event.preventDefault();
-        submit();
+        void form.handleSubmit();
       }}
     >
       <p className="text-sm text-muted-foreground">
@@ -118,11 +127,12 @@ export function UploadSkillForm({
 
       {upload && !upload.error && (
         <>
-          <FormField
+          <InputField
+            form={form}
+            name="name"
             label="Skill id"
             required
-            error={nameValid ? undefined : 'Must be a lowercase slug (letters, digits, dots, dashes, underscores).'}
-            control={<Input value={name} onChange={(event) => setName(event.target.value)} />}
+            validators={{ onMount: validateSkillId, onChange: validateSkillId }}
           />
 
           <div className="flex flex-col gap-1">

@@ -43,6 +43,8 @@ describe('GitSkillForm', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Link skill' }));
 
+    // Submitting goes through the form's async validation, so the request lands a tick later.
+    await waitFor(() => expect(mutate).toHaveBeenCalled());
     expect(mutate.mock.calls[0]?.[0]).toEqual({
       repo: 'https://github.com/cubicecho/cubeui',
       ref: 'main',
@@ -59,6 +61,7 @@ describe('GitSkillForm', () => {
     await userEvent.type(screen.getByLabelText(/^Skill id/), 'my-skill');
     await userEvent.click(screen.getByRole('button', { name: 'Link skill' }));
 
+    await waitFor(() => expect(mutate).toHaveBeenCalled());
     expect(mutate.mock.calls[0]?.[0]).toEqual({ repo: 'git@github.com:o/r.git', name: 'my-skill' });
   });
 

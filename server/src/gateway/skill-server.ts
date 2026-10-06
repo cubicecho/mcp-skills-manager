@@ -4,6 +4,8 @@ import {
   CallToolRequestSchema,
   CompleteRequestSchema,
   ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
@@ -39,21 +41,25 @@ import {
   SKILL_URI_TEMPLATE,
   skillResourceUri,
 } from './resource-uri.ts';
+import type { SkillPromptRef } from './skill-prompts.ts';
+import { fillPrompt, listPromptRefs, missingArguments, parsePrompt } from './skill-prompts.ts';
 import { renderIndex, renderSkill, skillTitle } from './skill-render.ts';
 import { searchSkills } from './skill-search.ts';
 
 /**
- * Server capabilities. `liveUpdates` toggles the two resource sub-capabilities
- * that only make sense on a long-lived transport (stdio): `listChanged` (the
- * served skill set changed on disk) and `subscribe` (per-resource change
- * notifications). The stateless HTTP path leaves them off — it cannot push and
- * re-lists fresh on every request anyway.
+ * Server capabilities. `liveUpdates` toggles the sub-capabilities that only
+ * make sense on a long-lived transport (stdio): `listChanged` (the served skill
+ * set changed on disk) for resources and prompts, and `subscribe` (per-resource
+ * change notifications). The stateless HTTP path leaves them off — it cannot
+ * push and re-lists fresh on every request anyway. `servesPrompts` is off when
+ * the endpoint cannot read skill files, since a prompt is one.
  */
-function skillCapabilities(liveUpdates: boolean) {
+function skillCapabilities(liveUpdates: boolean, servesPrompts: boolean) {
   return {
     capabilities: {
       tools: {},
       resources: liveUpdates ? { listChanged: true, subscribe: true } : {},
+      ...(servesPrompts ? { prompts: liveUpdates ? { listChanged: true } : {} } : {}),
       // Argument autocompletion for the resource templates below (skill names, file paths).
       completions: {},
     },
@@ -104,7 +110,8 @@ export interface SkillServerDeps {
   /**
    * Read a bundled supporting file's contents, so `dir`-skill files can be
    * exposed as `skill://<name>/<path>` resources independent of whether the
-   * authoring tools are enabled. Omit to not expose file resources at all.
+   * authoring tools are enabled, and so a skill's `prompts/*.md` files can be
+   * served as MCP prompts. Omit to expose neither file resources nor prompts.
    */
   readSupportingFile?: (skillName: string, relPath: string) => Promise<SkillFileRead>;
   /**
@@ -115,8 +122,8 @@ export interface SkillServerDeps {
   /**
    * Register a listener fired whenever the served skill set changes on disk, and
    * return an unsubscribe fn (called when the server closes). When present, the
-   * server advertises `resources.listChanged` + `subscribe` and pushes
-   * notifications. Only wire this on a long-lived transport (stdio) — the
+   * server advertises `listChanged` for resources and prompts plus resource
+   * `subscribe`, and pushes notifications. Only wire this on a long-lived transport (stdio) — the
    * stateless HTTP path cannot push and must omit it.
    */
   onSkillsChanged?: (listener: () => void) => () => void;
@@ -126,22 +133,27 @@ export interface SkillServerDeps {
  * Build an MCP Server that serves a set of skills. Each skill is exposed BOTH
  * as a tool (calling it returns the skill's Markdown so an agent can load it on
  * demand) and as a resource (`skill://<name>`), so clients using either
- * mechanism can reach every skill.
+ * mechanism can reach every skill. A skill's `prompts/*.md` files are served as
+ * MCP prompts.
  * @param deps - The endpoint's skill source, label and optional capabilities.
  * @returns The configured server, not yet connected to a transport.
  */
 export function createSkillServer(deps: SkillServerDeps): Server {
   const liveUpdates = Boolean(deps.onSkillsChanged);
+  const servesPrompts = deps.readSupportingFile !== undefined;
   const server = new Server(
     { name: `mcp-skills/${deps.label}`, version: SERVER_VERSION },
-    skillCapabilities(liveUpdates),
+    skillCapabilities(liveUpdates, servesPrompts),
   );
 
   registerToolHandlers(server, deps);
   registerResourceHandlers(server, deps);
+  if (deps.readSupportingFile) {
+    registerPromptHandlers(server, deps.getSkills, deps.readSupportingFile);
+  }
   registerCompletionHandler(server, deps);
   if (deps.onSkillsChanged) {
-    registerLiveUpdates(server, deps.onSkillsChanged);
+    registerLiveUpdates(server, deps.onSkillsChanged, servesPrompts);
   }
   return server;
 }
@@ -374,6 +386,72 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
 }
 
 /**
+ * Register `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
+ *
+ * @param server - The MCP server to register the handlers on.
+ * @param getSkills - Returns the skills this endpoint serves, so a prompt is only as visible as its skill.
+ * @param readSupportingFile - Reads a prompt file's contents.
+ */
+function registerPromptHandlers(
+  server: Server,
+  getSkills: SkillServerDeps['getSkills'],
+  readSupportingFile: NonNullable<SkillServerDeps['readSupportingFile']>,
+): void {
+  // Resolves to `undefined` for a file that cannot be served as a prompt: unreadable, or not text.
+  const readPrompt = async (ref: SkillPromptRef) => {
+    try {
+      const file = await readSupportingFile(ref.skillName, ref.path);
+      return file.binary ? undefined : parsePrompt(file.content);
+    } catch {
+      return undefined;
+    }
+  };
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    const refs = listPromptRefs(getSkills());
+    const parsed = await Promise.all(refs.map(readPrompt));
+    const prompts = [];
+    for (const [index, ref] of refs.entries()) {
+      const prompt = parsed[index];
+      if (prompt) {
+        prompts.push({
+          name: ref.name,
+          description: prompt.description ?? `Prompt from the "${ref.skillName}" skill.`,
+          arguments: prompt.arguments,
+        });
+      }
+    }
+    return { prompts };
+  });
+
+  server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+    const { name } = req.params;
+    const ref = listPromptRefs(getSkills()).find((candidate) => candidate.name === name);
+    const prompt = ref ? await readPrompt(ref) : undefined;
+    if (!prompt) {
+      throw new McpError(ErrorCode.InvalidParams, `Unknown prompt "${name}"`);
+    }
+    const given = req.params.arguments ?? {};
+    const missing = missingArguments(prompt.arguments, given);
+    if (missing.length > 0) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Prompt "${name}" is missing required argument: ${missing.join(', ')}`,
+      );
+    }
+    return {
+      description: prompt.description,
+      messages: [
+        {
+          role: 'user' as const,
+          content: { type: 'text' as const, text: fillPrompt(prompt.body, prompt.arguments, given) },
+        },
+      ],
+    };
+  });
+}
+
+/**
  * Register argument autocompletion for the resource templates: skill names for `{name}`, and a
  * skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
  * @param server - The MCP server to register the handler on.
@@ -411,8 +489,13 @@ function registerCompletionHandler(server: Server, deps: SkillServerDeps): void 
  * disk. Only for a long-lived transport (stdio).
  * @param server - The MCP server to register the handlers on.
  * @param onSkillsChanged - Registers a change listener and returns its unsubscribe function.
+ * @param servesPrompts - Whether the server advertises prompts, and so may announce that their list changed.
  */
-function registerLiveUpdates(server: Server, onSkillsChanged: NonNullable<SkillServerDeps['onSkillsChanged']>): void {
+function registerLiveUpdates(
+  server: Server,
+  onSkillsChanged: NonNullable<SkillServerDeps['onSkillsChanged']>,
+  servesPrompts: boolean,
+): void {
   const subscriptions = new Set<string>();
 
   server.setRequestHandler(SubscribeRequestSchema, async (req) => {
@@ -431,6 +514,11 @@ function registerLiveUpdates(server: Server, onSkillsChanged: NonNullable<SkillS
     server.sendResourceListChanged().catch((err: unknown) => {
       console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
     });
+    if (servesPrompts) {
+      server.sendPromptListChanged().catch((err: unknown) => {
+        console.warn(`prompts/list_changed notify failed: ${errorMessage(err)}`);
+      });
+    }
     for (const uri of subscriptions) {
       server.sendResourceUpdated({ uri }).catch((err: unknown) => {
         console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
