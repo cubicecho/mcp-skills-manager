@@ -371,7 +371,7 @@ export function SubmitButton({ children = 'Save', pendingLabel = 'Saving…', di
  * For the ninety percent of fields that need none of that, see {@link InputField} and the rest of
  * the exported fields, which are the same components with the render prop already written.
  */
-export const { useAppForm, withForm } = createFormHook({
+export const { useAppForm, withForm, withFieldGroup } = createFormHook({
   fieldContext,
   formContext,
   fieldComponents: {

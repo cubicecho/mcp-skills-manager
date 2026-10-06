@@ -1,8 +1,7 @@
 import { type GitSource, gitSourceSchema, parseGitSourceUrl } from '@mcp-skills/shared';
+import { withFieldGroup } from '@/components/app-form';
 import { FieldRow } from '@/components/field-row';
-import { FormField } from '@/components/form-field';
 import { Code } from '@/components/ui/code';
-import { Input } from '@/components/ui/input';
 
 /** The three source fields as typed, before validation. */
 export interface GitSourceDraft {
@@ -41,85 +40,91 @@ export function readGitSourceDraft(draft: GitSourceDraft): {
 }
 
 /**
+ * Build the validator for one source field.
+ * @param key - The field to validate.
+ * @returns A validator giving that field's message, or nothing when what was typed in it is allowed.
+ */
+function validateSourceField(key: keyof GitSourceDraft) {
+  return ({ value }: { value: string }): string | undefined =>
+    readGitSourceDraft({ ...EMPTY_GIT_SOURCE, [key]: value }).errors[key];
+}
+
+const validateRef = validateSourceField('ref');
+const validatePath = validateSourceField('path');
+const validateFilledRepo = validateSourceField('repo');
+
+/** An empty repo is not yet wrong: the form's submit stays disabled until there is one. */
+function validateRepo({ value }: { value: string }): string | undefined {
+  return value === '' ? undefined : validateFilledRepo({ value });
+}
+
+/**
  * The fields that say where a skill is fetched from: a repo, and optionally a ref and a folder.
  * Pasting a forge's folder URL (`…/tree/<ref>/<folder>`) into the repo field fills all three.
- * @param props.value - The fields as typed.
- * @param props.onValueChange - Called with the fields after each edit.
+ * @param props.form - The form holding the fields.
+ * @param props.fields - Where in the form's values the {@link GitSourceDraft} sits.
  * @param props.autoFocus - Focus the repo field when the fields mount.
  */
-export function GitSourceFields({
-  value,
-  onValueChange,
-  autoFocus,
-}: {
-  value: GitSourceDraft;
-  onValueChange: (value: GitSourceDraft) => void;
-  autoFocus?: boolean;
-}) {
-  const { errors } = readGitSourceDraft(value);
-  return (
-    <>
-      <FormField
-        label="Repository URL"
-        required
-        description={
-          <>
-            An <Code>https://</Code> or SSH clone URL. Paste a folder link from GitHub or GitLab to fill the branch and
-            folder too.
-          </>
-        }
-        // An untouched field is not yet wrong.
-        error={value.repo ? errors.repo : undefined}
-        control={
-          <Input
-            value={value.repo}
-            autoFocus={autoFocus}
-            placeholder="https://github.com/owner/repo"
-            onChange={(event) => onValueChange({ ...value, repo: event.target.value })}
-            onPaste={(event) => {
-              const parsed = parseGitSourceUrl(event.clipboardData.getData('text'));
-              if (parsed.ref) {
-                event.preventDefault();
-                onValueChange({ repo: parsed.repo, ref: parsed.ref, path: parsed.path ?? '' });
-              }
-            }}
-          />
-        }
-      />
-      <FieldRow
-        content={
-          <>
-            <FormField
-              label="Branch or tag"
-              description="Blank follows the default branch."
-              error={errors.ref}
-              control={
-                <Input
-                  value={value.ref}
-                  placeholder="main"
-                  onChange={(event) => onValueChange({ ...value, ref: event.target.value })}
-                />
-              }
-            />
-            <FormField
-              label="Folder"
+export const GitSourceFields = withFieldGroup({
+  defaultValues: EMPTY_GIT_SOURCE,
+  props: { autoFocus: false },
+  render: function GitSourceFieldGroup({ group, autoFocus }) {
+    return (
+      <>
+        <group.AppField name="repo" validators={{ onChange: validateRepo }}>
+          {(field) => (
+            <field.InputField
+              label="Repository URL"
+              required
               description={
                 <>
-                  Holds the <Code>SKILL.md</Code>. Blank is the repo root.
+                  An <Code>https://</Code> or SSH clone URL. Paste a folder link from GitHub or GitLab to fill the
+                  branch and folder too.
                 </>
               }
-              error={errors.path}
-              control={
-                <Input
-                  value={value.path}
-                  placeholder="skills/my-skill"
-                  onChange={(event) => onValueChange({ ...value, path: event.target.value })}
-                />
-              }
+              autoFocus={autoFocus}
+              placeholder="https://github.com/owner/repo"
+              onPaste={(event) => {
+                const parsed = parseGitSourceUrl(event.clipboardData.getData('text'));
+                if (parsed.ref) {
+                  event.preventDefault();
+                  group.setFieldValue('repo', parsed.repo);
+                  group.setFieldValue('ref', parsed.ref);
+                  group.setFieldValue('path', parsed.path ?? '');
+                }
+              }}
             />
-          </>
-        }
-      />
-    </>
-  );
-}
+          )}
+        </group.AppField>
+        <FieldRow
+          content={
+            <>
+              <group.AppField name="ref" validators={{ onChange: validateRef }}>
+                {(field) => (
+                  <field.InputField
+                    label="Branch or tag"
+                    description="Blank follows the default branch."
+                    placeholder="main"
+                  />
+                )}
+              </group.AppField>
+              <group.AppField name="path" validators={{ onChange: validatePath }}>
+                {(field) => (
+                  <field.InputField
+                    label="Folder"
+                    description={
+                      <>
+                        Holds the <Code>SKILL.md</Code>. Blank is the repo root.
+                      </>
+                    }
+                    placeholder="skills/my-skill"
+                  />
+                )}
+              </group.AppField>
+            </>
+          }
+        />
+      </>
+    );
+  },
+});

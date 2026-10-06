@@ -1,6 +1,8 @@
 import type { SkillDetail } from '@mcp-skills/shared';
+import { useStore } from '@tanstack/react-form';
 import { useState } from 'react';
 import { ActionButton } from '@/components/action-button';
+import { useAppForm } from '@/components/app-form';
 import { GitBranch } from '@/components/app-icons';
 import { DialogLayout } from '@/components/dialog-layout';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from '@/components/domain/skill/git-source-fields';
@@ -19,31 +21,34 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
   const toast = useToasts();
   const link = useLinkSkillSource(skill.name);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(EMPTY_GIT_SOURCE);
-  const { source } = readGitSourceDraft(draft);
+  const form = useAppForm({
+    defaultValues: { source: EMPTY_GIT_SOURCE },
+    onSubmit: ({ value }) => {
+      const { source } = readGitSourceDraft(value.source);
+      if (!source || link.isPending) {
+        return;
+      }
+      link.mutate(source, {
+        onSuccess: () => {
+          toast.success('Linked — content replaced from the repo');
+          handleOpenChange(false);
+        },
+        onError: toast.apiError,
+      });
+    },
+  });
+  const hasNoSource = useStore(form.store, (state) => readGitSourceDraft(state.values.source).source === undefined);
+  const isUnchanged = useStore(form.store, (state) => state.isDefaultValue);
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      setDraft(EMPTY_GIT_SOURCE);
+      form.reset();
     }
     setOpen(next);
   };
 
-  const submit = () => {
-    if (!source || link.isPending) {
-      return;
-    }
-    link.mutate(source, {
-      onSuccess: () => {
-        toast.success('Linked — content replaced from the repo');
-        handleOpenChange(false);
-      },
-      onError: toast.apiError,
-    });
-  };
-
   return (
-    <>
+    <form.AppForm>
       <ActionButton variant="ghost" size="icon-sm" label="Link to Git source" onClick={() => setOpen(true)}>
         <GitBranch />
       </ActionButton>
@@ -52,14 +57,14 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
         onOpenChange={handleOpenChange}
         title="Link to Git source"
         description="Point this skill at a folder in a git repo and keep it in step by syncing."
-        hasUnsavedChanges={draft.repo !== '' || draft.ref !== '' || draft.path !== ''}
+        hasUnsavedChanges={isUnchanged === false}
         content={
           <form
             id={LINK_SOURCE_FORM_ID}
             className="flex flex-col gap-4 py-1"
             onSubmit={(event) => {
               event.preventDefault();
-              submit();
+              void form.handleSubmit();
             }}
           >
             <Alert
@@ -67,7 +72,7 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
               title={`The content of "${skill.name}" is replaced`}
               description="Its Markdown and every supporting file are swapped for the folder in the repo, and it can no longer be edited here or by agents while linked. Its id, workspaces and settings are kept. Export a .zip first to keep a copy."
             />
-            <GitSourceFields value={draft} onValueChange={setDraft} autoFocus />
+            <GitSourceFields form={form} fields="source" autoFocus />
           </form>
         }
         footerActions={(close) => (
@@ -75,12 +80,12 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
-            <Button type="submit" form={LINK_SOURCE_FORM_ID} disabled={!source || link.isPending}>
+            <form.SubmitButton form={LINK_SOURCE_FORM_ID} disabled={hasNoSource || link.isPending}>
               <GitBranch /> {link.isPending ? 'Fetching…' : 'Link & replace'}
-            </Button>
+            </form.SubmitButton>
           </>
         )}
       />
-    </>
+    </form.AppForm>
   );
 }
