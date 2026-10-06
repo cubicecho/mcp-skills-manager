@@ -51,6 +51,8 @@ clients.
 - 🔍 **Discovery meta-tools** — `list_skills` and `search_skills` on every
   endpoint, plus `tags` on skills for organising and filtering
 - 🤖 **MCP authoring** — agents can create and refine their own skills over MCP
+- ⌨️ **Skill prompts** — a skill's `prompts/*.md` files are served as MCP
+  prompts, so a client can start the skill from a slash command
 - 🔧 **Tool modes** — advertise skills as one tool each (`per-skill`) or a
   single `load_skill` loader, globally or per workspace
 - 📁 **Two skill formats** — a flat `<name>.md` file, or a
@@ -149,6 +151,48 @@ An optional `tags` key (a comma-separated string or a YAML list) organises
 skills and feeds the `search_skills` filter. `readonly: true` stops agents from
 modifying the skill over MCP (the web UI and REST API can still edit it).
 Unknown frontmatter keys are preserved across round-trips.
+
+### Skill prompts
+
+A directory skill can carry **prompts**: each Markdown file directly inside its
+`prompts/` folder is served as an MCP prompt named after the file, on every
+endpoint that serves the skill. Clients that support MCP prompts offer them as
+slash commands (Claude Code shows `prompts/refactor.md` as
+`/mcp__<server>__refactor`), so a prompt is the way to start a skill by name
+instead of asking the agent to go and find it.
+
+`DATA_DIR/skills/coding-standards/prompts/refactor.md`:
+
+```markdown
+---
+description: Refactor a scope with the coding-standards workflow
+arguments:
+  - name: scope
+    description: Files, directory or concept to refactor
+    required: false
+---
+Refactor: {{scope}}
+
+Load the `coding-standards` skill and follow its refactor workflow.
+```
+
+- The frontmatter is optional. `description` is shown in the client's prompt
+  list; `arguments` declares what the prompt takes (`name`, and optionally
+  `description` and `required`).
+- `{{name}}` in the body is replaced by the argument of that name. An optional
+  argument that is left out becomes an empty string; a required one that is left
+  out fails the request. A placeholder that names no declared argument is left
+  as written.
+- The body is returned as a single user message.
+- The file name (without `.md`) is the prompt name, so it must be letters,
+  digits, `-` and `_`. Other files in `prompts/`, and files in its sub-folders,
+  are ordinary supporting files.
+- When two served skills have a prompt of the same name, the first skill by
+  sorted name keeps the bare name and each later one is served as
+  `<skill>__<name>`.
+- Prompt files are written and read like any other supporting file
+  (`write_skill_file`, the web UI, or on disk). They are left out of the
+  "bundled supporting files" list an agent sees when it loads the skill.
 
 ### Git-linked skills
 

@@ -1,6 +1,7 @@
 import type { Skill } from '@mcp-skills/shared';
 import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 import { fileResourceUri } from './resource-uri.ts';
+import { promptFileName } from './skill-prompts.ts';
 
 /** Normalize the `allowed-tools` frontmatter (a comma-separated string or a list) to a clean string array. */
 function allowedTools(skill: Skill): string[] {
@@ -47,7 +48,8 @@ export function renderSkill(skill: Skill): string {
     sections.push(`---\nSkill metadata:\n${metaLines.join('\n')}`);
   }
 
-  const files = bundledFiles(skill);
+  // A prompt file starts the skill from a slash command; it is not reading for an agent that has loaded it.
+  const files = bundledFiles(skill).filter((file) => promptFileName(file.path) === undefined);
   if (files.length > 0) {
     const list = files.map((f) => `- ${f.path} — resource \`${fileResourceUri(skill.name, f.path)}\``).join('\n');
     sections.push(

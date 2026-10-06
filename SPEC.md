@@ -34,6 +34,17 @@ large. ⭐ marks the highest-leverage picks.
       stateless server can't push); C3 below extends the same push to HTTP behind
       an opt-in stateful mode.
 
+- [x] **D1 · Skill prompts** — each `prompts/<name>.md` in a `dir` skill is
+      served as the MCP prompt `<name>` (`prompts/list`, `prompts/get`) on every
+      endpoint that serves the skill, so a client can start a skill from a slash
+      command. Optional frontmatter declares `description` and `arguments`;
+      `{{argument}}` placeholders in the body are substituted and the result is
+      returned as one user message. Two skills with the same prompt name: the
+      first by sorted name keeps the bare name, later ones are `<skill>__<name>`.
+      `prompts.listChanged` is advertised only with live updates.
+      Not done: the web UI treats a prompt file as any other supporting file, and
+      prompt arguments have no completions.
+
 ## Theme A — Better management UX
 
 - [ ] **A3 · "Preview as the agent sees it"** *(S)* — Show the exact

@@ -18,6 +18,18 @@ Skills come in two on-disk shapes, both supported:
 
 Both use YAML frontmatter (`name`, `description`) followed by the markdown body.
 
+A directory skill's **prompts** — each `prompts/<name>.md` — are served as MCP
+prompts (`prompts/list`, `prompts/get`) on every endpoint that serves the skill,
+which clients surface as slash commands. Optional frontmatter declares
+`description` and `arguments` (schema in `shared/src/skill-prompt.ts`);
+`{{argument}}` placeholders in the body are substituted and the body is returned
+as one user message. Naming, the collision rule (first skill by sorted name
+keeps the bare name, later ones are `<skill>__<name>`) and substitution are pure
+functions in `server/src/gateway/skill-prompts.ts`; the handlers are in
+`skill-server.ts` and read the files through `readSupportingFile`. Prompt files
+stay ordinary supporting files for the authoring tools and resources, and are
+only left out of the loaded skill's "Bundled supporting files" footer.
+
 **Agents can author their own skills over MCP** (self-improvement): every MCP
 endpoint also exposes authoring tools (`create_skill`, `update_skill`,
 `rename_skill`, `delete_skill`, `write_skill_file`, `read_skill_file`,
