@@ -238,6 +238,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.settings.authoringEnabled;
   }
 
+  /** The authoring tools left out of every MCP endpoint, by name (settings.disabledAuthoringTools). */
+  getDisabledAuthoringTools(): string[] {
+    return this.settings.disabledAuthoringTools;
+  }
+
   /** How skills are exposed as MCP tools — one tool per skill vs. a single loader tool (settings.skillToolMode). */
   getSkillToolMode(): SettingsFile['skillToolMode'] {
     return this.settings.skillToolMode;
@@ -258,6 +263,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return {
       authEnabled: this.settings.authEnabled,
       authoringEnabled: this.settings.authoringEnabled,
+      disabledAuthoringTools: this.settings.disabledAuthoringTools,
       skillToolMode: this.settings.skillToolMode,
       httpLiveUpdates: this.settings.httpLiveUpdates,
     };

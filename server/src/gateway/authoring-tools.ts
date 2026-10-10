@@ -1,8 +1,9 @@
-import type { Skill } from '@mcp-skills/shared';
+import type { AuthoringToolName, Skill } from '@mcp-skills/shared';
 import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
+import { applyReplacements, type Replacement } from '../skills/replacements.ts';
 import { resolveSkillName } from '../skills/skill-name.ts';
 import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 
@@ -29,7 +30,7 @@ const JSON_STRING_ARRAY = { type: 'array', items: { type: 'string' } } as const;
 /** One authoring tool: its advertised MCP definition plus the handler that runs it. */
 export interface AuthoringTool {
   definition: {
-    name: string;
+    name: AuthoringToolName;
     description: string;
     inputSchema: {
       type: 'object';
@@ -122,6 +123,13 @@ const updateArgs = z.object({
   global: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
+const editArgs = z.object({
+  name: z.string(),
+  path: skillRelPathSchema.optional(),
+  edits: z
+    .array(z.object({ old_text: z.string().min(1), new_text: z.string(), replace_all: z.boolean().optional() }))
+    .min(1),
+});
 const renameArgs = z.object({ name: z.string(), new_name: z.string() });
 const deleteArgs = z.object({ name: z.string() });
 const writeFileArgs = z.object({
@@ -160,6 +168,35 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           'Only a human can lift this in the web UI — do not retry; create a new skill instead if you need a variant.',
       );
     }
+  };
+
+  /**
+   * Swap passages of a skill's Markdown body, leaving its frontmatter as it is.
+   * @returns How many passages were swapped.
+   */
+  const editBody = async (name: string, replacements: Replacement[]): Promise<number> => {
+    const skill = store.getSkill(name);
+    if (!skill) {
+      throw new HttpError(404, `Unknown skill "${name}"`);
+    }
+    const { text, replaced } = applyReplacements(skill.body, replacements);
+    await store.updateSkill(name, { body: text });
+    return replaced;
+  };
+
+  /**
+   * Swap passages of one of a skill's supporting files, keeping the CRLF line endings of a file that has them.
+   * @returns How many passages were swapped.
+   */
+  const editSupportingFile = async (name: string, relPath: string, replacements: Replacement[]): Promise<number> => {
+    const file = await store.readSupportingFile(name, relPath);
+    if (file.binary) {
+      throw new HttpError(400, `"${relPath}" is a binary file: replace it whole with write_skill_file`);
+    }
+    const { text, replaced } = applyReplacements(file.content, replacements);
+    const stored = file.content.includes('\r\n') ? text.replaceAll('\n', '\r\n') : text;
+    await store.writeSupportingFile(name, relPath, Buffer.from(stored, 'utf8'));
+    return replaced;
   };
 
   return [
@@ -240,7 +277,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         description:
           'Update an existing skill in place: replace its `description` and/or its Markdown `body`, and/or ' +
           'toggle its `global` visibility on the root /mcp endpoint. Preserves the skill format, supporting ' +
-          'files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to ' +
+          'files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only ' +
+          'the passages that change. Use rename_skill to change the slug and write_skill_file to ' +
           'change supporting files. Skills marked read-only (`readOnly` in the catalogue) cannot be changed by ' +
           'this or any other authoring tool.',
         inputSchema: {
@@ -276,6 +314,65 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           }),
         );
         return `Updated skill "${skill.name}". ${whereVisible(skill, workspaceSlug)} ${fileSummary(skill)}`;
+      },
+    },
+    {
+      definition: {
+        name: 'edit_skill',
+        description:
+          'Change part of a skill without sending the rest of it: each edit swaps one exact passage (`old_text`) ' +
+          'for another (`new_text`), in the skill’s Markdown body, or in the supporting file at `path` when ' +
+          'given. `old_text` must match character for character, as the skill or read_skill_file returned it, ' +
+          'and be there exactly once unless `replace_all` is true, so include enough of the surrounding text to ' +
+          'make it unique. Edits are made in order, each on the result of the one before, and if any of them ' +
+          'does not apply nothing is written. An empty `new_text` deletes the passage. A passage that is not ' +
+          'found is answered with the nearest one the text does have.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { ...JSON_STRING, description: 'Slug of the skill to edit.' },
+            path: {
+              ...JSON_STRING,
+              description:
+                'Supporting file to edit, relative to the skill directory, e.g. "reference.md". Omit to edit the skill body.',
+            },
+            edits: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                properties: {
+                  old_text: { ...JSON_STRING, description: 'The passage to replace, exactly as it is in the text.' },
+                  new_text: { ...JSON_STRING, description: 'What replaces it; empty to delete the passage.' },
+                  replace_all: {
+                    type: 'boolean',
+                    description: 'Replace every occurrence of old_text rather than require exactly one.',
+                  },
+                },
+                required: ['old_text', 'new_text'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['name', 'edits'],
+          additionalProperties: false,
+        },
+      },
+      run: async (args) => {
+        const input = parseArgs(editArgs, args);
+        requireWritable(input.name);
+        const replacements = input.edits.map((edit) => ({
+          oldText: edit.old_text,
+          newText: edit.new_text,
+          replaceAll: edit.replace_all,
+        }));
+        const { path: relPath } = input;
+        if (relPath === undefined) {
+          const replaced = await guard(() => editBody(input.name, replacements));
+          return `Edited skill "${input.name}" (replaced ${replaced}).`;
+        }
+        const replaced = await guard(() => editSupportingFile(input.name, relPath, replacements));
+        return `Edited "${relPath}" in skill "${input.name}" (replaced ${replaced}).`;
       },
     },
     {
@@ -334,7 +431,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         name: 'write_skill_file',
         description:
           'Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). ' +
-          'Promotes a `file`-format skill to a directory automatically. Binary content must be base64-encoded.',
+          'To change part of a text file that is already there, use edit_skill with its `path`. Promotes a `file`-format skill to a directory automatically. Binary content must be base64-encoded.',
         inputSchema: {
           type: 'object',
           properties: {

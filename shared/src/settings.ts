@@ -16,6 +16,24 @@ export const skillToolModeSchema = z.enum(['per-skill', 'loader']);
 export type SkillToolMode = z.infer<typeof skillToolModeSchema>;
 
 /**
+ * The skill-authoring tools an MCP endpoint serves. `settings.disabledAuthoringTools` names the
+ * ones to leave out.
+ */
+export const authoringToolNameSchema = z.enum([
+  'create_skill',
+  'update_skill',
+  'edit_skill',
+  'rename_skill',
+  'delete_skill',
+  'write_skill_file',
+  'read_skill_file',
+  'create_skill_folder',
+  'move_skill_file',
+  'delete_skill_file',
+]);
+export type AuthoringToolName = z.infer<typeof authoringToolNameSchema>;
+
+/**
  * Schema for DATA_DIR/config/settings.json. Hand-editable; parsing is lenient
  * on unknown keys so user additions survive round-trips.
  */
@@ -35,6 +53,12 @@ export const settingsFileSchema = z
      * behind the same bearer auth as the rest of `/mcp`.
      */
     authoringEnabled: z.boolean().default(true),
+    /**
+     * Authoring tools left out of every MCP endpoint while authoring is enabled, by name (see
+     * authoringToolNameSchema). A name that is not an authoring tool is ignored, so a typo in a
+     * hand-edited file never stops the settings from loading.
+     */
+    disabledAuthoringTools: z.array(z.string()).default([]),
     /** Default for how skills are advertised as MCP tools; a workspace may override it. See skillToolModeSchema. */
     skillToolMode: skillToolModeSchema.default('per-skill'),
     /**
@@ -59,6 +83,7 @@ export type SettingsFile = z.infer<typeof settingsFileSchema>;
 export const settingsViewSchema = z.object({
   authEnabled: z.boolean(),
   authoringEnabled: z.boolean(),
+  disabledAuthoringTools: z.array(z.string()),
   skillToolMode: skillToolModeSchema,
   httpLiveUpdates: z.boolean(),
 });
@@ -68,6 +93,7 @@ export type SettingsView = z.infer<typeof settingsViewSchema>;
 export const updateSettingsRequestSchema = z
   .object({
     authoringEnabled: z.boolean().optional(),
+    disabledAuthoringTools: z.array(authoringToolNameSchema).optional(),
     skillToolMode: skillToolModeSchema.optional(),
     httpLiveUpdates: z.boolean().optional(),
   })

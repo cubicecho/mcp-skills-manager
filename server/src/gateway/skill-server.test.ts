@@ -81,23 +81,26 @@ describe('skill-server index tool', () => {
 
   it('returns a catalogue of metadata without any skill bodies', async () => {
     const text = firstText(await client.callTool({ name: 'list_skills' }));
-    const index = JSON.parse(text) as {
-      count: number;
-      skills: Array<{ name: string; tool: string; description: string; format: string; files: string[] }>;
-    };
 
-    expect(index.count).toBe(2);
-    expect(text).not.toContain('body'); // metadata only — no skill contents
-    expect(index.skills[0]).toEqual({
-      name: 'commit.messages',
-      tool: 'commit_messages',
-      description: 'Write conventional commit messages.',
-      format: 'file',
-      files: [],
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    // Directory skills list their supporting files but not sub-directories.
-    expect(index.skills[1]?.files).toEqual(['reference.md', 'scripts/fill.py']);
+    // One line per skill under the count: metadata only, and no sub-directories among the files.
+    expect(text).toBe(
+      [
+        'skills: 2',
+        'commit.messages (tool commit_messages; changed 2026-01-01): Write conventional commit messages.',
+        'pdf-forms (files: reference.md, scripts/fill.py; changed 2026-01-01): Fill and inspect PDF forms.',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps each skill to one line, with its tags, and says when there are none', async () => {
+    const tagged = await connect(() => [
+      skill({ name: 'solo', description: 'Line one.\n  Line two.', tags: ['a', 'b'] }),
+    ]);
+    expect(firstText(await tagged.callTool({ name: 'list_skills' }))).toBe(
+      'skills: 1\nsolo [#a #b] (changed 2026-01-01): Line one. Line two.',
+    );
+    const empty = await connect(() => []);
+    expect(firstText(await empty.callTool({ name: 'list_skills' }))).toBe('No skills.');
   });
 
   it('loads a skill body via the tool name from the catalogue', async () => {
@@ -109,8 +112,7 @@ describe('skill-server index tool', () => {
     let skills = [...SKILLS];
     const live = await connect(() => skills);
     skills = [skill({ name: 'solo' })];
-    const index = JSON.parse(firstText(await live.callTool({ name: 'list_skills' }))) as { count: number };
-    expect(index.count).toBe(1);
+    expect(firstText(await live.callTool({ name: 'list_skills' }))).toMatch(/^skills: 1\nsolo /);
   });
 });
 
@@ -144,8 +146,12 @@ describe('skill-server search tool', () => {
     skill({ name: 'grep-guide', description: 'Search code effectively.', body: '# grep-guide\n\nuse ripgrep' }),
   ];
 
+  /** The skill names of a catalogue: the first word of every line under the count. */
   const names = (text: string): string[] =>
-    (JSON.parse(text) as { skills: Array<{ name: string }> }).skills.map((s) => s.name);
+    text
+      .split('\n')
+      .slice(1)
+      .map((line) => line.split(' ')[0] ?? '');
 
   let client: Client;
   beforeEach(async () => {
@@ -198,6 +204,10 @@ describe('skill-server loader mode', () => {
     expect(tools[2]?.inputSchema.required).toEqual(['name']);
   });
 
+  it('leaves the per-skill tool name out of the catalogue, since load_skill takes the name', async () => {
+    expect(firstText(await client.callTool({ name: 'list_skills' }))).toContain('\ncommit.messages (changed ');
+  });
+
   it('loads any skill body by name through load_skill', async () => {
     const text = firstText(await client.callTool({ name: 'load_skill', arguments: { name: 'commit.messages' } }));
     expect(text).toContain('# commit.messages');
@@ -232,13 +242,10 @@ describe('skill-server metadata surfacing', () => {
 
   it('includes license and allowedTools in the list_skills catalogue', async () => {
     const client = await connect(() => META_SKILLS);
-    const index = JSON.parse(firstText(await client.callTool({ name: 'list_skills' }))) as {
-      skills: Array<{ name: string; license?: string; allowedTools?: string[] }>;
-    };
-    expect(index.skills[0]).toMatchObject({ license: 'Apache-2.0', allowedTools: ['Read', 'Bash'] });
-    // Comma-separated strings are split and trimmed; skills without a license omit the key.
-    expect(index.skills[1]?.allowedTools).toEqual(['Read', 'Write', 'Edit']);
-    expect(index.skills[1]).not.toHaveProperty('license');
+    const [, licensed, csvTools] = firstText(await client.callTool({ name: 'list_skills' })).split('\n');
+    expect(licensed).toContain('(allowed tools: Read, Bash; license Apache-2.0; changed ');
+    // Comma-separated strings are split and trimmed; skills without a license say nothing of one.
+    expect(csvTools).toContain('(allowed tools: Read, Write, Edit; changed ');
   });
 
   it('appends a metadata footer to the rendered skill body', async () => {
