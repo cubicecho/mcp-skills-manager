@@ -96,12 +96,26 @@ describe('management REST API', () => {
       expect(before.body).toEqual({
         authEnabled: true,
         authoringEnabled: true,
+        disabledAuthoringTools: [],
         skillToolMode: 'per-skill',
         httpLiveUpdates: false,
       });
       const after = await request(api).patch('/api/settings').send({ skillToolMode: 'loader' });
       expect(after.status).toBe(200);
       expect(after.body.skillToolMode).toBe('loader');
+    });
+
+    it('disables authoring tools by name, and rejects a name that is not an authoring tool', async () => {
+      const set = await request(api)
+        .patch('/api/settings')
+        .send({ disabledAuthoringTools: ['delete_skill'] });
+      expect(set.body.disabledAuthoringTools).toEqual(['delete_skill']);
+
+      const typo = await request(api)
+        .patch('/api/settings')
+        .send({ disabledAuthoringTools: ['delete_skil'] });
+      expectValidationFailure(typo, 'Invalid enum value');
+      expect(store.getDisabledAuthoringTools()).toEqual(['delete_skill']);
     });
 
     it('rejects an unknown settings key and leaves settings alone', async () => {

@@ -20,11 +20,16 @@ Both use YAML frontmatter (`name`, `description`) followed by the markdown body.
 
 **Agents can author their own skills over MCP** (self-improvement): every MCP
 endpoint also exposes authoring tools (`create_skill`, `update_skill`,
-`rename_skill`, `delete_skill`, `write_skill_file`, `read_skill_file`,
+`edit_skill`, `rename_skill`, `delete_skill`, `write_skill_file`, `read_skill_file`,
 `create_skill_folder`, `move_skill_file`, `delete_skill_file`) that delegate to
 the same `ConfigStore` mutators as the REST API. They live in
 `server/src/gateway/authoring-tools.ts` and are gated on the
-`settings.authoringEnabled` flag (default true). A skill authored **via a
+`settings.authoringEnabled` flag (default true), less any tool named in
+`settings.disabledAuthoringTools`; the names are `authoringToolNameSchema` in
+`shared/src/settings.ts`. `edit_skill` swaps exact passages of a skill's body, or
+of a supporting file given a `path` (`server/src/skills/replacements.ts`): all of
+its edits are written or none. `list_skills` and `search_skills` answer in text,
+one line per skill (`renderIndex` in `skill-render.ts`), not JSON. A skill authored **via a
 workspace endpoint** is scoped to that workspace by default: written with a
 `global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
 see `ConfigStore.getGlobalSkills`) and appended to the workspace's member list.

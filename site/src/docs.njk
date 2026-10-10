@@ -122,7 +122,7 @@ description: Write clear, conventional git commit messages.
             <tbody>
               <tr><td><code>GET /api/status</code></td><td>Version, uptime, skill/workspace counts, auth mode, port</td></tr>
               <tr><td><code>GET /api/settings</code></td><td>Read auth/authoring toggles, tool mode, live updates</td></tr>
-              <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>skillToolMode</code> / <code>httpLiveUpdates</code></td></tr>
+              <tr><td><code>PATCH /api/settings</code></td><td>Update <code>authoringEnabled</code> / <code>disabledAuthoringTools</code> / <code>skillToolMode</code> / <code>httpLiveUpdates</code></td></tr>
               <tr><td><code>GET /api/skills</code></td><td>List skills (summaries)</td></tr>
               <tr><td><code>POST /api/skills</code></td><td>Create a skill</td></tr>
               <tr><td><code>POST /api/skills/import</code></td><td>Import an uploaded <code>.md</code> / directory / zip</td></tr>
@@ -157,10 +157,10 @@ description: Write clear, conventional git commit messages.
           false). Disabled workspaces return 404; auth failures return 401 before any MCP handling.</p>
 
         <h3 id="list-skills">Discovering skills</h3>
-        <p>Every endpoint exposes two discovery meta-tools. <code>list_skills</code> returns a JSON catalogue of the
-          available skills — <code>name</code>, <code>description</code>, <code>format</code>, <code>tags</code>,
-          supporting <code>files</code>, <code>updatedAt</code>, and the <code>tool</code> name to call to load each
-          — without any skill bodies. <code>search_skills</code> returns the same shape, filtered by a free-text
+        <p>Every endpoint exposes two discovery meta-tools. <code>list_skills</code> returns a text catalogue of the
+          available skills, one line each — <code>name [#tags] (notes): description</code>, the notes being its
+          supporting files, <code>read-only</code> when agents cannot change it, and when it last changed —
+          without any skill bodies. <code>search_skills</code> returns the same lines, filtered by a free-text
           <code>query</code> (matched against name, description, tags, and body) and/or a <code>tags</code> filter.
           An agent discovers what's on offer first, then calls the named tool (or reads the matching
           <code>skill://&lt;name&gt;</code> resource) to pull the full contents.</p>
@@ -191,12 +191,14 @@ description: Write clear, conventional git commit messages.
 
         <h3 id="authoring">Authoring over MCP</h3>
         <p>When authoring is enabled (the default), every endpoint also exposes tools for agents to write and refine
-          their own skills — <code>create_skill</code>, <code>update_skill</code>, <code>rename_skill</code>,
-          <code>delete_skill</code>, and supporting-file tools (<code>write_skill_file</code>,
+          their own skills — <code>create_skill</code>, <code>update_skill</code>, <code>edit_skill</code>,
+          <code>rename_skill</code>, <code>delete_skill</code>, and supporting-file tools (<code>write_skill_file</code>,
           <code>read_skill_file</code>, <code>create_skill_folder</code>, <code>move_skill_file</code>,
           <code>delete_skill_file</code>). A skill authored through a workspace endpoint is scoped to that workspace by
-          default; skills authored at the root <code>/mcp</code> are global. Toggle the whole feature with
-          <code>authoringEnabled</code> in settings, or protect a single skill by marking it <strong>read-only</strong>
+          default; skills authored at the root <code>/mcp</code> are global. <code>edit_skill</code> swaps exact passages of a
+          skill's body, or of a supporting file, so a small change does not resend the whole text; its edits are all
+          written or none is. Toggle the whole feature with <code>authoringEnabled</code> in settings, leave single
+          tools out by naming them in <code>disabledAuthoringTools</code>, or protect a single skill by marking it <strong>read-only</strong>
           (the toggle in the skill editor, or <code>readonly: true</code> in its frontmatter): agents can still load
           it, but every authoring tool refuses to edit, rename or delete it or anything in its folder.</p>
 

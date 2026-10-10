@@ -17,10 +17,10 @@ Every skill is exposed two ways at once:
   always over stdio, and over HTTP when `httpLiveUpdates` is enabled.
 
 Every endpoint also serves two meta-tools for **discovery**: `list_skills`
-returns a JSON catalogue of the available skills — name, description, format,
-tags, supporting files, and the tool name to call to load each — with no bodies,
-and `search_skills` filters that catalogue by a free-text query and/or tags, so
-an agent can find what's relevant by intent before loading anything.
+returns a text catalogue of the available skills, one line each — name, tags,
+supporting files, last change and description — with no bodies, and
+`search_skills` filters that catalogue by a free-text query and/or tags, so an
+agent can find what's relevant by intent before loading anything.
 
 Skills are advertised as tools in one of two modes (a global default, optionally
 overridden per workspace): **per-skill** (the default — one no-arg tool per skill)
@@ -28,9 +28,12 @@ or **loader** (a single `load_skill(name)` tool that keeps the tool footprint
 fixed no matter how many skills exist).
 
 Agents can also **author skills over MCP**: every endpoint exposes authoring
-tools (`create_skill`, `update_skill`, `rename_skill`, `delete_skill`, plus
-supporting-file tools) so an agent can write and refine its own skills. These
-are gated on a setting (on by default). To protect an individual skill, mark it
+tools (`create_skill`, `update_skill`, `edit_skill`, `rename_skill`,
+`delete_skill`, plus supporting-file tools) so an agent can write and refine its
+own skills. `edit_skill` swaps exact passages of a skill's body or of one of its
+supporting files, so a small change does not resend the whole text. These are
+gated on a setting (on by default), and `disabledAuthoringTools` in
+`settings.json` leaves named tools out while the rest stay. To protect an individual skill, mark it
 **read-only** (the toggle in the skill editor, or `readonly: true` in its
 frontmatter): agents can still load it, but every authoring tool refuses to
 edit, rename or delete it — or, for a directory skill, anything in its folder.
@@ -257,7 +260,7 @@ All routes require the bearer token (unless `SECURE_LOCAL_NET=true`).
 | --- | --- | --- |
 | `GET` | `/api/status` | Version, uptime, skill/workspace counts, auth mode, port |
 | `GET` | `/api/settings` | Read settings (auth/authoring toggles, tool mode, live updates) |
-| `PATCH` | `/api/settings` | Update `authoringEnabled` / `skillToolMode` / `httpLiveUpdates` |
+| `PATCH` | `/api/settings` | Update `authoringEnabled` / `disabledAuthoringTools` / `skillToolMode` / `httpLiveUpdates` |
 | `GET` | `/api/skills` | List skills (summaries) |
 | `POST` | `/api/skills` | Create a skill |
 | `POST` | `/api/skills/import` | Import an uploaded `.md` / directory / `.zip` |

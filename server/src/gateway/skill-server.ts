@@ -91,8 +91,8 @@ export interface SkillServerDeps {
   label: string;
   /**
    * When set, this endpoint also exposes skill-authoring tools (create/update/…),
-   * gated at call time on the store's `authoringEnabled` setting. Omit for a
-   * strictly read-only server.
+   * gated at call time on the store's `authoringEnabled` and `disabledAuthoringTools`
+   * settings. Omit for a strictly read-only server.
    */
   authoring?: AuthoringDeps;
   /**
@@ -165,11 +165,17 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
   const findByToolName = (name: string): Skill | undefined =>
     deps.getSkills().find((s) => skillToolName(s.name) === name);
 
-  // Authoring tools are built once (closures over the store); whether they are
-  // actually served is decided live per request via `authoringEnabled`.
+  // Authoring tools are built once (closures over the store); which of them are actually served is
+  // decided live per request, from `authoringEnabled` and `disabledAuthoringTools`.
   const authoringTools: AuthoringTool[] = deps.authoring ? buildAuthoringTools(deps.authoring) : [];
-  const authoringEnabled = (): boolean => Boolean(deps.authoring?.store.isAuthoringEnabled());
-  const activeAuthoringTools = (): AuthoringTool[] => (authoringEnabled() ? authoringTools : []);
+  const activeAuthoringTools = (): AuthoringTool[] => {
+    const store = deps.authoring?.store;
+    if (!store?.isAuthoringEnabled()) {
+      return [];
+    }
+    const disabled = store.getDisabledAuthoringTools();
+    return authoringTools.filter((tool) => disabled.includes(tool.definition.name) === false);
+  };
   const skillToolMode = (): SkillToolMode => deps.getSkillToolMode?.() ?? 'per-skill';
   // Tool names that must never be shadowed by a same-named skill: the meta-tool,
   // any active authoring tools, and (in loader mode) the loader tool.
@@ -215,13 +221,13 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
-      return textResult(renderIndex(deps.getSkills()));
+      return textResult(renderIndex(deps.getSkills(), skillToolMode()));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
       const args = req.params.arguments ?? {};
       const query = typeof args.query === 'string' ? args.query : '';
       const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
-      return textResult(renderIndex(searchSkills(deps.getSkills(), query, tags)));
+      return textResult(renderIndex(searchSkills(deps.getSkills(), query, tags), skillToolMode()));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const raw = req.params.arguments?.name;

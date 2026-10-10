@@ -18,12 +18,20 @@ export const LOAD_TOOL_NAME = 'load_skill';
 /**
  * Name of the search meta-tool: full-text lookup over the catalogue (name,
  * description, tags, and body) so an agent can find relevant skills by intent
- * without loading every body. Returns the same metadata shape as `list_skills`.
+ * without loading every body. Returns the same catalogue lines as `list_skills`.
  */
 export const SEARCH_TOOL_NAME = 'search_skills';
 
 /** JSON Schema for a tool that takes no arguments. */
 export const NO_ARGS_SCHEMA: Tool['inputSchema'] = { type: 'object', properties: {}, additionalProperties: false };
+
+/** How an agent loads a skill it found in the catalogue, by how the endpoint advertises skills. */
+const HOW_TO_LOAD: Record<SkillToolMode, string> = {
+  loader: 'call `load_skill` with the name of each to fetch its full contents.',
+  'per-skill':
+    'call the tool named after each to fetch its full contents (its notes say `tool …` where that name ' +
+    'differs from the skill’s).',
+};
 
 /**
  * Build the definition of the catalogue tool.
@@ -34,11 +42,10 @@ export function indexToolDefinition(mode: SkillToolMode): Tool {
   return {
     name: INDEX_TOOL_NAME,
     description:
-      'List every skill available from this endpoint with its name, description, format, and supporting ' +
-      'files — without loading any skill bodies. Call this first to decide which skill(s) to load, then ' +
-      (mode === 'loader'
-        ? 'call `load_skill` with the `name` of each entry to fetch that skill’s full contents.'
-        : "call the tool named in each entry's `tool` field to fetch that skill's full contents."),
+      'List every skill available from this endpoint, one per line and without loading any skill bodies: ' +
+      '`name [#tags] (notes): description`. The notes give its supporting files, `read-only` when the ' +
+      'authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to ' +
+      `load, then ${HOW_TO_LOAD[mode]}`,
     inputSchema: NO_ARGS_SCHEMA,
   };
 }
@@ -47,10 +54,10 @@ export function indexToolDefinition(mode: SkillToolMode): Tool {
 export const SEARCH_TOOL_DEFINITION: Tool = {
   name: SEARCH_TOOL_NAME,
   description:
-    'Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no ' +
-    'bodies). Provide a free-text `query` (matched against each skill’s name, description, tags, and body) ' +
-    'and/or a `tags` filter. Use this instead of `list_skills` when you know roughly what you need but not ' +
-    'the exact skill name; then load a match by its `tool`/`name` as usual.',
+    'Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of ' +
+    '`list_skills` (metadata only, no bodies). Provide a free-text `query` (matched against each skill’s ' +
+    'name, description, tags, and body) and/or a `tags` filter. Use this instead of `list_skills` when you ' +
+    'know roughly what you need but not the exact skill name; then load a match as usual.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -1,4 +1,4 @@
-import type { Skill } from '@mcp-skills/shared';
+import type { Skill, SkillToolMode } from '@mcp-skills/shared';
 import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
 import { fileResourceUri } from './resource-uri.ts';
 
@@ -59,24 +59,41 @@ export function renderSkill(skill: Skill): string {
   return sections.join('\n\n');
 }
 
-/** One catalogue entry: the metadata an agent needs to decide whether to load a skill (never the body). */
-function indexEntry(skill: Skill) {
-  return {
-    name: skill.name,
-    tool: skillToolName(skill.name),
-    description: skill.description,
-    format: skill.format,
-    files: bundledFiles(skill).map((f) => f.path),
-    updatedAt: skill.updatedAt,
-    ...(skill.tags.length > 0 ? { tags: skill.tags } : {}),
-    // Only flagged when set, so an agent knows up front that the authoring tools will refuse this skill —
-    // because a human marked it read-only, or because its content is owned by a git source.
-    ...(skill.readOnly || skill.source ? { readOnly: true } : {}),
-    ...skillMeta(skill),
-  };
+/** The characters of an ISO timestamp that are its date. */
+const DATE_CHARS = '2026-01-01'.length;
+
+/** One catalogue line: the metadata an agent needs to decide whether to load a skill (never the body). */
+function indexLine(skill: Skill, mode: SkillToolMode): string {
+  const tags = skill.tags.length > 0 ? ` [${skill.tags.map((tag) => `#${tag}`).join(' ')}]` : '';
+  const toolName = skillToolName(skill.name);
+  const loadsUnderAnotherName = mode === 'per-skill' && toolName !== skill.name;
+  // Flagged so an agent knows up front that the authoring tools will refuse this skill — because a
+  // human marked it read-only, or because its content is owned by a git source.
+  const authoringIsRefused = skill.readOnly || skill.source !== undefined;
+  const files = bundledFiles(skill).map((file) => file.path);
+  const meta = skillMeta(skill);
+  const notes = [
+    ...(loadsUnderAnotherName ? [`tool ${toolName}`] : []),
+    ...(authoringIsRefused ? ['read-only'] : []),
+    ...(files.length > 0 ? [`files: ${files.join(', ')}`] : []),
+    ...(meta.allowedTools ? [`allowed tools: ${meta.allowedTools.join(', ')}`] : []),
+    ...(meta.license ? [`license ${meta.license}`] : []),
+    `changed ${skill.updatedAt.slice(0, DATE_CHARS)}`,
+  ];
+  const description = skill.description ? `: ${skill.description.trim().replace(/\s+/g, ' ')}` : '';
+  return `${skill.name}${tags} (${notes.join('; ')})${description}`;
 }
 
-/** The JSON catalogue returned by the index tool: every skill's metadata, no bodies. */
-export function renderIndex(skills: Skill[]): string {
-  return JSON.stringify({ count: skills.length, skills: skills.map(indexEntry) }, null, 2);
+/**
+ * The catalogue returned by the index and search tools: a line that counts the skills, then one
+ * line per skill. Text rather than JSON, since an agent pays for every character of it.
+ * @param skills - The skills to list.
+ * @param mode - How the endpoint advertises skills; a per-skill tool name is only shown under `per-skill`.
+ * @returns The catalogue text, with no skill bodies.
+ */
+export function renderIndex(skills: Skill[], mode: SkillToolMode): string {
+  if (skills.length === 0) {
+    return 'No skills.';
+  }
+  return [`skills: ${skills.length}`, ...skills.map((skill) => indexLine(skill, mode))].join('\n');
 }

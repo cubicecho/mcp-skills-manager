@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { authoringToolNameSchema } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -170,6 +171,7 @@ describe('MCP authoring tools', () => {
 
     const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
       { name: 'update_skill', arguments: { name: 'locked', body: 'hacked' } },
+      { name: 'edit_skill', arguments: { name: 'locked', edits: [{ old_text: 'original', new_text: 'hacked' }] } },
       { name: 'rename_skill', arguments: { name: 'locked', new_name: 'unlocked' } },
       { name: 'delete_skill', arguments: { name: 'locked' } },
       { name: 'write_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md', content: 'hacked' } },
@@ -198,11 +200,9 @@ describe('MCP authoring tools', () => {
         await client.callTool({ name: 'read_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md' } }),
       ),
     ).toBe('notes');
-    const catalogue = JSON.parse(firstText(await client.callTool({ name: 'list_skills' }))) as {
-      skills: Array<{ name: string; readOnly?: boolean }>;
-    };
-    expect(catalogue.skills.find((s) => s.name === 'locked')?.readOnly).toBe(true);
-    expect(catalogue.skills.find((s) => s.name === 'getting-started')).not.toHaveProperty('readOnly');
+    const catalogue = firstText(await client.callTool({ name: 'list_skills' }));
+    expect(catalogue).toMatch(/^locked \(read-only; /m);
+    expect(catalogue).toMatch(/^getting-started \((?!read-only)/m);
   });
 
   it('refuses every mutating tool on a git-linked skill, and flags it in the catalogue', async () => {
@@ -212,6 +212,11 @@ describe('MCP authoring tools', () => {
     const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
       { name: 'update_skill', arguments: { name: 'linked', body: 'hacked' } },
       { name: 'update_skill', arguments: { name: 'linked', global: false } },
+      { name: 'edit_skill', arguments: { name: 'linked', edits: [{ old_text: 'upstream', new_text: 'hacked' }] } },
+      {
+        name: 'edit_skill',
+        arguments: { name: 'linked', path: 'notes.md', edits: [{ old_text: 'notes', new_text: 'hacked' }] },
+      },
       { name: 'rename_skill', arguments: { name: 'linked', new_name: 'unlinked' } },
       { name: 'delete_skill', arguments: { name: 'linked' } },
       { name: 'write_skill_file', arguments: { skill: 'linked', path: 'new.md', content: 'new' } },
@@ -227,10 +232,7 @@ describe('MCP authoring tools', () => {
     expect(store.getSkill('linked')?.files.map((f) => f.path)).toEqual(['notes.md']);
 
     expect(firstText(await client.callTool({ name: 'linked' }))).toContain('upstream');
-    const catalogue = JSON.parse(firstText(await client.callTool({ name: 'list_skills' }))) as {
-      skills: Array<{ name: string; readOnly?: boolean }>;
-    };
-    expect(catalogue.skills.find((s) => s.name === 'linked')?.readOnly).toBe(true);
+    expect(firstText(await client.callTool({ name: 'list_skills' }))).toMatch(/^linked \(read-only; /m);
   });
 
   it('gives agents no way to lift the read-only flag, and allows edits again once a human does', async () => {
@@ -298,6 +300,103 @@ describe('MCP authoring tools', () => {
       `"Renamed skill "outsider" to "insider". It is served globally on the root /mcp endpoint and included in workspace "examples". Load it by calling the tool named "insider"."`,
     );
     expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started', 'insider']);
+  });
+
+  it('edits passages of a skill body, leaving the rest and the frontmatter as they were', async () => {
+    const client = await connect(store);
+    await client.callTool({
+      name: 'create_skill',
+      arguments: {
+        name: 'backups',
+        description: 'Backups',
+        body: '# Backups\n\nRun pg_restore twice.\n',
+        tags: ['ops'],
+      },
+    });
+
+    const text = firstText(
+      await client.callTool({
+        name: 'edit_skill',
+        arguments: {
+          name: 'backups',
+          edits: [
+            { old_text: 'twice', new_text: 'once' },
+            { old_text: '# Backups', new_text: '# Restores' },
+          ],
+        },
+      }),
+    );
+
+    expect(text).toBe('Edited skill "backups" (replaced 2).');
+    const skill = store.getSkill('backups');
+    expect(skill?.body.trim()).toBe('# Restores\n\nRun pg_restore once.');
+    expect(skill).toMatchObject({ description: 'Backups', tags: ['ops'] });
+  });
+
+  it('writes none of the edits when one does not apply, and shows the nearest passage', async () => {
+    const client = await connect(store);
+    await client.callTool({ name: 'create_skill', arguments: { name: 'backups', body: 'Run pg_restore twice.' } });
+
+    const res = await client.callTool({
+      name: 'edit_skill',
+      arguments: {
+        name: 'backups',
+        edits: [
+          { old_text: 'twice', new_text: 'once' },
+          { old_text: 'Run  pg_restore', new_text: 'Use pg_restore' },
+        ],
+      },
+    });
+
+    expect((res as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(res)).toMatch(/^edit 2 of 2: old_text is not in the text.*\nRun pg_restore$/s);
+    expect(store.getSkill('backups')?.body.trim()).toBe('Run pg_restore twice.');
+  });
+
+  it('edits a supporting file by path, keeping its CRLF line endings, and refuses a binary one', async () => {
+    const client = await connect(store);
+    await client.callTool({ name: 'create_skill', arguments: { name: 'backups', body: 'b' } });
+    await store.writeSupportingFile('backups', 'notes.md', Buffer.from('One\r\nTwo\r\n'));
+    await store.writeSupportingFile('backups', 'logo.bin', Buffer.from([0, 1, 2, 0]));
+
+    const text = firstText(
+      await client.callTool({
+        name: 'edit_skill',
+        arguments: { name: 'backups', path: 'notes.md', edits: [{ old_text: 'One\nTwo', new_text: '1\n2' }] },
+      }),
+    );
+    expect(text).toBe('Edited "notes.md" in skill "backups" (replaced 1).');
+    expect((await store.readSupportingFile('backups', 'notes.md')).content).toBe('1\r\n2\r\n');
+
+    const binary = await client.callTool({
+      name: 'edit_skill',
+      arguments: { name: 'backups', path: 'logo.bin', edits: [{ old_text: 'a', new_text: 'b' }] },
+    });
+    expect((binary as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(binary)).toContain('binary file');
+  });
+
+  it('serves an authoring tool for every name the settings can disable', async () => {
+    const client = await connect(store);
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining([...authoringToolNameSchema.options]));
+    // list_skills, search_skills and the starter skill are the only others.
+    expect(names).toHaveLength(authoringToolNameSchema.options.length + 3);
+  });
+
+  it('leaves out the authoring tools named in disabledAuthoringTools, and only those', async () => {
+    await store.updateSettings({ disabledAuthoringTools: ['delete_skill', 'no_such_tool'] });
+    const client = await connect(store);
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).not.toContain('delete_skill');
+    expect(names).toContain('create_skill');
+    expect(names).toContain('edit_skill');
+
+    await client.callTool({ name: 'create_skill', arguments: { name: 'keeper', body: 'b' } });
+    await expect(client.callTool({ name: 'delete_skill', arguments: { name: 'keeper' } })).rejects.toThrow(
+      /Unknown skill tool/,
+    );
+    expect(store.getSkill('keeper')).toBeDefined();
   });
 
   it('omits authoring tools when authoringEnabled is false', async () => {

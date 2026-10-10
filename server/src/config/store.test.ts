@@ -343,7 +343,13 @@ describe('ConfigStore skillToolMode resolution', () => {
   it('omits the auth token from the settings view', async () => {
     const view = store.getSettingsView();
     expect(view).not.toHaveProperty('authToken');
-    expect(Object.keys(view).sort()).toEqual(['authEnabled', 'authoringEnabled', 'httpLiveUpdates', 'skillToolMode']);
+    expect(Object.keys(view).sort()).toEqual([
+      'authEnabled',
+      'authoringEnabled',
+      'disabledAuthoringTools',
+      'httpLiveUpdates',
+      'skillToolMode',
+    ]);
   });
 });
 

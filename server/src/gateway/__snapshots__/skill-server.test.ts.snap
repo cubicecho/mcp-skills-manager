@@ -3,7 +3,7 @@
 exports[`skill-server advertised tools with authoring on > pins every tool definition in loader mode 1`] = `
 [
   {
-    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call \`load_skill\` with the \`name\` of each entry to fetch that skill’s full contents.",
+    "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call \`load_skill\` with the name of each to fetch its full contents.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -12,7 +12,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -96,7 +96,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill",
   },
   {
-    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -130,6 +130,54 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
       "type": "object",
     },
     "name": "update_skill",
+  },
+  {
+    "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "new_text": {
+                "description": "What replaces it; empty to delete the passage.",
+                "type": "string",
+              },
+              "old_text": {
+                "description": "The passage to replace, exactly as it is in the text.",
+                "type": "string",
+              },
+              "replace_all": {
+                "description": "Replace every occurrence of old_text rather than require exactly one.",
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "old_text",
+              "new_text",
+            ],
+            "type": "object",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "name": {
+          "description": "Slug of the skill to edit.",
+          "type": "string",
+        },
+        "path": {
+          "description": "Supporting file to edit, relative to the skill directory, e.g. "reference.md". Omit to edit the skill body.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "edits",
+      ],
+      "type": "object",
+    },
+    "name": "edit_skill",
   },
   {
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
@@ -171,7 +219,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill",
   },
   {
-    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -304,7 +352,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
 exports[`skill-server advertised tools with authoring on > pins every tool definition in per-skill mode 1`] = `
 [
   {
-    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call the tool named in each entry's \`tool\` field to fetch that skill's full contents.",
+    "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call the tool named after each to fetch its full contents (its notes say \`tool …\` where that name differs from the skill’s).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -313,7 +361,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -380,7 +428,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill",
   },
   {
-    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -414,6 +462,54 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
       "type": "object",
     },
     "name": "update_skill",
+  },
+  {
+    "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "new_text": {
+                "description": "What replaces it; empty to delete the passage.",
+                "type": "string",
+              },
+              "old_text": {
+                "description": "The passage to replace, exactly as it is in the text.",
+                "type": "string",
+              },
+              "replace_all": {
+                "description": "Replace every occurrence of old_text rather than require exactly one.",
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "old_text",
+              "new_text",
+            ],
+            "type": "object",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "name": {
+          "description": "Slug of the skill to edit.",
+          "type": "string",
+        },
+        "path": {
+          "description": "Supporting file to edit, relative to the skill directory, e.g. "reference.md". Omit to edit the skill body.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "edits",
+      ],
+      "type": "object",
+    },
+    "name": "edit_skill",
   },
   {
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
@@ -455,7 +551,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill",
   },
   {
-    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -606,7 +702,7 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
 exports[`skill-server advertised tools with authoring on > pins the authoring tools of a workspace endpoint 1`] = `
 [
   {
-    "description": "List every skill available from this endpoint with its name, description, format, and supporting files — without loading any skill bodies. Call this first to decide which skill(s) to load, then call the tool named in each entry's \`tool\` field to fetch that skill's full contents.",
+    "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call the tool named after each to fetch its full contents (its notes say \`tool …\` where that name differs from the skill’s).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -615,7 +711,7 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue entries (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match by its \`tool\`/\`name\` as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -682,7 +778,7 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "create_skill",
   },
   {
-    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
+    "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -716,6 +812,54 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
       "type": "object",
     },
     "name": "update_skill",
+  },
+  {
+    "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "new_text": {
+                "description": "What replaces it; empty to delete the passage.",
+                "type": "string",
+              },
+              "old_text": {
+                "description": "The passage to replace, exactly as it is in the text.",
+                "type": "string",
+              },
+              "replace_all": {
+                "description": "Replace every occurrence of old_text rather than require exactly one.",
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "old_text",
+              "new_text",
+            ],
+            "type": "object",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "name": {
+          "description": "Slug of the skill to edit.",
+          "type": "string",
+        },
+        "path": {
+          "description": "Supporting file to edit, relative to the skill directory, e.g. "reference.md". Omit to edit the skill body.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "edits",
+      ],
+      "type": "object",
+    },
+    "name": "edit_skill",
   },
   {
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
@@ -757,7 +901,7 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "delete_skill",
   },
   {
-    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
+    "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
