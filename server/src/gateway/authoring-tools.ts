@@ -5,7 +5,7 @@ import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
 import { applyReplacements, type Replacement } from '../skills/replacements.ts';
 import { resolveSkillName } from '../skills/skill-name.ts';
-import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
+import { bundledFiles, skillToolName, skillToolNames } from '../skills/skill-view.ts';
 
 /**
  * MCP tools that let an agent author and maintain skills over the same endpoint
@@ -98,9 +98,15 @@ function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
   return result.data;
 }
 
-/** How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace). */
-function whereVisible(skill: Skill, workspaceSlug: string | undefined): string {
-  const load = `Load it by calling the tool named "${skillToolName(skill.name)}".`;
+/**
+ * How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace).
+ * @param skill - The skill just authored.
+ * @param workspaceSlug - The workspace whose endpoint authored it, if any.
+ * @param toolName - The tool the endpoint serves the skill under.
+ * @returns The sentence pair that ends the tool's answer.
+ */
+function whereVisible(skill: Skill, workspaceSlug: string | undefined, toolName: string): string {
+  const load = `Load it by calling the tool named "${toolName}".`;
   const parts = [
     skill.global ? 'served globally on the root /mcp endpoint' : 'hidden from the root /mcp endpoint (global:false)',
   ];
@@ -164,6 +170,26 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
   /**
+   * Lists what this endpoint serves: the workspace's skills, or every global skill on the root endpoint.
+   * @returns The served skills, read fresh.
+   */
+  const servedSkills = (): Skill[] => {
+    if (workspaceSlug === undefined) {
+      return store.getGlobalSkills();
+    }
+    const workspace = store.getWorkspace(workspaceSlug);
+    return workspace ? store.getSkillsForWorkspace(workspace) : [];
+  };
+
+  /**
+   * Names the tool this endpoint serves a skill under, which is numbered when another skill holds the bare name.
+   * @param skill - The skill just authored; one the endpoint does not serve gets its bare tool name.
+   * @returns The tool name.
+   */
+  const toolNameOf = (skill: Skill): string =>
+    skillToolNames(servedSkills()).get(skill.name) ?? skillToolName(skill.name);
+
+  /**
    * Refuse, on a workspace endpoint, a skill that workspace does not serve: the endpoint authors its own set only.
    * The root endpoint reaches every skill, and an unknown name falls through to the store's 404.
    * @param name - Slug the tool call addresses.
@@ -172,9 +198,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
     if (workspaceSlug === undefined || store.getSkill(name) === undefined) {
       return;
     }
-    const workspace = store.getWorkspace(workspaceSlug);
-    const served = workspace ? store.getSkillsForWorkspace(workspace) : [];
-    const isServed = served.some((skill) => skill.name === name);
+    const isServed = servedSkills().some((skill) => skill.name === name);
     if (isServed === false) {
       throw new Error(
         `Skill "${name}" is not served by workspace "${workspaceSlug}", so it cannot be read or changed from this endpoint.`,
@@ -320,7 +344,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         if (workspaceSlug) {
           await guard(() => store.addSkillToWorkspace(workspaceSlug, name));
         }
-        return `Created skill "${skill.name}" (${skill.format}). ${whereVisible(skill, workspaceSlug)}`;
+        return `Created skill "${skill.name}" (${skill.format}). ${whereVisible(skill, workspaceSlug, toolNameOf(skill))}`;
       },
     }),
     tool({
@@ -365,7 +389,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
             tags: input.tags,
           }),
         );
-        return `Updated skill "${skill.name}". ${whereVisible(skill, workspaceSlug)} ${fileSummary(skill)}`;
+        return `Updated skill "${skill.name}". ${whereVisible(skill, workspaceSlug, toolNameOf(skill))} ${fileSummary(skill)}`;
       },
     }),
     tool({
@@ -454,7 +478,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
           await guard(() => store.addSkillToWorkspace(workspaceSlug, skill.name));
         }
-        return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, workspaceSlug)}`;
+        return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, workspaceSlug, toolNameOf(skill))}`;
       },
     }),
     tool({

@@ -15,7 +15,7 @@ import {
   UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { errorMessage } from '../errors.ts';
-import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
+import { bundledFiles, skillToolNames } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
@@ -174,8 +174,11 @@ function findByName(skills: Skill[], name: string): Skill | undefined {
  * @param deps - The endpoint's skill source and optional authoring access.
  */
 function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
-  const findByToolName = (name: string): Skill | undefined =>
-    deps.getSkills().find((s) => skillToolName(s.name) === name);
+  const findByToolName = (name: string): Skill | undefined => {
+    const skills = deps.getSkills();
+    const toolNames = skillToolNames(skills);
+    return skills.find((skill) => toolNames.get(skill.name) === name);
+  };
 
   // Authoring tools are built once (closures over the store); which of them are actually served is
   // decided live per request, from `authoringEnabled` and `disabledAuthoringTools`.
@@ -215,10 +218,12 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 
     // per-skill mode: one no-arg tool per skill.
     const reserved = reservedNames();
+    const toolNames = skillToolNames(skills);
     const skillTools = skills
-      .filter((skill) => !reserved.has(skillToolName(skill.name)))
-      .map((skill) => ({
-        name: skillToolName(skill.name),
+      .map((skill) => ({ skill, name: toolNames.get(skill.name) ?? skill.name }))
+      .filter(({ name }) => reserved.has(name) === false)
+      .map(({ skill, name }) => ({
+        name,
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: NO_ARGS_SCHEMA,
       }));
@@ -233,13 +238,15 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
-      return textResult(renderIndex(deps.getSkills(), skillToolMode()));
+      const skills = deps.getSkills();
+      return textResult(renderIndex(skills, skillToolMode(), skillToolNames(skills)));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
       const args = req.params.arguments ?? {};
       const query = typeof args.query === 'string' ? args.query : '';
       const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
-      return textResult(renderIndex(searchSkills(deps.getSkills(), query, tags), skillToolMode()));
+      const skills = deps.getSkills();
+      return textResult(renderIndex(searchSkills(skills, query, tags), skillToolMode(), skillToolNames(skills)));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const raw = req.params.arguments?.name;

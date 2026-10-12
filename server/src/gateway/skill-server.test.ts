@@ -67,6 +67,29 @@ async function connect(getSkills: () => Skill[], opts: ConnectOpts = {}): Promis
   return client;
 }
 
+describe('skills whose names share one tool name', () => {
+  const TWINS: Skill[] = [
+    skill({ name: 'a.b', body: 'dotted body' }),
+    skill({ name: 'a_b', body: 'underscored body' }),
+  ];
+
+  it('advertises each under its own tool name and loads the right one', async () => {
+    const client = await connect(() => TWINS);
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    expect(names.filter((name) => name.startsWith('a_b'))).toEqual(['a_b__2', 'a_b']);
+    expect(firstText(await client.callTool({ name: 'a_b' }))).toBe('underscored body');
+    expect(firstText(await client.callTool({ name: 'a_b__2' }))).toBe('dotted body');
+  });
+
+  it('names the qualified tool in the catalogue, also when a search returns only that skill', async () => {
+    const client = await connect(() => TWINS);
+    expect(firstText(await client.callTool({ name: 'list_skills' }))).toContain('a.b (tool a_b__2;');
+    const found = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'dotted' } }));
+    expect(found).toContain('skills: 1');
+    expect(found).toContain('a.b (tool a_b__2;');
+  });
+});
+
 describe('skill-server index tool', () => {
   let client: Client;
   beforeEach(async () => {

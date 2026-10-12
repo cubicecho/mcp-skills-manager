@@ -134,7 +134,9 @@ const input = createSkillRequestSchema.parse(req.body); // throws → 400 via er
 hand-added keys survive round-trips.
 
 **Skill names are slugs:** `^[a-z0-9][a-z0-9._-]*$`, max 64. Names double as
-tool names (dots sanitized to `_` for the MCP tool name) and resource URIs
+tool names (dots sanitized to `_` for the MCP tool name; when two served skills
+sanitize to one name the later is numbered `<tool>__2` — `skillToolNames` in
+`server/src/skills/skill-view.ts`) and resource URIs
 (`skill://<name>`). A skill's canonical identity is its frontmatter `name` when
 that is a valid slug (so a folder can be named anything — the on-disk basename
 is only a storage detail, resolved via the skill's stored `path`); it falls
