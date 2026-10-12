@@ -1,6 +1,7 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FilePreview } from '@/components/domain/skill/editor/file-preview';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { FilesPanel } from '@/components/domain/skill/editor/files-panel';
@@ -8,7 +9,7 @@ import { SkillBodyEditor } from '@/components/domain/skill/editor/skill-body-edi
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { SidebarLayout } from '@/components/split-layout';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 
 /**
  * One skill: its files in a list, and the selected one beside it. A file opens as a preview, and its
@@ -82,9 +83,7 @@ function FilePane({
   // A skill linked to a git source is read here, never edited: its content is the repo's.
   const editable = !skill.source && (path === SKILL_MD_KEY || isMarkdownPath(path));
   const [editing, setEditing] = useState(startEditing && editable);
-  const [dirty, setDirty] = useState(false);
-  // Close was pressed over unsaved edits, and the reader has not yet said what happens to them.
-  const [closing, setClosing] = useState(false);
+  const editor = useRef<EditorHandle>(null);
 
   useEffect(() => {
     if (startEditing) {
@@ -92,45 +91,23 @@ function FilePane({
     }
   }, [startEditing, onEditStarted]);
 
-  // Opening another file, another skill or another page, and closing or reloading the tab.
-  const unsaved = editing && editable && dirty;
-  const blocker = useBlocker({ shouldBlockFn: () => unsaved, enableBeforeUnload: () => unsaved, withResolver: true });
+  // Asked when the reader leaves: by Close, by opening another file, skill or page, or by closing the tab.
+  const hasUnsavedChanges = () => editor.current?.hasUnsavedChanges() ?? false;
+  const blocker = useBlocker({ shouldBlockFn: hasUnsavedChanges, enableBeforeUnload: false, withResolver: true });
+  // Only an open editor can hold edits, and the guard listens for the tab closing only while one is open.
+  const guard = useUnsavedChangesGuard({
+    hasUnsavedChanges: editing && editable ? hasUnsavedChanges : false,
+    blocker,
+  });
 
-  const stopEditing = () => {
-    setDirty(false);
-    setEditing(false);
-  };
-
-  const keepEditing = () => {
-    setClosing(false);
-    blocker.reset?.();
-  };
-
-  const discard = () => {
-    setClosing(false);
-    if (blocker.status === 'blocked') {
-      blocker.proceed();
-    } else {
-      stopEditing();
-    }
-  };
-
-  const close = () => (dirty ? setClosing(true) : stopEditing());
+  const close = () => guard.leave(() => setEditing(false));
 
   return (
     <>
-      <ConfirmDialog
-        open={closing || blocker.status === 'blocked'}
-        onOpenChange={(open) => {
-          if (!open) {
-            keepEditing();
-          }
-        }}
-        title="Discard unsaved changes?"
-        description="The edits to the open file have not been saved, and leaving the editor loses them."
-        confirmLabel="Discard"
-        cancelLabel="Keep editing"
-        onConfirm={discard}
+      <UnsavedChangesDialog
+        guard={guard}
+        discardTitle="Discard unsaved changes?"
+        discardDescription="The edits to the open file have not been saved, and leaving the editor loses them."
       />
 
       {!editing || !editable ? (
@@ -140,9 +117,9 @@ function FilePane({
           contentClassName="p-4"
           contentSlot={
             path === SKILL_MD_KEY ? (
-              <SkillBodyEditor skill={skill} onDirtyChange={setDirty} onClose={close} />
+              <SkillBodyEditor ref={editor} skill={skill} onClose={close} />
             ) : (
-              <SupportingFileEditor skillName={skill.name} path={path} onDirtyChange={setDirty} onClose={close} />
+              <SupportingFileEditor ref={editor} skillName={skill.name} path={path} onClose={close} />
             )
           }
         />

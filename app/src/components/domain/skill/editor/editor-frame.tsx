@@ -4,6 +4,12 @@ import { Button } from '@/components/ui/button';
 import { X } from '@/components/ui/icons';
 import type { SlotNode } from '@/lib/utils';
 
+/** What an editor answers to the pane that holds it, asked at the moment the reader leaves. */
+export type EditorHandle = {
+  /** Whether the editor holds edits that have not been saved. */
+  hasUnsavedChanges: () => boolean;
+};
+
 /** A file path as a `Section` title: the path as written, not the uppercase overline. */
 export const FILE_TITLE = 'font-mono text-sm normal-case tracking-normal text-foreground';
 

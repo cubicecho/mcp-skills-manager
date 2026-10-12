@@ -128,6 +128,7 @@
         "app/src/lib/error-message.ts",
         "app/src/lib/form-binding.ts",
         "app/src/components/action-button.tsx",
+        "app/src/components/unsaved-changes-guard.tsx",
         "app/src/components/app-form.tsx",
         "app/src/components/app-icons.tsx",
         "app/src/components/card-layout.tsx",

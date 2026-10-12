@@ -1,8 +1,8 @@
 import { normalizeTags, type SkillDetail } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
-import { useEffect, useMemo } from 'react';
+import { type Ref, useImperativeHandle, useMemo } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
-import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
+import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { MarkdownEditor } from '@/components/markdown-editor';
 import { MultiSelectField } from '@/components/multi-select-field';
@@ -14,11 +14,11 @@ import { useSaveShortcut } from '@/lib/use-save-shortcut';
 /** Edit the skill's own Markdown: its frontmatter description plus its body. */
 export function SkillBodyEditor({
   skill,
-  onDirtyChange,
+  ref,
   onClose,
 }: {
   skill: SkillDetail;
-  onDirtyChange: (dirty: boolean) => void;
+  ref?: Ref<EditorHandle>;
   onClose: () => void;
 }) {
   const toast = useToasts();
@@ -46,7 +46,7 @@ export function SkillBodyEditor({
   // Measured against the skill as last loaded, not the form's defaults: a save refetches the skill, and the
   // editor is clean again once what it holds is what was saved.
   const dirty = description !== skill.description || body !== skill.body || tagsDirty;
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useImperativeHandle(ref, () => ({ hasUnsavedChanges: () => dirty }), [dirty]);
 
   const save = () => void form.handleSubmit();
 

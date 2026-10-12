@@ -1,7 +1,9 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorHandle } from './editor-frame';
 import { SkillBodyEditor } from './skill-body-editor';
 
 type MutateOptions = { onSuccess?: () => void };
@@ -41,30 +43,30 @@ describe('SkillBodyEditor', () => {
   });
 
   it('starts clean, showing the skill as saved', () => {
-    const onDirtyChange = vi.fn();
-    render(<SkillBodyEditor skill={SKILL} onDirtyChange={onDirtyChange} onClose={() => {}} />);
+    const handle = createRef<EditorHandle>();
+    render(<SkillBodyEditor skill={SKILL} ref={handle} onClose={() => {}} />);
 
     expect(screen.getByLabelText(/^Description/)).toHaveValue('Write commits');
     expect(screen.getByLabelText('Skill body')).toHaveValue('# Commits');
     expect(saveButton()).toBeDisabled();
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(handle.current?.hasUnsavedChanges()).toBe(false);
   });
 
   it('is dirty after an edit and clean again once the edit is undone', async () => {
-    const onDirtyChange = vi.fn();
-    render(<SkillBodyEditor skill={SKILL} onDirtyChange={onDirtyChange} onClose={() => {}} />);
+    const handle = createRef<EditorHandle>();
+    render(<SkillBodyEditor skill={SKILL} ref={handle} onClose={() => {}} />);
 
     await userEvent.type(screen.getByLabelText('Skill body'), '!');
-    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(handle.current?.hasUnsavedChanges()).toBe(true);
     expect(saveButton()).toBeEnabled();
 
     await userEvent.type(screen.getByLabelText('Skill body'), '{Backspace}');
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(handle.current?.hasUnsavedChanges()).toBe(false);
     expect(saveButton()).toBeDisabled();
   });
 
   it('saves the description, body and tags together', async () => {
-    render(<SkillBodyEditor skill={SKILL} onDirtyChange={() => {}} onClose={() => {}} />);
+    render(<SkillBodyEditor skill={SKILL} onClose={() => {}} />);
 
     await userEvent.type(screen.getByLabelText(/^Description/), ' well');
     await userEvent.type(screen.getByLabelText('Skill body'), '!');
@@ -83,21 +85,19 @@ describe('SkillBodyEditor', () => {
   });
 
   it('is clean once the saved skill comes back', async () => {
-    const onDirtyChange = vi.fn();
-    const { rerender } = render(<SkillBodyEditor skill={SKILL} onDirtyChange={onDirtyChange} onClose={() => {}} />);
+    const handle = createRef<EditorHandle>();
+    const { rerender } = render(<SkillBodyEditor skill={SKILL} ref={handle} onClose={() => {}} />);
 
     await userEvent.type(screen.getByLabelText('Skill body'), '!');
     await userEvent.click(saveButton());
-    rerender(
-      <SkillBodyEditor skill={{ ...SKILL, body: '# Commits!' }} onDirtyChange={onDirtyChange} onClose={() => {}} />,
-    );
+    rerender(<SkillBodyEditor skill={{ ...SKILL, body: '# Commits!' }} ref={handle} onClose={() => {}} />);
 
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(handle.current?.hasUnsavedChanges()).toBe(false);
     expect(saveButton()).toBeDisabled();
   });
 
   it('saves on Ctrl+S only when there is something to save', async () => {
-    render(<SkillBodyEditor skill={SKILL} onDirtyChange={() => {}} onClose={() => {}} />);
+    render(<SkillBodyEditor skill={SKILL} onClose={() => {}} />);
 
     pressSaveChord();
     expect(mutate).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe('SkillBodyEditor', () => {
 
   it('hands Close to the caller, which owns the unsaved-changes question', async () => {
     const onClose = vi.fn();
-    render(<SkillBodyEditor skill={SKILL} onDirtyChange={() => {}} onClose={onClose} />);
+    render(<SkillBodyEditor skill={SKILL} onClose={onClose} />);
 
     await userEvent.type(screen.getByLabelText('Skill body'), '!');
     await userEvent.click(screen.getByRole('button', { name: /Close/ }));

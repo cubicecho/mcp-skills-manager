@@ -1,7 +1,7 @@
 import { useStore } from '@tanstack/react-form';
-import { useEffect, useRef, useState } from 'react';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useAppForm } from '@/components/app-form';
-import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
+import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { MarkdownEditor } from '@/components/markdown-editor';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
@@ -12,12 +12,12 @@ import { useSaveShortcut } from '@/lib/use-save-shortcut';
 export function SupportingFileEditor({
   skillName,
   path,
-  onDirtyChange,
+  ref,
   onClose,
 }: {
   skillName: string;
   path: string;
-  onDirtyChange: (dirty: boolean) => void;
+  ref?: Ref<EditorHandle>;
   onClose: () => void;
 }) {
   const toast = useToasts();
@@ -63,7 +63,7 @@ export function SupportingFileEditor({
 
   const content = useStore(form.store, (state) => state.values.content);
   const dirty = saved !== undefined && content !== saved;
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useImperativeHandle(ref, () => ({ hasUnsavedChanges: () => dirty }), [dirty]);
 
   const save = () => void form.handleSubmit();
 

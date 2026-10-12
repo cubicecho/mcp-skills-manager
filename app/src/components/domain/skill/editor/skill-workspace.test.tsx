@@ -195,6 +195,22 @@ describe('SkillWorkspace', () => {
     expect(await screen.findByText('Another page')).toBeInTheDocument();
   });
 
+  it('asks before the tab closes only while edits are unsaved', async () => {
+    const closeTab = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    await renderWorkspace();
+    expect(closeTab()).toBe(false);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(closeTab()).toBe(false);
+
+    await userEvent.type(body(), '!');
+    expect(closeTab()).toBe(true);
+  });
+
   it('opens a supporting Markdown file with an editor of its own', async () => {
     await renderWorkspace();
 
