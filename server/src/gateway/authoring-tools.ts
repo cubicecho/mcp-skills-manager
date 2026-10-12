@@ -44,6 +44,16 @@ export interface AuthoringTool {
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
+/** One row of the authoring table: a tool's definition, its arguments, the skill it addresses, and what it does. */
+interface ToolSpec<T> {
+  definition: AuthoringTool['definition'];
+  /** Schema the call's arguments are parsed with. */
+  args: z.ZodType<T>;
+  /** The existing skill a call addresses, and whether it only reads it; left out by a tool that addresses none. */
+  target?: { skill: (input: T) => string; access: 'read' | 'write' };
+  run: (input: T) => Promise<string>;
+}
+
 /** What the authoring tools need from the endpoint that exposes them. */
 export interface AuthoringDeps {
   store: ConfigStore;
@@ -221,8 +231,28 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
     return replaced;
   };
 
+  /**
+   * Turns one row of the table into a served tool: its arguments are parsed, then the skill it addresses is
+   * checked for this endpoint's reach, and for being writable when the tool changes it, before the row runs.
+   * @param spec - The row.
+   * @returns The tool, as the skill server dispatches it.
+   */
+  const tool = <T>(spec: ToolSpec<T>): AuthoringTool => ({
+    definition: spec.definition,
+    run: async (args) => {
+      const input = parseArgs(spec.args, args);
+      if (spec.target?.access === 'write') {
+        requireWritable(spec.target.skill(input));
+      }
+      if (spec.target?.access === 'read') {
+        requireServed(spec.target.skill(input));
+      }
+      return spec.run(input);
+    },
+  });
+
   return [
-    {
+    tool({
       definition: {
         name: 'create_skill',
         description:
@@ -262,8 +292,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(createArgs, args);
+      args: createArgs,
+      run: async (input) => {
         const resolved = resolveSkillName(input.name, input.title);
         if (!resolved) {
           throw new Error('Provide a "name" or a "title" to create a skill');
@@ -292,8 +322,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         }
         return `Created skill "${skill.name}" (${skill.format}). ${whereVisible(skill, workspaceSlug)}`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'update_skill',
         description:
@@ -324,9 +354,9 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(updateArgs, args);
-        requireWritable(input.name);
+      args: updateArgs,
+      target: { skill: (input) => input.name, access: 'write' },
+      run: async (input) => {
         const skill = await guard(() =>
           store.updateSkill(input.name, {
             description: input.description,
@@ -337,8 +367,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         );
         return `Updated skill "${skill.name}". ${whereVisible(skill, workspaceSlug)} ${fileSummary(skill)}`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'edit_skill',
         description:
@@ -380,9 +410,9 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(editArgs, args);
-        requireWritable(input.name);
+      args: editArgs,
+      target: { skill: (input) => input.name, access: 'write' },
+      run: async (input) => {
         const replacements = input.edits.map((edit) => ({
           oldText: edit.old_text,
           newText: edit.new_text,
@@ -396,8 +426,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         const replaced = await guard(() => editSupportingFile(input.name, relPath, replacements));
         return `Edited "${relPath}" in skill "${input.name}" (replaced ${replaced}).`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'rename_skill',
         description: 'Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.',
@@ -411,9 +441,9 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(renameArgs, args);
-        requireWritable(input.name);
+      args: renameArgs,
+      target: { skill: (input) => input.name, access: 'write' },
+      run: async (input) => {
         const target = slugSchema.safeParse(input.new_name);
         if (!target.success) {
           throw new Error(`Invalid skill name "${input.new_name}"`);
@@ -426,8 +456,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         }
         return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, workspaceSlug)}`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'delete_skill',
         description: 'Delete a skill and all its supporting files. This cannot be undone.',
@@ -438,17 +468,17 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(deleteArgs, args);
-        requireWritable(input.name);
+      args: deleteArgs,
+      target: { skill: (input) => input.name, access: 'write' },
+      run: async (input) => {
         await guard(() => store.deleteSkill(input.name));
         if (workspaceSlug) {
           await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
         }
         return `Deleted skill "${input.name}".`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'write_skill_file',
         description:
@@ -466,16 +496,16 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(writeFileArgs, args);
-        requireWritable(input.skill);
+      args: writeFileArgs,
+      target: { skill: (input) => input.skill, access: 'write' },
+      run: async (input) => {
         const skill = await guard(() =>
           store.writeSupportingFile(input.skill, input.path, Buffer.from(input.content, input.encoding ?? 'utf8')),
         );
         return `Wrote "${input.path}" to skill "${skill.name}". ${fileSummary(skill)}`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'read_skill_file',
         description:
@@ -490,17 +520,17 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(skillPathArgs, args);
-        requireServed(input.skill);
+      args: skillPathArgs,
+      target: { skill: (input) => input.skill, access: 'read' },
+      run: async (input) => {
         const file = await guard(() => store.readSupportingFile(input.skill, input.path));
         if (file.binary) {
           return `${input.path} (${file.size} bytes, binary, base64):\n${file.content}`;
         }
         return file.content;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'create_skill_folder',
         description: 'Create an empty sub-directory inside a skill (promotes a `file` skill to a directory).',
@@ -517,14 +547,14 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(skillPathArgs, args);
-        requireWritable(input.skill);
+      args: skillPathArgs,
+      target: { skill: (input) => input.skill, access: 'write' },
+      run: async (input) => {
         const skill = await guard(() => store.createSupportingFolder(input.skill, input.path));
         return `Created folder "${input.path}" in skill "${skill.name}".`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'move_skill_file',
         description: 'Rename or move a supporting file or folder within a skill.',
@@ -539,14 +569,14 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(moveArgs, args);
-        requireWritable(input.skill);
+      args: moveArgs,
+      target: { skill: (input) => input.skill, access: 'write' },
+      run: async (input) => {
         const skill = await guard(() => store.moveSupportingPath(input.skill, input.from, input.to));
         return `Moved "${input.from}" to "${input.to}" in skill "${skill.name}".`;
       },
-    },
-    {
+    }),
+    tool({
       definition: {
         name: 'delete_skill_file',
         description: 'Delete a supporting file or folder (folders recursively) from a skill.',
@@ -560,12 +590,12 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           additionalProperties: false,
         },
       },
-      run: async (args) => {
-        const input = parseArgs(skillPathArgs, args);
-        requireWritable(input.skill);
+      args: skillPathArgs,
+      target: { skill: (input) => input.skill, access: 'write' },
+      run: async (input) => {
         const skill = await guard(() => store.deleteSupportingFile(input.skill, input.path));
         return `Deleted "${input.path}" from skill "${skill.name}". ${fileSummary(skill)}`;
       },
-    },
+    }),
   ];
 }
