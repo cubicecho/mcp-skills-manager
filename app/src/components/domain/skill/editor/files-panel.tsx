@@ -2,7 +2,6 @@ import type { SkillDetail, SkillFile } from '@mcp-skills/shared';
 import { type ReactNode, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
-import { ConfirmButton } from '@/components/confirm-button';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { LinkSourceButton } from '@/components/domain/skill/editor/link-source-button';
 import { RenameButton } from '@/components/domain/skill/editor/rename-button';
@@ -12,11 +11,14 @@ import { FileTree } from '@/components/file-tree';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DownloadButton } from '@/components/ui/download-button';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import type { PickedFile } from '@/components/ui/file-picker-base';
-import { FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
+import { Ellipsis, FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
@@ -72,6 +74,8 @@ export function FilesPanel({
   const syncNow = useSyncNow(skill.name);
   const [busy, setBusy] = useState(false);
   const [prompt, setPrompt] = useState<PathPrompt | null>(null);
+  // The file or folder whose Delete was chosen, until the question about it is answered.
+  const [deleting, setDeleting] = useState<TreeNode<FileEntry> | null>(null);
 
   // A linked skill's content is the repo's: nothing here may add to it, rename in it or delete from it.
   const linked = skill.source !== undefined;
@@ -234,12 +238,33 @@ export function FilesPanel({
                   onNewFile={newFile}
                   onNewFolder={newFolder}
                   onRename={rename}
-                  onDelete={remove}
+                  onDelete={setDeleting}
                 />
               )
             }
           />
           {prompt && <PathPromptDialog prompt={prompt} onClose={() => setPrompt(null)} />}
+          {deleting && (
+            <ConfirmDialog
+              open
+              onOpenChange={(open) => {
+                if (!open) {
+                  setDeleting(null);
+                }
+              }}
+              title={`Delete ${deleting.type === 'dir' ? 'folder' : 'file'} "${deleting.path}"?`}
+              description={
+                deleting.type === 'dir'
+                  ? 'Every file inside the folder is deleted with it, on disk as well as here.'
+                  : 'The file is deleted from the skill on disk, and anything linking to it breaks.'
+              }
+              confirmLabel="Delete"
+              onConfirm={() => {
+                setDeleting(null);
+                remove(deleting);
+              }}
+            />
+          )}
         </>
       }
     />
@@ -247,8 +272,8 @@ export function FilesPanel({
 }
 
 /**
- * A file's or folder's buttons at the end of its row: new file and new folder inside a folder, then
- * rename and delete.
+ * A file's or folder's actions, behind one button at the end of its row: new file and new folder
+ * inside a folder, then rename and delete.
  * @param props.node - The row's file or folder.
  */
 function FileActions({
@@ -264,39 +289,28 @@ function FileActions({
   onRename: (node: TreeNode<FileEntry>) => void;
   onDelete: (node: TreeNode<FileEntry>) => void;
 }) {
-  const isDir = node.type === 'dir';
-  const button = { variant: 'ghost', size: 'icon-xs' } as const;
+  // Every row opens a dialog, which takes the focus the menu would otherwise hand back to its button.
   return (
-    <>
-      {isDir && (
-        <>
-          <ActionButton
-            {...button}
-            label={`New file in ${node.path}`}
-            onClick={() => onNewFile(node.path)}
-            iconSlot={<FilePlus />}
-          />
-          <ActionButton
-            {...button}
-            label={`New folder in ${node.path}`}
-            onClick={() => onNewFolder(node.path)}
-            iconSlot={<FolderPlus />}
-          />
-        </>
-      )}
-      <ActionButton {...button} label={`Rename ${node.path}`} onClick={() => onRename(node)} iconSlot={<Pencil />} />
-      <ConfirmButton
-        {...button}
-        label={`Delete ${node.path}`}
-        title={`Delete ${isDir ? 'folder' : 'file'} "${node.path}"?`}
-        description={
-          isDir
-            ? 'Every file inside the folder is deleted with it, on disk as well as here.'
-            : 'The file is deleted from the skill on disk, and anything linking to it breaks.'
-        }
-        onConfirm={() => onDelete(node)}
-        iconSlot={<Trash2 />}
-      />
-    </>
+    <Menu>
+      <MenuTrigger asChild>
+        <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${node.path}`} iconSlot={<Ellipsis />} />
+      </MenuTrigger>
+      <MenuContent align="end">
+        {node.type === 'dir' && (
+          <>
+            <MenuItem label="New file" focusesElsewhere onSelect={() => onNewFile(node.path)} iconSlot={<FilePlus />} />
+            <MenuItem
+              label="New folder"
+              focusesElsewhere
+              onSelect={() => onNewFolder(node.path)}
+              iconSlot={<FolderPlus />}
+            />
+            <MenuSeparator />
+          </>
+        )}
+        <MenuItem label="Rename" focusesElsewhere onSelect={() => onRename(node)} iconSlot={<Pencil />} />
+        <MenuItem label="Delete" destructive focusesElsewhere onSelect={() => onDelete(node)} iconSlot={<Trash2 />} />
+      </MenuContent>
+    </Menu>
   );
 }

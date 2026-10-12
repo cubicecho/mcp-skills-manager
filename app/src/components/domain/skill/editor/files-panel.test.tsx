@@ -66,6 +66,12 @@ const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const queryButton = (name: string | RegExp) => screen.queryByRole('button', { name });
 const files = () => within(screen.getByLabelText('Skill files'));
 
+/** Choose an action from a file's or folder's menu. */
+async function chooseAction(path: string, action: string) {
+  await userEvent.click(button(`Actions for ${path}`));
+  await userEvent.click(await screen.findByRole('menuitem', { name: action }));
+}
+
 /** Answer the open path prompt and submit it. */
 async function answerPrompt(label: string, value: string, submit: string) {
   const field = screen.getByLabelText(new RegExp(`^${label}`));
@@ -109,8 +115,7 @@ describe('FilesPanel', () => {
     }
     expect(button('Export .zip')).toBeInTheDocument();
     expect(button('Rename skill')).toBeInTheDocument();
-    expect(queryButton(/^Rename docs/)).not.toBeInTheDocument();
-    expect(queryButton(/^Delete /)).not.toBeInTheDocument();
+    expect(queryButton(/^Actions for /)).not.toBeInTheDocument();
 
     await userEvent.click(button('Sync from Git'));
     expect(syncSkill).toHaveBeenCalledTimes(1);
@@ -122,8 +127,8 @@ describe('FilesPanel', () => {
     const rows = files().getAllByRole('button', { name: /^(SKILL\.md|notes\.md|logo\.png)/ });
     expect(rows[0]).toHaveTextContent('SKILL.md');
     expect(rows[0]).toHaveTextContent('main');
-    expect(queryButton('Rename SKILL.md')).not.toBeInTheDocument();
-    expect(queryButton('Delete SKILL.md')).not.toBeInTheDocument();
+    expect(queryButton('Actions for SKILL.md')).not.toBeInTheDocument();
+    expect(button('Actions for logo.png')).toBeInTheDocument();
 
     await userEvent.click(rows[0] as HTMLElement);
     expect(onSelect).toHaveBeenCalledWith(SKILL_MD_KEY);
@@ -180,14 +185,14 @@ describe('FilesPanel', () => {
   it('creates a file or a folder inside the folder whose row asked', async () => {
     renderPanel();
 
-    await userEvent.click(button('New file in docs'));
+    await chooseAction('docs', 'New file');
     expect(screen.getByText(/Created under/)).toHaveTextContent('Created under docs/.');
     await answerPrompt('Path', 'intro.md', 'Create file');
     await waitFor(() =>
       expect(writeFile).toHaveBeenCalledWith({ path: 'docs/intro.md', content: '', encoding: 'utf8' }),
     );
 
-    await userEvent.click(button('New folder in docs'));
+    await chooseAction('docs', 'New folder');
     await answerPrompt('Name', 'examples', 'Create folder');
     await waitFor(() => expect(createFolder).toHaveBeenCalledWith({ path: 'docs/examples' }));
   });
@@ -201,10 +206,19 @@ describe('FilesPanel', () => {
     await waitFor(() => expect(createFolder).toHaveBeenCalledWith({ path: 'reference/examples' }));
   });
 
+  it('offers a file only Rename and Delete', async () => {
+    renderPanel();
+
+    await userEvent.click(button('Actions for logo.png'));
+
+    const actions = (await screen.findAllByRole('menuitem')).map((item) => item.textContent);
+    expect(actions).toEqual(['Rename', 'Delete']);
+  });
+
   it('renames a file by moving it to the path given', async () => {
     renderPanel();
 
-    await userEvent.click(button('Rename docs/notes.md'));
+    await chooseAction('docs/notes.md', 'Rename');
     expect(screen.getByLabelText(/^Path/)).toHaveValue('docs/notes.md');
     await answerPrompt('Path', 'reference/notes.md', 'Rename');
 
@@ -215,7 +229,7 @@ describe('FilesPanel', () => {
   it('deletes a file only once the question is confirmed', async () => {
     renderPanel();
 
-    await userEvent.click(button('Delete logo.png'));
+    await chooseAction('logo.png', 'Delete');
     expect(screen.getByText('Delete file "logo.png"?')).toBeInTheDocument();
     expect(deleteFile).not.toHaveBeenCalled();
 
@@ -227,7 +241,7 @@ describe('FilesPanel', () => {
   it('warns that deleting a folder takes its files with it', async () => {
     renderPanel();
 
-    await userEvent.click(button('Delete docs'));
+    await chooseAction('docs', 'Delete');
 
     expect(screen.getByText('Delete folder "docs"?')).toBeInTheDocument();
     expect(screen.getByText(/Every file inside the folder is deleted with it/)).toBeInTheDocument();
