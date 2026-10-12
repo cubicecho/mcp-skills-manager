@@ -28,9 +28,28 @@ export function parseMarkdown(raw: string): ParsedMarkdown {
     // Malformed frontmatter: treat the whole document as body rather than losing content.
     return { frontmatter: {}, body: raw };
   }
-  const frontmatter = skillFrontmatterSchema.safeParse(parsed);
-  const body = raw.slice(match[0].length);
-  return { frontmatter: frontmatter.success ? frontmatter.data : {}, body };
+  return { frontmatter: readFrontmatter(parsed), body: raw.slice(match[0].length) };
+}
+
+/**
+ * Validate parsed frontmatter, giving up only the keys that are wrong. One mistyped value must not
+ * take `readonly` or `global` down with it, nor erase the other keys on the next save.
+ * @param parsed - The YAML value of the frontmatter block.
+ * @returns The frontmatter without its mistyped keys; empty when the block is not a mapping.
+ */
+function readFrontmatter(parsed: unknown): SkillFrontmatter {
+  const whole = skillFrontmatterSchema.safeParse(parsed);
+  if (whole.success) {
+    return whole.data;
+  }
+  const isMapping = typeof parsed === 'object' && parsed !== null && Array.isArray(parsed) === false;
+  if (isMapping === false) {
+    return {};
+  }
+  const mistyped = new Set(whole.error.issues.map((issue) => issue.path[0]));
+  const kept = Object.entries(parsed as Record<string, unknown>).filter(([key]) => mistyped.has(key) === false);
+  const rest = skillFrontmatterSchema.safeParse(Object.fromEntries(kept));
+  return rest.success ? rest.data : {};
 }
 
 /**

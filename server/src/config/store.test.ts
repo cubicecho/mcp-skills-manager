@@ -387,6 +387,16 @@ describe('ConfigStore on-disk skill identity', () => {
     expect(await readFile(path.join(dir, 'skills/same.md'), 'utf8')).toBe(raw);
   });
 
+  it('keeps a skill protected and scoped when another frontmatter value is mistyped', async () => {
+    await dropDirSkill('guarded', 'name: guarded\ndescription: 123\nreadonly: true\nglobal: false\nauthor: ada');
+    await store.reload();
+    expect(store.getSkill('guarded')).toMatchObject({ readOnly: true, global: false });
+    await store.updateSkill('guarded', { body: 'edited' });
+    const raw = await readFile(path.join(dir, 'skills/guarded/SKILL.md'), 'utf8');
+    expect(raw).toContain('readonly: true');
+    expect(raw).toContain('author: ada');
+  });
+
   it('renames a mismatched-folder skill, moving its folder to the new name', async () => {
     await dropDirSkill('My-Skill', 'name: my-skill\ndescription: d', { 'notes.txt': 'hi' });
     await store.reload();
