@@ -1,5 +1,5 @@
 import type { AuthoringToolName, Skill } from '@mcp-skills/shared';
-import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
+import { fileEncodingSchema, HttpStatus, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
@@ -233,7 +233,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const editBody = async (name: string, replacements: Replacement[]): Promise<number> => {
     const skill = store.getSkill(name);
     if (!skill) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
     }
     const { text, replaced } = applyReplacements(skill.body, replacements);
     await store.updateSkill(name, { body: text });
@@ -247,7 +247,10 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const editSupportingFile = async (name: string, relPath: string, replacements: Replacement[]): Promise<number> => {
     const file = await store.readSupportingFile(name, relPath);
     if (file.binary) {
-      throw new HttpError(400, `"${relPath}" is a binary file: replace it whole with write_skill_file`);
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `"${relPath}" is a binary file: replace it whole with write_skill_file`,
+      );
     }
     const { text, replaced } = applyReplacements(file.content, replacements);
     const stored = file.content.includes('\r\n') ? text.replaceAll('\n', '\r\n') : text;

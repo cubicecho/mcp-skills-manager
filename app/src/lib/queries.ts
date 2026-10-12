@@ -14,6 +14,7 @@ import type {
 } from '@mcp-skills/shared';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './api';
+import { POLLING_DEFAULTS } from './defaults';
 
 /** TanStack Query keys for every cached API resource. */
 export const queryKeys = {
@@ -68,7 +69,7 @@ export function useServerStatus() {
   return useQuery({
     queryKey: queryKeys.status,
     queryFn: api.getStatus,
-    refetchInterval: 15_000,
+    refetchInterval: POLLING_DEFAULTS.statusMs,
   });
 }
 
@@ -91,7 +92,7 @@ export function useSkills() {
   return useQuery({
     queryKey: queryKeys.skills,
     queryFn: api.listSkills,
-    refetchInterval: 10_000,
+    refetchInterval: POLLING_DEFAULTS.listMs,
   });
 }
 
@@ -126,7 +127,7 @@ export function useWorkspaces() {
   return useQuery({
     queryKey: queryKeys.workspaces,
     queryFn: api.listWorkspaces,
-    refetchInterval: 10_000,
+    refetchInterval: POLLING_DEFAULTS.listMs,
   });
 }
 

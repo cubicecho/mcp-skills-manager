@@ -15,6 +15,7 @@ import type {
   WorkspaceConfig,
 } from '@mcp-skills/shared';
 import {
+  HttpStatus,
   isReadOnlyFlag,
   normalizeTags,
   settingsFileSchema,
@@ -27,6 +28,7 @@ import {
 import { type FSWatcher, watch } from 'chokidar';
 import { zipSync } from 'fflate';
 import { resolveAuth } from '../auth.ts';
+import { AUTH_TOKEN_BYTES, WATCH_DEBOUNCE_MS } from '../core/defaults.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
@@ -60,8 +62,6 @@ interface StagedSource {
   commit: string;
 }
 
-/** Quiet period in milliseconds after the last file event before the store reloads. */
-const WATCH_DEBOUNCE_MS = 300;
 /**
  * Tells whether a skills-dir entry is a flat-file skill.
  * @param entry Directory entry to test.
@@ -470,12 +470,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const name = slugSchema.parse(input.name);
     this.requireFreeName(name);
     if (input.files.length === 0) {
-      throw new HttpError(400, 'An imported skill must contain at least one file');
+      throw new HttpError(HttpStatus.BadRequest, 'An imported skill must contain at least one file');
     }
     const [only] = input.files;
     if (input.format === 'file') {
       if (input.files.length !== 1 || !only) {
-        throw new HttpError(400, 'A file-format skill must contain exactly one Markdown file');
+        throw new HttpError(HttpStatus.BadRequest, 'A file-format skill must contain exactly one Markdown file');
       }
       const relPath = fileSkillPath(name);
       await writeBufferAtomic(path.join(this.skillsDir, relPath), declaringName(only.content, name));
@@ -488,7 +488,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }));
     const hasSkillFile = entries.some((entry) => entry.rel === SKILL_FILE);
     if (hasSkillFile === false) {
-      throw new HttpError(400, 'A directory skill must include a SKILL.md at its root');
+      throw new HttpError(HttpStatus.BadRequest, 'A directory skill must include a SKILL.md at its root');
     }
     const dir = path.join(this.skillsDir, name);
     await mkdir(dir, { recursive: true });
@@ -538,7 +538,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async syncSkill(name: string): Promise<{ skill: Skill; changed: boolean }> {
     const linked = this.requireSkill(name).source;
     if (!linked) {
-      throw new HttpError(400, `Skill "${name}" is not linked to a git source`);
+      throw new HttpError(HttpStatus.BadRequest, `Skill "${name}" is not linked to a git source`);
     }
     const source: GitSource = { repo: linked.repo, ref: linked.ref, path: linked.path };
     const skill = await this.exclusiveSync(name, () => this.replaceFromSource(name, source));
@@ -575,7 +575,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Run a sync for `name`, refusing a second one while the first is still in flight. */
   private async exclusiveSync<T>(name: string, run: () => Promise<T>): Promise<T> {
     if (this.syncing.has(name)) {
-      throw new HttpError(409, `Skill "${name}" is already syncing`);
+      throw new HttpError(HttpStatus.Conflict, `Skill "${name}" is already syncing`);
     }
     this.syncing.add(name);
     try {
@@ -594,7 +594,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await mkdir(dir);
       const { commit } = await this.fetchSource(source, dir);
       if (!existsSync(path.join(dir, SKILL_FILE))) {
-        throw new HttpError(400, 'The source folder has no SKILL.md at its root');
+        throw new HttpError(HttpStatus.BadRequest, 'The source folder has no SKILL.md at its root');
       }
       return await use({ work, dir, commit });
     } finally {
@@ -612,7 +612,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const basename = (source.path ?? source.repo.replace(/\.git$/, '')).split(/[/:]/).pop() ?? '';
     const derived = slugSchema.safeParse(slugify(basename));
     if (!derived.success) {
-      throw new HttpError(400, 'Could not derive a skill name from the source; give the skill a name');
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        'Could not derive a skill name from the source; give the skill a name',
+      );
     }
     return derived.data;
   }
@@ -674,7 +677,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const existing = this.requireSkill(name);
     const rel = safeSkillRelPath(this.skillsDir, name, relPath);
     if (rel === SKILL_FILE) {
-      throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
+      throw new HttpError(HttpStatus.BadRequest, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
@@ -690,10 +693,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const full = path.join(this.skillRoot(existing), rel);
     const stats = await statOrUndefined(full);
     if (stats === undefined) {
-      throw new HttpError(404, `No file "${rel}" in skill "${name}"`);
+      throw new HttpError(HttpStatus.NotFound, `No file "${rel}" in skill "${name}"`);
     }
     if (stats.isFile() === false) {
-      throw new HttpError(400, `"${rel}" is a directory, not a file`);
+      throw new HttpError(HttpStatus.BadRequest, `"${rel}" is a directory, not a file`);
     }
     const buffer = await readFile(full);
     const binary = isBinary(buffer);
@@ -711,12 +714,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const existing = this.requireSkill(name);
     const rel = safeSkillRelPath(this.skillsDir, name, relPath);
     if (rel === SKILL_FILE) {
-      throw new HttpError(400, 'A folder cannot be named SKILL.md');
+      throw new HttpError(HttpStatus.BadRequest, 'A folder cannot be named SKILL.md');
     }
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     if (existsSync(full)) {
-      throw new HttpError(409, `"${rel}" already exists in skill "${name}"`);
+      throw new HttpError(HttpStatus.Conflict, `"${rel}" already exists in skill "${name}"`);
     }
     await mkdir(full, { recursive: true });
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
@@ -728,22 +731,22 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const from = this.requireDirRelPath(existing, fromPath);
     const to = safeSkillRelPath(this.skillsDir, name, toPath);
     if (to === SKILL_FILE) {
-      throw new HttpError(400, 'A supporting file cannot be named SKILL.md');
+      throw new HttpError(HttpStatus.BadRequest, 'A supporting file cannot be named SKILL.md');
     }
     if (from === to) {
       return existing;
     }
     if (to.startsWith(`${from}/`)) {
-      throw new HttpError(400, 'Cannot move a folder into itself');
+      throw new HttpError(HttpStatus.BadRequest, 'Cannot move a folder into itself');
     }
     const root = this.skillRoot(existing);
     const fromFull = path.join(root, from);
     const toFull = path.join(root, to);
     if (!existsSync(fromFull)) {
-      throw new HttpError(404, `No file or folder "${from}" in skill "${name}"`);
+      throw new HttpError(HttpStatus.NotFound, `No file or folder "${from}" in skill "${name}"`);
     }
     if (existsSync(toFull)) {
-      throw new HttpError(409, `"${to}" already exists in skill "${name}"`);
+      throw new HttpError(HttpStatus.Conflict, `"${to}" already exists in skill "${name}"`);
     }
     await mkdir(path.dirname(toFull), { recursive: true });
     await rename(fromFull, toFull);
@@ -782,11 +785,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Require a `dir`-format skill and return the safe relative path, rejecting the reserved SKILL.md. */
   private requireDirRelPath(skill: Skill, relPath: string): string {
     if (skill.format !== 'dir') {
-      throw new HttpError(400, `Skill "${skill.name}" has no supporting files`);
+      throw new HttpError(HttpStatus.BadRequest, `Skill "${skill.name}" has no supporting files`);
     }
     const rel = safeSkillRelPath(this.skillsDir, skill.name, relPath);
     if (rel === SKILL_FILE) {
-      throw new HttpError(400, 'Edit SKILL.md through the skill body, not as a supporting file');
+      throw new HttpError(HttpStatus.BadRequest, 'Edit SKILL.md through the skill body, not as a supporting file');
     }
     return rel;
   }
@@ -800,7 +803,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private requireSkill(name: string): Skill {
     const skill = this.skills.get(name);
     if (!skill) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
     }
     return skill;
   }
@@ -818,7 +821,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       (rel) => ownStorage.includes(rel) === false && existsSync(path.join(this.skillsDir, rel)),
     );
     if (this.skills.has(name) || isStorageTaken) {
-      throw new HttpError(409, `Skill "${name}" already exists`);
+      throw new HttpError(HttpStatus.Conflict, `Skill "${name}" already exists`);
     }
   }
 
@@ -839,7 +842,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const dir = this.skillRoot(skill);
     if (existsSync(path.join(dir, SKILL_FILE))) {
       throw new HttpError(
-        409,
+        HttpStatus.Conflict,
         `Skill "${skill.name}" cannot take supporting files: the folder "${skillFolder(skill)}" already holds another skill. Rename one of them first.`,
       );
     }
@@ -892,7 +895,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async addSkillToWorkspace(slug: string, name: string): Promise<WorkspaceConfig> {
     const workspace = this.workspaces.get(slug);
     if (!workspace) {
-      throw new HttpError(404, `Unknown workspace "${slug}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
     }
     if (workspace.skills.includes(name)) {
       return workspace;
@@ -963,7 +966,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       : settingsFileSchema.parse({});
     const auth = resolveAuth(loaded);
     const needsGeneratedToken = auth.enabled && auth.token === null;
-    const settings = needsGeneratedToken ? { ...loaded, authToken: randomBytes(32).toString('hex') } : loaded;
+    const settings = needsGeneratedToken
+      ? { ...loaded, authToken: randomBytes(AUTH_TOKEN_BYTES).toString('hex') }
+      : loaded;
     if (needsGeneratedToken) {
       console.log(`Generated auth token (persisted to ${file}):\n  ${settings.authToken}`);
     }

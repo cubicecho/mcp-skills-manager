@@ -1,6 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { SettingsFile } from '@mcp-skills/shared';
+import { HttpStatus } from '@mcp-skills/shared';
 import type { RequestHandler } from 'express';
+import { EnvVar } from './core/defaults.ts';
 
 /** The effective bearer-auth state for one request. */
 export interface AuthConfig {
@@ -22,7 +24,7 @@ const TRUTHY_ENV = new Set(['1', 'true', 'yes', 'on']);
  * passing tokens. Overrides `authEnabled` in settings.json.
  */
 export function authDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  const value = env.SECURE_LOCAL_NET;
+  const value = env[EnvVar.SecureLocalNet];
   return value !== undefined && TRUTHY_ENV.has(value.trim().toLowerCase());
 }
 
@@ -51,8 +53,9 @@ export function resolveAuth(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedAuth {
   const enabled = isAuthEffective(settings, env);
-  if (env.MCP_SKILLS_TOKEN) {
-    return { enabled, token: env.MCP_SKILLS_TOKEN, tokenSource: 'env' };
+  const envToken = env[EnvVar.Token];
+  if (envToken) {
+    return { enabled, token: envToken, tokenSource: 'env' };
   }
   if (settings.authToken) {
     return { enabled, token: settings.authToken, tokenSource: 'settings' };
@@ -79,13 +82,13 @@ export function createAuthMiddleware(getAuth: () => AuthConfig): RequestHandler 
       return;
     }
     if (!token) {
-      res.status(401).json({ error: 'Auth is enabled but no token is configured' });
+      res.status(HttpStatus.Unauthorized).json({ error: 'Auth is enabled but no token is configured' });
       return;
     }
     const header = req.headers.authorization;
     const provided = header?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!provided || !tokensEqual(provided, token)) {
-      res.status(401).json({ error: 'Unauthorized' });
+      res.status(HttpStatus.Unauthorized).json({ error: 'Unauthorized' });
       return;
     }
     next();

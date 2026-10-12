@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { HttpStatus } from '@mcp-skills/shared';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -42,7 +43,7 @@ export class McpSessionManager {
     if (id) {
       const existing = this.sessions.get(id);
       if (!existing) {
-        res.status(404).json({ error: `Unknown MCP session "${id}"` });
+        res.status(HttpStatus.NotFound).json({ error: `Unknown MCP session "${id}"` });
         return;
       }
       // The standalone GET request is the session's long-lived SSE push channel.
@@ -62,7 +63,9 @@ export class McpSessionManager {
     }
 
     if (isInitializeRequest(req.body) === false) {
-      res.status(400).json({ error: 'Missing Mcp-Session-Id header (send an initialize request to open a session)' });
+      res
+        .status(HttpStatus.BadRequest)
+        .json({ error: 'Missing Mcp-Session-Id header (send an initialize request to open a session)' });
       return;
     }
 

@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { HttpStatus } from '@mcp-skills/shared';
 import { HttpError } from '../errors.ts';
 
 /**
@@ -44,7 +45,11 @@ export function safeSkillRelPath(skillsDir: string, name: string, relPath: strin
   const rel = path.relative(skillDir, full);
   const escapesSkillDir = rel === '' || rel.startsWith('..') || path.isAbsolute(rel);
   if (escapesSkillDir) {
-    throw new HttpError(400, `Unsafe file path "${relPath}"`, 'paths must stay within the skill directory');
+    throw new HttpError(
+      HttpStatus.BadRequest,
+      `Unsafe file path "${relPath}"`,
+      'paths must stay within the skill directory',
+    );
   }
   return toPosix(rel);
 }

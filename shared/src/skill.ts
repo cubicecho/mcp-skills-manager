@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS } from './defaults.ts';
 import { skillSourceSchema } from './skill-source.ts';
 import { slugSchema } from './slug.ts';
 
@@ -18,7 +19,7 @@ export const skillFormatSchema = z.enum(['file', 'dir']);
 export type SkillFormat = z.infer<typeof skillFormatSchema>;
 
 /** A file or folder path relative to a skill's root, e.g. "scripts/run.py"; at most 255 characters. */
-export const skillRelPathSchema = z.string().min(1).max(255);
+export const skillRelPathSchema = z.string().min(1).max(LENGTH_LIMITS.skillRelPath);
 
 /** How file content travels as a string: `utf8` for text, `base64` for binary. */
 export const fileEncodingSchema = z.enum(['utf8', 'base64']);

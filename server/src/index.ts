@@ -2,12 +2,13 @@ import path from 'node:path';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
+import { EnvVar } from './core/defaults.ts';
 import { McpSessionManager } from './gateway/session-manager.ts';
 import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 import { closeOnSignal } from './shutdown.ts';
 
 async function main(): Promise<void> {
-  const dataDir = path.resolve(process.env.DATA_DIR ?? './data');
+  const dataDir = path.resolve(process.env[EnvVar.DataDir] ?? './data');
   const store = new ConfigStore(dataDir);
   await store.init();
 

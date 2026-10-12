@@ -1,7 +1,5 @@
 import type { Server } from 'node:http';
-
-/** Idle time before a keep-alive connection is closed, in ms. Above the 60 s nginx and ALB hold theirs. */
-export const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 75_000;
+import { DEFAULT_KEEP_ALIVE_TIMEOUT_MS, EnvVar } from './core/defaults.ts';
 
 /**
  * Keeps idle client connections open longer than Node's 5 s, so a tool call after a pause reuses one.
@@ -10,7 +8,7 @@ export const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 75_000;
  * @returns The timeout applied, in ms. The default when the value is unset or not a whole number of ms.
  */
 export function tuneKeepAlive(server: Server, env: NodeJS.ProcessEnv = process.env): number {
-  const parsed = Number(env.HTTP_KEEP_ALIVE_TIMEOUT_MS?.trim() || Number.NaN);
+  const parsed = Number(env[EnvVar.KeepAliveTimeoutMs]?.trim() || Number.NaN);
   const timeoutMs = Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_KEEP_ALIVE_TIMEOUT_MS;
   server.keepAliveTimeout = timeoutMs;
   return timeoutMs;
@@ -26,7 +24,7 @@ const MAX_PORT = 65_535;
  * @returns `PORT` when it is a whole number from 0 to 65535, else `settingsPort` (unset, empty or not a port).
  */
 export function resolvePort(settingsPort: number, env: NodeJS.ProcessEnv = process.env): number {
-  const parsed = Number(env.PORT?.trim() || Number.NaN);
+  const parsed = Number(env[EnvVar.Port]?.trim() || Number.NaN);
   const isPort = Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_PORT;
   return isPort ? parsed : settingsPort;
 }

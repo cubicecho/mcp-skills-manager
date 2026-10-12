@@ -2,11 +2,9 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { SkillUsage } from '@mcp-skills/shared';
 import { skillUsageSchema } from '@mcp-skills/shared';
+import { USAGE_FLUSH_MS } from '../core/defaults.ts';
 import { errorMessage } from '../errors.ts';
 import { writeJsonAtomic } from './atomic-file.ts';
-
-/** Coalesce bursts of skill loads into one usage.json write (milliseconds). */
-const USAGE_FLUSH_MS = 500;
 
 /**
  * Per-skill load statistics. They are authoritative in memory once loaded and are

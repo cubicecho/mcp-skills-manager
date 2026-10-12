@@ -1,3 +1,4 @@
+import { HttpStatus } from '@mcp-skills/shared';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
@@ -71,7 +72,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     const workspace = store.getWorkspace(slug);
     const isServed = workspace?.enabled === true;
     if (isServed === false) {
-      res.status(404).json({ error: `Unknown workspace "${slug}"` });
+      res.status(HttpStatus.NotFound).json({ error: `Unknown workspace "${slug}"` });
       return;
     }
     await handle(req, res, slug);

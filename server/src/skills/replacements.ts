@@ -1,3 +1,4 @@
+import { HttpStatus } from '@mcp-skills/shared';
 import { HttpError } from '../errors.ts';
 
 /** One change to part of a text: an exact passage, and the text that takes its place. */
@@ -26,7 +27,10 @@ export function applyReplacements(text: string, replacements: Replacement[]): { 
     const oldText = withUnixNewlines(replacement.oldText);
     const newText = withUnixNewlines(replacement.newText);
     if (oldText === newText) {
-      throw new HttpError(400, `${which}: old_text and new_text are the same, so nothing was written`);
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `${which}: old_text and new_text are the same, so nothing was written`,
+      );
     }
 
     const pieces = next.split(oldText);
@@ -34,14 +38,14 @@ export function applyReplacements(text: string, replacements: Replacement[]): { 
     if (occurrences === 0) {
       const isFirstEdit = index === 0;
       throw new HttpError(
-        404,
+        HttpStatus.NotFound,
         `${which}: old_text is not in the text, so nothing was written. ${howToFix(next, oldText, isFirstEdit)}`,
       );
     }
     const isAmbiguous = occurrences > 1 && replacement.replaceAll !== true;
     if (isAmbiguous) {
       throw new HttpError(
-        409,
+        HttpStatus.Conflict,
         `${which}: old_text is in the text ${occurrences} times, so nothing was written. ` +
           'Add the text around the one you mean until it matches once, or pass replace_all: true',
       );

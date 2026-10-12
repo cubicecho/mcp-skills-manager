@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConfigStore } from './config/store.ts';
+import { EnvVar } from './core/defaults.ts';
 import { errorMessage } from './errors.ts';
 import { endpointDeps } from './gateway/endpoint.ts';
 import { createSkillServer } from './gateway/skill-server.ts';
@@ -24,7 +25,7 @@ async function main(): Promise<void> {
     },
   });
 
-  const dataDir = path.resolve(values['data-dir'] ?? process.env.DATA_DIR ?? './data');
+  const dataDir = path.resolve(values['data-dir'] ?? process.env[EnvVar.DataDir] ?? './data');
   const store = new ConfigStore(dataDir);
   await store.init();
   store.startWatching();

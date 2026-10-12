@@ -12,8 +12,10 @@ import {
   createSkillRequestSchema,
   createWorkspaceRequestSchema,
   gitSourceSchema,
+  HttpStatus,
   importGitSkillRequestSchema,
   importSkillRequestSchema,
+  MS_PER_SECOND,
   moveSkillPathRequestSchema,
   slugify,
   slugSchema,
@@ -78,7 +80,7 @@ function requirePathQuery(req: Request): string {
   const relPath = req.query.path;
   const isUsable = typeof relPath === 'string' && relPath !== '';
   if (isUsable === false) {
-    throw new HttpError(400, 'A "path" query parameter is required');
+    throw new HttpError(HttpStatus.BadRequest, 'A "path" query parameter is required');
   }
   return relPath;
 }
@@ -92,11 +94,15 @@ function requirePathQuery(req: Request): string {
 function requireSkillName(request: { name?: string; title?: string }, action: 'create' | 'import'): string {
   const name = resolveSkillName(request.name, request.title);
   if (!name) {
-    throw new HttpError(400, `A "name" or "title" is required to ${action} a skill`);
+    throw new HttpError(HttpStatus.BadRequest, `A "name" or "title" is required to ${action} a skill`);
   }
   const parsed = slugSchema.safeParse(name);
   if (!parsed.success) {
-    throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
+    throw new HttpError(
+      HttpStatus.BadRequest,
+      `Invalid skill name "${name}"`,
+      'lowercase alphanumerics, dots, dashes, underscores',
+    );
   }
   return parsed.data;
 }
@@ -114,7 +120,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const requireSkill = (name: string): Skill => {
     const skill = store.getSkill(name);
     if (!skill) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
     }
     return skill;
   };
@@ -123,7 +129,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const requireUnlinked = (name: string): void => {
     if (requireSkill(name).source) {
       throw new HttpError(
-        409,
+        HttpStatus.Conflict,
         `Skill "${name}" is linked to a git source`,
         'its content comes from the repo; sync it, or unlink it to edit it here',
       );
@@ -133,7 +139,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.get('/status', (_req, res) => {
     const status: ServerStatus = {
       version: SERVER_VERSION,
-      uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+      uptimeSeconds: Math.floor((Date.now() - startedAt) / MS_PER_SECOND),
       skillCount: store.getSkills().length,
       workspaceCount: store.getWorkspaces().length,
       // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
@@ -168,7 +174,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       global: request.global,
       tags: request.tags,
     });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
@@ -180,14 +186,14 @@ export function createApiRouter(deps: ApiDeps): Router {
       content: Buffer.from(file.content, file.encoding),
     }));
     const skill = await store.importSkill({ name, format: request.format, files });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   // Create a skill linked to a folder in a git repo, fetching it right away.
   router.post('/skills/import-git', async (req, res) => {
     const { name, global, ...source } = importGitSkillRequestSchema.parse(req.body);
     const skill = await store.importSkillFromSource({ name, source, global });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   router.get('/skills/:name', (req, res) => {
@@ -220,7 +226,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.delete('/skills/:name', async (req, res) => {
     await store.deleteSkill(req.params.name);
-    res.status(204).end();
+    res.status(HttpStatus.NoContent).end();
   });
 
   // Link a skill to a folder in a git repo and replace its content with that folder.
@@ -309,7 +315,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const requireWorkspace = (slug: string): WorkspaceConfig => {
     const workspace = store.getWorkspace(slug);
     if (!workspace) {
-      throw new HttpError(404, `Unknown workspace "${slug}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
     }
     return workspace;
   };
@@ -317,7 +323,11 @@ export function createApiRouter(deps: ApiDeps): Router {
   const requireValidSlug = (slug: string): string => {
     const parsed = slugSchema.safeParse(slug);
     if (!parsed.success) {
-      throw new HttpError(400, `Invalid workspace slug "${slug}"`, 'derive a name that yields a valid URL slug');
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `Invalid workspace slug "${slug}"`,
+        'derive a name that yields a valid URL slug',
+      );
     }
     return parsed.data;
   };
@@ -330,7 +340,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     const request = createWorkspaceRequestSchema.parse(req.body);
     const slug = requireValidSlug(request.slug ?? slugify(request.name));
     if (store.getWorkspace(slug)) {
-      throw new HttpError(409, `Workspace "${slug}" already exists`);
+      throw new HttpError(HttpStatus.Conflict, `Workspace "${slug}" already exists`);
     }
     const config = workspaceConfigSchema.parse({
       name: request.name,
@@ -341,7 +351,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       skillToolMode: request.skillToolMode,
     });
     const saved = await store.saveWorkspace(config);
-    res.status(201).json(toWorkspaceStatus(saved));
+    res.status(HttpStatus.Created).json(toWorkspaceStatus(saved));
   });
 
   router.get('/workspaces/:slug', (req, res) => {
@@ -357,7 +367,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     const slug = update.name !== undefined ? requireValidSlug(slugify(name)) : existing.slug;
     const collidesWithAnother = slug !== existing.slug && store.getWorkspace(slug) !== undefined;
     if (collidesWithAnother) {
-      throw new HttpError(409, `Workspace "${slug}" already exists`);
+      throw new HttpError(HttpStatus.Conflict, `Workspace "${slug}" already exists`);
     }
     // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.
     const skillToolMode =
@@ -381,7 +391,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.delete('/workspaces/:slug', async (req, res) => {
     requireWorkspace(req.params.slug);
     await store.deleteWorkspace(req.params.slug);
-    res.status(204).end();
+    res.status(HttpStatus.NoContent).end();
   });
 
   router.post('/reload', async (_req, res) => {

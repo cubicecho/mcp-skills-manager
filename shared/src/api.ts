@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS, MAX_SKILL_FILES } from './defaults.ts';
 import { skillToolModeSchema } from './settings.ts';
 import {
   fileEncodingSchema,
@@ -94,7 +95,7 @@ export const importSkillRequestSchema = z.object({
   name: slugSchema.optional(),
   title: z.string().optional(),
   format: skillFormatSchema,
-  files: z.array(skillFileContentSchema).min(1).max(500),
+  files: z.array(skillFileContentSchema).min(1).max(MAX_SKILL_FILES),
 });
 export type ImportSkillRequest = z.infer<typeof importSkillRequestSchema>;
 
@@ -175,7 +176,7 @@ export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 
 /** Body of POST /api/workspaces. */
 export const createWorkspaceRequestSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(LENGTH_LIMITS.workspaceName),
   /** Slug for the URL; derived from `name` when omitted. */
   slug: slugSchema.optional(),
   enabled: z.boolean().optional(),
@@ -188,7 +189,7 @@ export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema
 
 /** Body of PATCH /api/workspaces/:slug; a new name moves the slug with it. */
 export const updateWorkspaceRequestSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(LENGTH_LIMITS.workspaceName).optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   /** Full replacement of the member list when provided. */

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS } from './defaults.ts';
 
 /**
  * Schemas for a skill's git source: the folder in a git repo a skill is linked
@@ -49,21 +50,21 @@ export const gitSourceSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .max(2048)
+    .max(LENGTH_LIMITS.repoUrl)
     .refine(isAllowedRepo, 'must be an https:// or SSH git URL without embedded credentials'),
   /** Branch or tag to track; the repo's default branch when absent. */
   ref: z
     .string()
     .trim()
     .min(1)
-    .max(255)
+    .max(LENGTH_LIMITS.gitRef)
     .regex(/^[^\s-]\S*$/, 'must be a branch or tag name')
     .optional(),
   /** Folder inside the repo holding the SKILL.md; the repo root when absent. */
   path: z
     .string()
     .trim()
-    .max(1024)
+    .max(LENGTH_LIMITS.sourcePath)
     .refine(isRepoRelative, 'must be a folder path inside the repo')
     .transform((folder) => folder.replace(/^\/+|\/+$/g, ''))
     .pipe(z.string().min(1))

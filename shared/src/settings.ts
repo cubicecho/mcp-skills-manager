@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_PORT } from './defaults.ts';
 
 /**
  * How skills are advertised as MCP tools.
@@ -40,7 +41,7 @@ export type AuthoringToolName = z.infer<typeof authoringToolNameSchema>;
 export const settingsFileSchema = z
   .object({
     /** HTTP port. Env PORT wins over this. */
-    port: z.number().int().positive().default(3000),
+    port: z.number().int().positive().default(DEFAULT_PORT),
     /** Bearer token for the management API and MCP endpoints. Env MCP_SKILLS_TOKEN wins.
      *  Generated on first run when auth is enabled and no token exists. */
     authToken: z.string().nullable().default(null),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS } from './defaults.ts';
 import { skillToolModeSchema } from './settings.ts';
 import { slugSchema } from './slug.ts';
 
@@ -13,7 +14,7 @@ import { slugSchema } from './slug.ts';
 export const workspaceConfigSchema = z
   .object({
     /** Human-facing display name. */
-    name: z.string().min(1).max(100),
+    name: z.string().min(1).max(LENGTH_LIMITS.workspaceName),
     /** URL slug — the route segment at /mcp/w/<slug>, also the config filename. */
     slug: slugSchema,
     /** Disable to 404 the workspace's endpoint without deleting it. */

@@ -1,16 +1,21 @@
+/** Bytes in a kilobyte, as sizes are shown (binary). */
+const BYTES_PER_KB = 1024;
+/** Bytes in a megabyte. */
+const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB;
+
 /**
  * Format a byte count for display.
  * @param bytes - The size in bytes.
  * @returns The size in B, KB or MB (1 KB = 1024 B), to one decimal place from 1 KB up.
  */
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
+  if (bytes < BYTES_PER_KB) {
     return `${bytes} B`;
   }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < BYTES_PER_MB) {
+    return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
 }
 
 /**

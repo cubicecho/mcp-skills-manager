@@ -19,6 +19,7 @@ import type {
   WorkspaceStatus,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
+import { HttpStatus } from '@mcp-skills/shared';
 import { getToken, requireAuth } from './auth';
 
 /** Non-2xx responses throw this; carries the HTTP status and the server's { error, detail? } envelope. */
@@ -69,7 +70,7 @@ async function authorizedFetch(path: string, init: AuthorizedInit = {}): Promise
     headers.Authorization = `Bearer ${token}`;
   }
   const response = await fetch(path, { ...init, headers: { ...headers, ...init.headers } });
-  if (response.status === 401) {
+  if (response.status === HttpStatus.Unauthorized) {
     requireAuth();
   }
   return response;

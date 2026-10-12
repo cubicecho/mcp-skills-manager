@@ -5,6 +5,7 @@ import { errorMiddleware } from './api/error-middleware.ts';
 import { createApiRouter } from './api/router.ts';
 import { createAuthMiddleware, resolveAuth } from './auth.ts';
 import type { ConfigStore } from './config/store.ts';
+import { BODY_LIMIT } from './core/defaults.ts';
 import { createMcpRouter } from './gateway/routes.ts';
 import type { McpSessionManager } from './gateway/session-manager.ts';
 
@@ -24,8 +25,7 @@ export function buildApp(deps: AppDeps): express.Express {
   const { store, port } = deps;
   const app = express();
   app.disable('x-powered-by');
-  // Generous limit: skill uploads carry base64-encoded supporting files inline.
-  app.use(express.json({ limit: '25mb' }));
+  app.use(express.json({ limit: BODY_LIMIT }));
 
   const auth = createAuthMiddleware(() => resolveAuth(store.getSettings()));
 

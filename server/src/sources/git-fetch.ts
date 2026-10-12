@@ -4,16 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { GitSource } from '@mcp-skills/shared';
+import { HttpStatus, MAX_SKILL_FILES } from '@mcp-skills/shared';
+import { EnvVar, GIT_MAX_BUFFER_BYTES, GIT_STDERR_TAIL_LENGTH, GIT_TIMEOUT_MS } from '../core/defaults.ts';
 import { HttpError } from '../errors.ts';
 
 const execFileAsync = promisify(execFile);
-
-/** Longest a single git command may run, in milliseconds. */
-const GIT_TIMEOUT_MS = 60_000;
-/** Most files a fetched skill folder may hold (matches the upload limit). */
-const MAX_SOURCE_FILES = 500;
-/** How much of git's stderr is passed back as the error detail, in characters. */
-const STDERR_TAIL_LENGTH = 600;
 
 /** Fetches a source's folder into `destDir` and reports the commit it came from. */
 export type SkillSourceFetcher = (source: GitSource, destDir: string) => Promise<{ commit: string }>;
@@ -34,12 +29,12 @@ export interface GitFetchOptions {
 async function git(args: string[], options: GitFetchOptions): Promise<string> {
   const { stdout } = await execFileAsync('git', args, {
     timeout: GIT_TIMEOUT_MS,
-    maxBuffer: 16 * 1024 * 1024,
+    maxBuffer: GIT_MAX_BUFFER_BYTES,
     env: {
       ...process.env,
       // Fail instead of hanging on a username/password or host-key prompt.
       GIT_TERMINAL_PROMPT: '0',
-      GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -oBatchMode=yes',
+      GIT_SSH_COMMAND: process.env[EnvVar.GitSshCommand] ?? 'ssh -oBatchMode=yes',
       GIT_ALLOW_PROTOCOL: options.allowLocal ? 'https:ssh:file' : 'https:ssh',
       // The folder is a literal path, never a pathspec pattern.
       GIT_LITERAL_PATHSPECS: '1',
@@ -58,10 +53,14 @@ async function git(args: string[], options: GitFetchOptions): Promise<string> {
 function gitError(err: unknown, status: number, message: string): HttpError {
   const failure = err as { code?: unknown; stderr?: unknown };
   if (failure.code === 'ENOENT') {
-    return new HttpError(500, 'git is not installed on the server', 'install git to sync skills from a repo');
+    return new HttpError(
+      HttpStatus.InternalServerError,
+      'git is not installed on the server',
+      'install git to sync skills from a repo',
+    );
   }
   const stderr = typeof failure.stderr === 'string' ? failure.stderr.trim() : '';
-  return new HttpError(status, message, stderr.slice(-STDERR_TAIL_LENGTH) || undefined, { cause: err });
+  return new HttpError(status, message, stderr.slice(-GIT_STDERR_TAIL_LENGTH) || undefined, { cause: err });
 }
 
 /**
@@ -87,7 +86,7 @@ async function copyTree(from: string, to: string, allowance: number): Promise<nu
     } else if (entry.isFile()) {
       remaining -= 1;
       if (remaining < 0) {
-        throw new HttpError(400, `The source folder holds more than ${MAX_SOURCE_FILES} files`);
+        throw new HttpError(HttpStatus.BadRequest, `The source folder holds more than ${MAX_SKILL_FILES} files`);
       }
       await copyFile(source, target);
     }
@@ -129,22 +128,22 @@ export async function fetchGitFolder(
         options,
       );
     } catch (err) {
-      throw gitError(err, 502, `Could not fetch ${source.repo}`);
+      throw gitError(err, HttpStatus.BadGateway, `Could not fetch ${source.repo}`);
     }
     const folder = source.path ?? '.';
     try {
       await git(['-C', clone, 'checkout', '--quiet', 'HEAD', '--', folder], options);
     } catch (err) {
-      throw gitError(err, 400, `Folder "${folder}" was not found in ${source.repo}`);
+      throw gitError(err, HttpStatus.BadRequest, `Folder "${folder}" was not found in ${source.repo}`);
     }
     const commit = await git(['-C', clone, 'rev-parse', 'HEAD'], options);
     const root = path.join(clone, folder);
     // lstat, not stat: a symlink standing in for the folder must not be followed out of the clone.
     const isFolder = (await lstat(root)).isDirectory();
     if (isFolder === false) {
-      throw new HttpError(400, `"${folder}" in ${source.repo} is not a folder`);
+      throw new HttpError(HttpStatus.BadRequest, `"${folder}" in ${source.repo} is not a folder`);
     }
-    await copyTree(root, destDir, MAX_SOURCE_FILES);
+    await copyTree(root, destDir, MAX_SKILL_FILES);
     return { commit };
   } finally {
     await rm(clone, { recursive: true, force: true });
