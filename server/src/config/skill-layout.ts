@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import type { Skill } from '@mcp-skills/shared';
 
@@ -32,4 +33,23 @@ export function dirSkillPath(folder: string): string {
  */
 export function fileSkillPath(name: string): string {
   return `${name}${FLAT_FILE_EXT}`;
+}
+
+/**
+ * Build the path a skill of either layout loads from.
+ * @param format - The skill's layout.
+ * @param name - The skill's folder (`dir`) or file-name stem (`file`).
+ * @returns The skill document's path, relative to the skills dir.
+ */
+export function skillPath(format: Skill['format'], name: string): string {
+  return format === 'dir' ? dirSkillPath(name) : fileSkillPath(name);
+}
+
+/**
+ * Tells whether a skills-dir entry is a flat-file skill.
+ * @param entry - Directory entry to test.
+ * @returns True for a regular file named `*.md`.
+ */
+export function isMarkdownFile(entry: Dirent): boolean {
+  return entry.isFile() && entry.name.endsWith(FLAT_FILE_EXT);
 }

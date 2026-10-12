@@ -312,14 +312,6 @@ export function createApiRouter(deps: ApiDeps): Router {
     resolvedCount: store.getSkillsForWorkspace(workspace).length,
   });
 
-  const requireWorkspace = (slug: string): WorkspaceConfig => {
-    const workspace = store.getWorkspace(slug);
-    if (!workspace) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
-    }
-    return workspace;
-  };
-
   const requireValidSlug = (slug: string): string => {
     const parsed = slugSchema.safeParse(slug);
     if (!parsed.success) {
@@ -355,11 +347,11 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.get('/workspaces/:slug', (req, res) => {
-    res.json(toWorkspaceStatus(requireWorkspace(req.params.slug)));
+    res.json(toWorkspaceStatus(store.requireWorkspace(req.params.slug)));
   });
 
   router.patch('/workspaces/:slug', async (req, res) => {
-    const existing = requireWorkspace(req.params.slug);
+    const existing = store.requireWorkspace(req.params.slug);
     const update = updateWorkspaceRequestSchema.parse(req.body);
     // Auto-slug: renaming re-derives the slug (and thus the URL). Keep the old
     // slug when the name is unchanged so member-only edits never move the URL.
@@ -389,7 +381,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.delete('/workspaces/:slug', async (req, res) => {
-    requireWorkspace(req.params.slug);
+    store.requireWorkspace(req.params.slug);
     await store.deleteWorkspace(req.params.slug);
     res.status(HttpStatus.NoContent).end();
   });

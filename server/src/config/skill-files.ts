@@ -32,15 +32,14 @@ export function isBinary(buffer: Buffer): boolean {
 
 /**
  * Resolve a caller-supplied path within a skill's directory, rejecting absolute paths and `..` traversal.
- * @param skillsDir - Absolute path of the skills dir.
- * @param name - The skill's name, which is also its directory under `skillsDir`.
  * @param relPath - The caller-supplied path, relative to the skill's directory.
  * @returns The safe POSIX-style relative path.
  * @throws HttpError 400 when the path is empty or leaves the skill's directory.
  */
-export function safeSkillRelPath(skillsDir: string, name: string, relPath: string): string {
+export function safeRelPath(relPath: string): string {
   const cleaned = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
-  const skillDir = path.join(skillsDir, name);
+  // Any absolute directory answers the same; the path is only measured against it.
+  const skillDir = path.resolve('skill');
   const full = path.resolve(skillDir, cleaned);
   const rel = path.relative(skillDir, full);
   const escapesSkillDir = rel === '' || rel.startsWith('..') || path.isAbsolute(rel);

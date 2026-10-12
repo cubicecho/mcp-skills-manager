@@ -32,10 +32,10 @@ import { AUTH_TOKEN_BYTES, WATCH_DEBOUNCE_MS } from '../core/defaults.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
-import { writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
+import { parseJsonFile, writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
 import { migrateLegacyWorkspaces } from './legacy-workspaces.ts';
-import { isBinary, pruneEmptyDirs, safeSkillRelPath, toPosix, walkEntries } from './skill-files.ts';
-import { dirSkillPath, fileSkillPath, SKILL_FILE, skillFolder } from './skill-layout.ts';
+import { isBinary, pruneEmptyDirs, safeRelPath, toPosix, walkEntries } from './skill-files.ts';
+import { dirSkillPath, fileSkillPath, isMarkdownFile, SKILL_FILE, skillFolder, skillPath } from './skill-layout.ts';
 import { STARTER_SKILL, STARTER_WORKSPACE } from './starter-skill.ts';
 import { UsageTracker } from './usage-tracker.ts';
 
@@ -63,12 +63,25 @@ interface StagedSource {
 }
 
 /**
- * Tells whether a skills-dir entry is a flat-file skill.
- * @param entry Directory entry to test.
- * @returns True for a regular file named `*.md`.
+ * Write a skill's local-only settings the way frontmatter keeps them: only the non-default value
+ * is stored, so the key is dropped when the skill is global, or writable.
+ * @param flags - Whether the skill is served on the root endpoint, and whether agents may edit it.
+ * @returns The `global` and `readonly` frontmatter keys.
  */
-function isMarkdownFile(entry: Dirent): boolean {
-  return entry.isFile() && entry.name.endsWith('.md');
+function localFlags(flags: { global: boolean; readOnly: boolean }): Pick<SkillFrontmatter, 'global' | 'readonly'> {
+  return { global: flags.global ? undefined : false, readonly: flags.readOnly ? true : undefined };
+}
+
+/**
+ * Refuse a path that names the skill's own document, which is not a supporting file.
+ * @param rel - Safe path relative to the skill's folder.
+ * @param message - What to tell the caller.
+ * @throws HttpError 400 when the path is SKILL.md.
+ */
+function requireNotSkillFile(rel: string, message: string): void {
+  if (rel === SKILL_FILE) {
+    throw new HttpError(HttpStatus.BadRequest, message);
+  }
 }
 
 /**
@@ -353,14 +366,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const name = slugSchema.parse(input.name);
     this.requireFreeName(name);
     const format = input.format ?? 'file';
-    const relPath = format === 'dir' ? dirSkillPath(name) : fileSkillPath(name);
+    const relPath = skillPath(format, name);
     const fullPath = path.join(this.skillsDir, relPath);
     await mkdir(path.dirname(fullPath), { recursive: true });
-    // Only persist the `global` key when it is false — the true default stays implicit for clean files.
-    const frontmatter: SkillFrontmatter = { name, description: input.description };
-    if (input.global === false) {
-      frontmatter.global = false;
-    }
+    const frontmatter: SkillFrontmatter = {
+      name,
+      description: input.description,
+      ...localFlags({ global: input.global !== false, readOnly: false }),
+    };
     const tags = normalizeTags(input.tags);
     if (tags.length > 0) {
       frontmatter.tags = tags;
@@ -376,18 +389,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     patch: { description?: string; body?: string; global?: boolean; readOnly?: boolean; tags?: string[] },
   ): Promise<Skill> {
     const existing = this.requireSkill(name);
-    const nextGlobal = patch.global ?? existing.global;
-    const nextReadOnly = patch.readOnly ?? existing.readOnly;
     // Tags: undefined → keep existing; a list → replace (empty clears the key).
     const nextTags = patch.tags !== undefined ? normalizeTags(patch.tags) : existing.tags;
     const frontmatter: SkillFrontmatter = {
       ...existing.frontmatter,
       name,
       description: patch.description ?? existing.description,
-      // Persist `global: false` only; drop the key entirely when the skill is (back to) global.
-      global: nextGlobal ? undefined : false,
-      // Likewise persist `readonly: true` only; drop the key when the skill is writable.
-      readonly: nextReadOnly ? true : undefined,
+      ...localFlags({
+        global: patch.global ?? existing.global,
+        readOnly: patch.readOnly ?? existing.readOnly,
+      }),
       tags: nextTags.length > 0 ? nextTags : undefined,
     };
     const body = patch.body ?? existing.body;
@@ -405,7 +416,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     this.requireFreeName(target, existing);
     const isDir = existing.format === 'dir';
-    const relPath = isDir ? dirSkillPath(target) : fileSkillPath(target);
+    const relPath = skillPath(existing.format, target);
     if (isDir) {
       // Rename aligns the on-disk folder to the new identity, even if it previously differed.
       await rename(this.skillRoot(existing), path.join(this.skillsDir, target));
@@ -428,10 +439,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Point every workspace that listed `from` at `to`, preserving position (used when a skill is renamed). */
   private async retargetWorkspaceSkill(from: string, to: string): Promise<void> {
-    for (const workspace of this.getWorkspaces()) {
-      if (workspace.skills.includes(from)) {
-        await this.saveWorkspace({ ...workspace, skills: workspace.skills.map((s) => (s === from ? to : s)) });
-      }
+    for (const workspace of this.workspacesListing(from)) {
+      await this.saveWorkspace({ ...workspace, skills: workspace.skills.map((s) => (s === from ? to : s)) });
     }
   }
 
@@ -449,10 +458,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       await rm(path.join(this.skillsDir, existing.path), { force: true });
     }
     // Drop the deleted skill from any workspace that referenced it (saveWorkspace prunes it now that it is gone).
-    for (const workspace of this.getWorkspaces()) {
-      if (workspace.skills.includes(name)) {
-        await this.saveWorkspace(workspace);
-      }
+    for (const workspace of this.workspacesListing(name)) {
+      await this.saveWorkspace(workspace);
     }
   }
 
@@ -483,7 +490,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
     const entries = input.files.map((file) => ({
-      rel: safeSkillRelPath(this.skillsDir, name, file.path),
+      rel: safeRelPath(file.path),
       content: file.content,
     }));
     const hasSkillFile = entries.some((entry) => entry.rel === SKILL_FILE);
@@ -636,8 +643,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       // The local name stays the identity even when upstream declares another, so workspace
       // membership and usage stats never orphan.
       name,
-      global: target.global ? undefined : false,
-      readonly: target.readOnly ? true : undefined,
+      ...localFlags(target),
       source: {
         repo: source.repo,
         ...(source.ref ? { ref: source.ref } : {}),
@@ -675,10 +681,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    */
   async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
     const existing = this.requireSkill(name);
-    const rel = safeSkillRelPath(this.skillsDir, name, relPath);
-    if (rel === SKILL_FILE) {
-      throw new HttpError(HttpStatus.BadRequest, 'Edit SKILL.md through the skill body, not as a supporting file');
-    }
+    const rel = safeRelPath(relPath);
+    requireNotSkillFile(rel, 'Edit SKILL.md through the skill body, not as a supporting file');
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     await mkdir(path.dirname(full), { recursive: true });
@@ -712,10 +716,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Create an empty sub-directory under a skill (promoting a `file` skill to a `dir` first). */
   async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
-    const rel = safeSkillRelPath(this.skillsDir, name, relPath);
-    if (rel === SKILL_FILE) {
-      throw new HttpError(HttpStatus.BadRequest, 'A folder cannot be named SKILL.md');
-    }
+    const rel = safeRelPath(relPath);
+    requireNotSkillFile(rel, 'A folder cannot be named SKILL.md');
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     if (existsSync(full)) {
@@ -729,10 +731,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async moveSupportingPath(name: string, fromPath: string, toPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const from = this.requireDirRelPath(existing, fromPath);
-    const to = safeSkillRelPath(this.skillsDir, name, toPath);
-    if (to === SKILL_FILE) {
-      throw new HttpError(HttpStatus.BadRequest, 'A supporting file cannot be named SKILL.md');
-    }
+    const to = safeRelPath(toPath);
+    requireNotSkillFile(to, 'A supporting file cannot be named SKILL.md');
     if (from === to) {
       return existing;
     }
@@ -787,10 +787,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (skill.format !== 'dir') {
       throw new HttpError(HttpStatus.BadRequest, `Skill "${skill.name}" has no supporting files`);
     }
-    const rel = safeSkillRelPath(this.skillsDir, skill.name, relPath);
-    if (rel === SKILL_FILE) {
-      throw new HttpError(HttpStatus.BadRequest, 'Edit SKILL.md through the skill body, not as a supporting file');
-    }
+    const rel = safeRelPath(relPath);
+    requireNotSkillFile(rel, 'Edit SKILL.md through the skill body, not as a supporting file');
     return rel;
   }
 
@@ -869,6 +867,29 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
+   * Look a workspace up by slug, failing when there is none.
+   * @param slug - Workspace slug.
+   * @returns The workspace.
+   * @throws HttpError 404 when no workspace has that slug.
+   */
+  requireWorkspace(slug: string): WorkspaceConfig {
+    const workspace = this.workspaces.get(slug);
+    if (!workspace) {
+      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
+    }
+    return workspace;
+  }
+
+  /**
+   * Find the workspaces a skill belongs to.
+   * @param name - Skill slug.
+   * @returns Every workspace whose member list names the skill, sorted by display name.
+   */
+  private workspacesListing(name: string): WorkspaceConfig[] {
+    return this.getWorkspaces().filter((workspace) => workspace.skills.includes(name));
+  }
+
+  /**
    * Creates or replaces a workspace and writes its config file.
    * @param config Workspace to store, keyed by its slug.
    * @returns The stored workspace, with members that no longer exist dropped.
@@ -893,10 +914,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Append a skill to a workspace's member list (idempotent). Used when an agent authors a skill via a workspace endpoint. */
   async addSkillToWorkspace(slug: string, name: string): Promise<WorkspaceConfig> {
-    const workspace = this.workspaces.get(slug);
-    if (!workspace) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
-    }
+    const workspace = this.requireWorkspace(slug);
     if (workspace.skills.includes(name)) {
       return workspace;
     }
@@ -962,7 +980,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const file = this.settingsFile;
     const isOnDisk = existsSync(file);
     const loaded = isOnDisk
-      ? this.parseJson(file, await readFile(file, 'utf8'), settingsFileSchema.parse.bind(settingsFileSchema))
+      ? await parseJsonFile(file, settingsFileSchema.parse.bind(settingsFileSchema))
       : settingsFileSchema.parse({});
     const auth = resolveAuth(loaded);
     const needsGeneratedToken = auth.enabled && auth.token === null;
@@ -1069,11 +1087,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     for (const file of files.sort()) {
       const fullPath = path.join(this.workspacesDir, file);
       try {
-        const config = this.parseJson(
-          fullPath,
-          await readFile(fullPath, 'utf8'),
-          workspaceConfigSchema.parse.bind(workspaceConfigSchema),
-        );
+        const config = await parseJsonFile(fullPath, workspaceConfigSchema.parse.bind(workspaceConfigSchema));
         if (`${config.slug}.json` !== file) {
           console.warn(`Workspace config ${fullPath} has slug "${config.slug}" that does not match its filename`);
         }
@@ -1083,19 +1097,5 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       }
     }
     return workspaces;
-  }
-
-  private parseJson<T>(file: string, raw: string, parse: (value: unknown) => T): T {
-    let json: unknown;
-    try {
-      json = JSON.parse(raw);
-    } catch (cause) {
-      throw new Error(`${file} is not valid JSON: ${errorMessage(cause)}`, { cause });
-    }
-    try {
-      return parse(json);
-    } catch (cause) {
-      throw new Error(`${file} failed validation: ${errorMessage(cause)}`, { cause });
-    }
   }
 }

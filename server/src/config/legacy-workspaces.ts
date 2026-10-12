@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile, rename, rm } from 'node:fs/promises';
+import { readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { workspaceConfigSchema } from '@mcp-skills/shared';
+import { readJsonFile } from './atomic-file.ts';
 
 /**
  * One-time migration: "profiles" were renamed to "workspaces", including their
@@ -53,7 +54,7 @@ export async function migrateLegacyWorkspaces(configDir: string, workspacesDir: 
  */
 async function legacyWorkspaceTargetName(source: string, fallback: string): Promise<string> {
   try {
-    const parsed = workspaceConfigSchema.safeParse(JSON.parse(await readFile(source, 'utf8')));
+    const parsed = workspaceConfigSchema.safeParse(await readJsonFile(source));
     if (parsed.success) {
       return `${parsed.data.slug}.json`;
     }
