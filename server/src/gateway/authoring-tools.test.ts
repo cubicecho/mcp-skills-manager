@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
+import { buildAuthoringTools } from './authoring-tools.ts';
 import { createSkillServer } from './skill-server.ts';
 
 /** The text of a tool result's first content block. */
@@ -189,6 +190,12 @@ describe('MCP authoring tools', () => {
     expect(store.getSkill('renamed')).toBeDefined();
     await client.callTool({ name: 'delete_skill', arguments: { name: 'renamed' } });
     expect(store.getSkill('renamed')).toBeUndefined();
+  });
+
+  it('advertises the same tool definitions on the root endpoint and, scoped, on a workspace', () => {
+    expect(buildAuthoringTools({ store }).map((tool) => tool.definition)).toMatchSnapshot('root');
+    const scoped = buildAuthoringTools({ store, workspaceSlug: 'examples' }).map((tool) => tool.definition);
+    expect(scoped).toMatchSnapshot('workspace');
   });
 
   it('creates a folder, moves a file into it and deletes the file', async () => {
