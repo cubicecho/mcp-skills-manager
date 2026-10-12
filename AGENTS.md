@@ -64,7 +64,8 @@ ref?, path?, commit, syncedAt }` → `Skill.source`; schemas in
 `linkSkillSource` / `syncSkill` / `unlinkSkillSource` fetch the folder with the
 git CLI (`server/src/sources/git-fetch.ts`, no shell, injected as the store's
 `fetchSource` option so tests use a fake), stage it under `DATA_DIR/.sync` —
-outside the watched dirs — and swap it in for the skill's folder. Sync is manual
+outside the watched dirs — and swap it in for the skill's folder (`SkillSync` in
+`server/src/sources/skill-sync.ts`; the store loads the result). Sync is manual
 (`POST /api/skills/:name/sync`); it forces the local `name` and carries
 `global`/`readonly` over, so identity and workspace membership survive. A linked
 skill's content is **locked**: the REST content routes answer 409
