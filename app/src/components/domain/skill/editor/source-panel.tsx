@@ -36,10 +36,12 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
           <Button
             size="sm"
             variant="outline"
-            disabled={pending || unlink.isPending}
+            disabled={unlink.isPending}
+            loading={pending}
+            loadingLabel="Syncing…"
             onClick={sync}
-            content={pending ? 'Syncing…' : 'Sync now'}
-            iconSlot={<RefreshCw className={pending ? 'animate-spin' : undefined} />}
+            content="Sync now"
+            iconSlot={<RefreshCw />}
           />
           <ConfirmButton
             variant="ghost"

@@ -1,5 +1,5 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SKILL_MD_KEY } from './file-tree';
@@ -65,6 +65,14 @@ function renderPanel(skill: SkillDetail = SKILL, selected: string = SKILL_MD_KEY
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const queryButton = (name: string | RegExp) => screen.queryByRole('button', { name });
 const files = () => within(screen.getByLabelText('Skill files'));
+
+const row = (name: RegExp) => files().getByRole('button', { name });
+
+/** Drag one row and drop it on another, or on the list itself for the skill root. */
+function dragOnto(from: RegExp, onto?: RegExp) {
+  fireEvent.dragStart(row(from), { dataTransfer: { setData: () => {}, effectAllowed: 'none' } });
+  fireEvent.drop(onto ? row(onto) : screen.getByLabelText('Skill files'), { dataTransfer: { dropEffect: 'none' } });
+}
 
 /** Choose an action from a file's or folder's menu. */
 async function chooseAction(path: string, action: string) {
@@ -224,6 +232,44 @@ describe('FilesPanel', () => {
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Renamed to reference/notes.md'));
     expect(movePath).toHaveBeenCalledWith({ from: 'docs/notes.md', to: 'reference/notes.md' });
+  });
+
+  it('moves a file dragged onto a folder into it, keeping its name', async () => {
+    renderPanel();
+
+    dragOnto(/^logo\.png/, /^docs/);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Moved to docs/logo.png'));
+    expect(movePath).toHaveBeenCalledWith({ from: 'logo.png', to: 'docs/logo.png' });
+  });
+
+  it('moves a file dragged out of its folder to the skill root', async () => {
+    renderPanel();
+
+    dragOnto(/^notes\.md/);
+
+    await waitFor(() => expect(movePath).toHaveBeenCalledWith({ from: 'docs/notes.md', to: 'notes.md' }));
+  });
+
+  it('reports a move that fails', async () => {
+    movePath.mockRejectedValueOnce(new Error('exists'));
+    renderPanel();
+
+    dragOnto(/^logo\.png/, /^docs/);
+
+    await waitFor(() => expect(toast.apiError).toHaveBeenCalledTimes(1));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('moves neither the skill’s own Markdown nor anything in a linked skill', () => {
+    const view = renderPanel();
+    dragOnto(/^SKILL\.md/, /^docs/);
+    view.unmount();
+
+    renderPanel(LINKED);
+    dragOnto(/^logo\.png/, /^docs/);
+
+    expect(movePath).not.toHaveBeenCalled();
   });
 
   it('deletes a file only once the question is confirmed', async () => {

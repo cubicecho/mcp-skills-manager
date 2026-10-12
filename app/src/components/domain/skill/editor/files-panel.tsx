@@ -19,6 +19,7 @@ import { FilePickerButton } from '@/components/ui/file-picker';
 import type { PickedFile } from '@/components/ui/file-picker-base';
 import { Ellipsis, FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
+import { Spinner } from '@/components/ui/spinner';
 import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
@@ -138,6 +139,18 @@ export function FilesPanel({
       },
     });
 
+  /**
+   * Move a dragged file or folder into a folder, under the name it has.
+   * @param from - The dragged path.
+   * @param into - The folder it was dropped on; empty for the skill root.
+   */
+  const moveInto = async (from: string, into: string) => {
+    const name = from.slice(from.lastIndexOf('/') + 1);
+    const to = into ? `${into}/${name}` : name;
+    await reported(movePath.mutateAsync({ from, to }), toast.apiError);
+    toast.success(`Moved to ${to}`);
+  };
+
   const remove = (node: TreeNode<FileEntry>) => {
     deleteEntry.mutate(node.path, {
       onSuccess: () => toast.success(`Deleted ${node.path}`),
@@ -173,7 +186,8 @@ export function FilesPanel({
                   hint={syncNow.pending ? 'Syncing…' : undefined}
                   disabled={syncNow.pending}
                   onClick={syncNow.sync}
-                  iconSlot={<RefreshCw className={syncNow.pending ? 'animate-spin' : undefined} />}
+                  // Not `loading`, which disables the button outright and takes the hint's tooltip with it.
+                  iconSlot={syncNow.pending ? <Spinner /> : <RefreshCw />}
                 />
               ) : (
                 <>
@@ -225,6 +239,8 @@ export function FilesPanel({
             entries={skill.files}
             selected={selected === SKILL_MD_KEY ? mainLabel : selected}
             onSelect={(path) => onSelect(path === mainLabel ? SKILL_MD_KEY : path)}
+            onMove={linked ? undefined : moveInto}
+            canMove={(node) => node.entry?.main !== true}
             meta={(node) => {
               if (node.entry?.main) {
                 return <Badge variant="secondary">main</Badge>;
