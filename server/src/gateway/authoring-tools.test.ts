@@ -6,17 +6,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
+import { firstText } from '../test/tool-result.ts';
 import { buildAuthoringTools } from './authoring-tools.ts';
 import { createSkillServer } from './skill-server.ts';
-
-/** The text of a tool result's first content block. */
-function firstText(res: unknown): string {
-  const block = (res as { content?: Array<{ type: string; text: string }> }).content?.[0];
-  if (!block) {
-    throw new Error('tool result had no content');
-  }
-  return block.text;
-}
 
 /** Wire a Client to a skill server for the given endpoint (root, or a workspace). */
 async function connect(store: ConfigStore, workspaceSlug?: string): Promise<Client> {

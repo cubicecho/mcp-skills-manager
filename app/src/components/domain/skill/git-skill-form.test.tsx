@@ -7,7 +7,7 @@ const mutate = vi.fn();
 const navigate = vi.fn();
 
 vi.mock('@/lib/queries', () => ({ useImportGitSkill: () => ({ mutate, isPending: false }) }));
-vi.mock('@/lib/toast', () => ({ useToasts: () => ({ success: vi.fn(), error: vi.fn(), apiError: vi.fn() }) }));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 
 /** The form with the submit button its dialog would draw in the footer. */

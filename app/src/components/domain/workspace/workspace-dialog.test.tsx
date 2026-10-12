@@ -17,7 +17,7 @@ vi.mock('@/lib/queries', () => ({
   useUpdateWorkspace: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
 }));
 
-vi.mock('@/lib/toast', () => ({ useToasts: () => ({ success: vi.fn(), error: vi.fn(), apiError: vi.fn() }) }));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
 describe('WorkspaceDialog', () => {
   beforeEach(() => {

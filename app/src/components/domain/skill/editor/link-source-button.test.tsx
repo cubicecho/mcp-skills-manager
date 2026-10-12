@@ -1,16 +1,16 @@
-import type { SkillDetail } from '@mcp-skills/shared';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aSkill } from '@/test/fixtures';
+import { toasts } from '@/test/toasts';
 import { LinkSourceButton } from './link-source-button';
 
 const mutate = vi.fn();
-const success = vi.fn();
 
 vi.mock('@/lib/queries', () => ({ useLinkSkillSource: () => ({ mutate, isPending: false }) }));
-vi.mock('@/lib/toast', () => ({ useToasts: () => ({ success, error: vi.fn(), apiError: vi.fn() }) }));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
-const skill = { name: 'my-skill' } as SkillDetail;
+const skill = aSkill({ name: 'my-skill' });
 
 /** The button, with its dialog already opened. */
 async function renderOpenDialog() {
@@ -21,7 +21,7 @@ async function renderOpenDialog() {
 describe('LinkSourceButton', () => {
   beforeEach(() => {
     mutate.mockReset();
-    success.mockReset();
+    toasts.success.mockReset();
   });
 
   it('keeps the submit disabled until the source is valid', async () => {
@@ -49,7 +49,7 @@ describe('LinkSourceButton', () => {
         path: 'skills/cubeui',
       }),
     );
-    expect(success).toHaveBeenCalled();
+    expect(toasts.success).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByLabelText(/^Repository URL/)).not.toBeInTheDocument());
   });
 

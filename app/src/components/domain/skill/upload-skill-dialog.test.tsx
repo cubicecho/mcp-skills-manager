@@ -7,7 +7,7 @@ const mutate = vi.fn();
 const navigate = vi.fn();
 
 vi.mock('@/lib/queries', () => ({ useImportSkill: () => ({ mutate, isPending: false }) }));
-vi.mock('@/lib/toast', () => ({ useToasts: () => ({ success: vi.fn(), error: vi.fn(), apiError: vi.fn() }) }));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 // jsdom's `File` cannot be read as bytes, so the picker is a button that hands over one Markdown file.
 vi.mock('@/components/ui/file-picker', () => ({

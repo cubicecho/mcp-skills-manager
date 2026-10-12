@@ -1,37 +1,23 @@
-import type { SkillDetail } from '@mcp-skills/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aSkill } from '@/test/fixtures';
+import { toasts } from '@/test/toasts';
 import type { EditorHandle } from './editor-frame';
 import { SkillBodyEditor } from './skill-body-editor';
 
 type MutateOptions = { onSuccess?: () => void };
 const mutate = vi.fn((_input: unknown, options?: MutateOptions) => options?.onSuccess?.());
-const toastSuccess = vi.fn();
 
 vi.mock('@/lib/queries', () => ({
   useSkills: () => ({ data: [{ name: 'other', tags: ['git', 'style'] }] }),
   useUpdateSkill: () => ({ mutate, isPending: false }),
 }));
 
-vi.mock('@/lib/toast', () => ({
-  useToasts: () => ({ success: toastSuccess, error: vi.fn(), apiError: vi.fn() }),
-}));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
-const SKILL = {
-  name: 'commit-messages',
-  description: 'Write commits',
-  body: '# Commits',
-  tags: ['git'],
-  format: 'dir',
-  path: 'commit-messages/SKILL.md',
-  global: true,
-  readOnly: false,
-  files: [],
-  frontmatter: {},
-  updatedAt: '2026-01-01T00:00:00.000Z',
-} as unknown as SkillDetail;
+const SKILL = aSkill({ description: 'Write commits', body: '# Commits', tags: ['git'] });
 
 const saveButton = () => screen.getByRole('button', { name: /Save/ });
 const pressSaveChord = () => fireEvent.keyDown(window, { key: 's', ctrlKey: true });
@@ -39,7 +25,7 @@ const pressSaveChord = () => fireEvent.keyDown(window, { key: 's', ctrlKey: true
 describe('SkillBodyEditor', () => {
   beforeEach(() => {
     mutate.mockClear();
-    toastSuccess.mockClear();
+    toasts.success.mockClear();
   });
 
   it('starts clean, showing the skill as saved', () => {
@@ -81,7 +67,7 @@ describe('SkillBodyEditor', () => {
       body: '# Commits!',
       tags: ['git', 'style'],
     });
-    expect(toastSuccess).toHaveBeenCalledWith('Skill saved');
+    expect(toasts.success).toHaveBeenCalledWith('Skill saved');
   });
 
   it('is clean once the saved skill comes back', async () => {

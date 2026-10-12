@@ -2,6 +2,8 @@ import type { SkillDetail } from '@mcp-skills/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { A_SOURCE, aSkill } from '@/test/fixtures';
+import { toasts } from '@/test/toasts';
 import { SKILL_MD_KEY } from './file-tree';
 import { FilesPanel } from './files-panel';
 
@@ -12,7 +14,6 @@ const movePath = vi.fn(async (_input: unknown) => ({}));
 const deleteFile = vi.fn((_path: string, options?: MutateOptions) => options?.onSuccess?.());
 const syncSkill = vi.fn();
 const exportSkill = vi.fn();
-const toast = { success: vi.fn(), error: vi.fn(), apiError: vi.fn() };
 
 vi.mock('@/lib/queries', () => ({
   useWriteSkillFile: () => ({ mutateAsync: writeFile, isPending: false }),
@@ -29,32 +30,21 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   exportSkill: (name: string) => exportSkill(name),
 }));
 
-vi.mock('@/lib/toast', () => ({ useToasts: () => toast }));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
-const SKILL = {
+const SKILL = aSkill({
   name: 'pdf-forms',
-  description: '',
   body: '# Forms',
-  tags: [],
-  format: 'dir',
-  path: 'pdf-forms/SKILL.md',
-  global: true,
-  readOnly: false,
   files: [
     { path: 'docs', type: 'dir', size: 0 },
     { path: 'docs/notes.md', type: 'file', size: 1536 },
     { path: 'logo.png', type: 'file', size: 12 },
   ],
-  frontmatter: {},
-  updatedAt: '2026-01-01T00:00:00.000Z',
-} as unknown as SkillDetail;
+});
 
-const LINKED = {
-  ...SKILL,
-  source: { repo: 'https://github.com/o/r', commit: 'abc1234', syncedAt: '2026-01-01T00:00:00.000Z' },
-} as unknown as SkillDetail;
+const LINKED = aSkill({ ...SKILL, source: A_SOURCE });
 
-const FILE_SKILL = { ...SKILL, format: 'file', path: 'pdf-forms.md', files: [] } as unknown as SkillDetail;
+const FILE_SKILL = aSkill({ ...SKILL, format: 'file', path: 'pdf-forms.md', files: [] });
 
 const onSelect = vi.fn();
 
@@ -185,7 +175,7 @@ describe('FilesPanel', () => {
     await userEvent.click(button('New file'));
     await answerPrompt('Path', 'docs/notes.md', 'Create file');
 
-    await waitFor(() => expect(toast.apiError).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toasts.apiError).toHaveBeenCalledTimes(1));
     expect(onSelect).not.toHaveBeenCalled();
     expect(button('Create file')).toBeInTheDocument();
   });
@@ -230,7 +220,7 @@ describe('FilesPanel', () => {
     expect(screen.getByLabelText(/^Path/)).toHaveValue('docs/notes.md');
     await answerPrompt('Path', 'reference/notes.md', 'Rename');
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Renamed to reference/notes.md'));
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Renamed to reference/notes.md'));
     expect(movePath).toHaveBeenCalledWith({ from: 'docs/notes.md', to: 'reference/notes.md' });
   });
 
@@ -239,7 +229,7 @@ describe('FilesPanel', () => {
 
     dragOnto(/^logo\.png/, /^docs/);
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Moved to docs/logo.png'));
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Moved to docs/logo.png'));
     expect(movePath).toHaveBeenCalledWith({ from: 'logo.png', to: 'docs/logo.png' });
   });
 
@@ -257,8 +247,8 @@ describe('FilesPanel', () => {
 
     dragOnto(/^logo\.png/, /^docs/);
 
-    await waitFor(() => expect(toast.apiError).toHaveBeenCalledTimes(1));
-    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() => expect(toasts.apiError).toHaveBeenCalledTimes(1));
+    expect(toasts.success).not.toHaveBeenCalled();
   });
 
   it('moves neither the skill’s own Markdown nor anything in a linked skill', () => {
@@ -281,7 +271,7 @@ describe('FilesPanel', () => {
 
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
     expect(deleteFile.mock.calls[0]?.[0]).toBe('logo.png');
-    expect(toast.success).toHaveBeenCalledWith('Deleted logo.png');
+    expect(toasts.success).toHaveBeenCalledWith('Deleted logo.png');
   });
 
   it('warns that deleting a folder takes its files with it', async () => {
@@ -318,6 +308,6 @@ describe('FilesPanel', () => {
 
     await userEvent.click(button('Export .zip'));
 
-    await waitFor(() => expect(toast.apiError).toHaveBeenCalledWith(failure));
+    await waitFor(() => expect(toasts.apiError).toHaveBeenCalledWith(failure));
   });
 });

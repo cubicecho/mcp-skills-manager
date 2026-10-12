@@ -12,6 +12,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { A_SOURCE, aSkill } from '@/test/fixtures';
 import { SKILL_MD_KEY } from './file-tree';
 import { SkillWorkspace } from './skill-workspace';
 
@@ -31,9 +32,7 @@ vi.mock('@/lib/queries', () => ({
   }),
 }));
 
-vi.mock('@/lib/toast', () => ({
-  useToasts: () => ({ success: vi.fn(), error: vi.fn(), apiError: vi.fn() }),
-}));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
 // The file list is pinned by its own tests; here it is the two rows this flow presses.
 vi.mock('@/components/domain/skill/editor/files-panel', () => ({
@@ -50,28 +49,16 @@ vi.mock('@/components/domain/skill/editor/files-panel', () => ({
   ),
 }));
 
-const SKILL = {
-  name: 'commit-messages',
+const SKILL = aSkill({
   description: 'Write commits',
   body: '# Commits',
-  tags: [],
-  format: 'dir',
-  path: 'commit-messages/SKILL.md',
-  global: true,
-  readOnly: false,
   files: [
     { path: 'docs/notes.md', type: 'file', size: 7 },
     { path: 'logo.png', type: 'file', size: 12 },
   ],
-  frontmatter: {},
-  usage: { count: 0, lastUsedAt: null },
-  updatedAt: '2026-01-01T00:00:00.000Z',
-} as unknown as SkillDetail;
+});
 
-const LINKED = {
-  ...SKILL,
-  source: { repo: 'https://github.com/o/r', commit: 'abc1234', syncedAt: '2026-01-01T00:00:00.000Z' },
-} as unknown as SkillDetail;
+const LINKED = aSkill({ ...SKILL, source: A_SOURCE });
 
 /** The workspace as its route holds it: the open file in state, and a way to another page. */
 function Harness({ skill, initial }: { skill: SkillDetail; initial: string | undefined }) {

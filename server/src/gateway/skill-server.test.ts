@@ -11,6 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
+import { firstText } from '../test/tool-result.ts';
 import { createSkillServer } from './skill-server.ts';
 
 function skill(overrides: Partial<Skill> & Pick<Skill, 'name'>): Skill {
@@ -43,15 +44,6 @@ const SKILLS: Skill[] = [
     ],
   }),
 ];
-
-/** The text of a tool result's first content block. */
-function firstText(res: unknown): string {
-  const block = (res as { content?: Array<{ type: string; text: string }> }).content?.[0];
-  if (!block) {
-    throw new Error('tool result had no content');
-  }
-  return block.text;
-}
 
 /** The first resource-content block, widened past the text|blob union for assertions. */
 function firstContent(res: { contents: unknown[] }): { text?: string; blob?: string; mimeType?: string } {

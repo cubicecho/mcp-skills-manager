@@ -2,12 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, type Ref } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toasts } from '@/test/toasts';
 import type { EditorHandle } from './editor-frame';
 import { SupportingFileEditor } from './supporting-file-editor';
 
 type MutateOptions = { onSuccess?: () => void };
 const mutate = vi.fn((_input: unknown, options?: MutateOptions) => options?.onSuccess?.());
-const toastSuccess = vi.fn();
 let fileQuery: { data?: { content: string; binary: boolean; size: number }; isPending: boolean; error: null };
 
 vi.mock('@/lib/queries', () => ({
@@ -15,9 +15,7 @@ vi.mock('@/lib/queries', () => ({
   useWriteSkillFile: () => ({ mutate, isPending: false }),
 }));
 
-vi.mock('@/lib/toast', () => ({
-  useToasts: () => ({ success: toastSuccess, error: vi.fn(), apiError: vi.fn() }),
-}));
+vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
 const PATH = 'reference/notes.md';
 // The card is labelled by the path too, so the textarea is found by its role.
@@ -32,7 +30,7 @@ function renderEditor(handle?: Ref<EditorHandle>) {
 describe('SupportingFileEditor', () => {
   beforeEach(() => {
     mutate.mockClear();
-    toastSuccess.mockClear();
+    toasts.success.mockClear();
     fileQuery = { data: { content: '# Notes', binary: false, size: 7 }, isPending: false, error: null };
   });
 
@@ -65,7 +63,7 @@ describe('SupportingFileEditor', () => {
     await userEvent.click(saveButton());
 
     expect(mutate.mock.calls[0]?.[0]).toEqual({ path: PATH, content: '# Notes!', encoding: 'utf8' });
-    expect(toastSuccess).toHaveBeenCalledWith(`Saved ${PATH}`);
+    expect(toasts.success).toHaveBeenCalledWith(`Saved ${PATH}`);
     expect(handle.current?.hasUnsavedChanges()).toBe(false);
     expect(saveButton()).toBeDisabled();
     expect(editor()).toHaveValue('# Notes!');
