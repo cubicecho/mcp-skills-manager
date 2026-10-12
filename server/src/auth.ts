@@ -8,6 +8,11 @@ export interface AuthConfig {
   token: string | null;
 }
 
+/** Bearer-auth state plus where its token comes from: the environment, settings.json, or nowhere. */
+export interface ResolvedAuth extends AuthConfig {
+  tokenSource: 'env' | 'settings' | 'none';
+}
+
 /** Lower-cased environment values that count as "on". */
 const TRUTHY_ENV = new Set(['1', 'true', 'yes', 'on']);
 
@@ -32,6 +37,27 @@ export function isAuthEffective(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   return settings.authEnabled && !authDisabledByEnv(env);
+}
+
+/**
+ * Work out the auth state in force. This is the one place that decides which token wins, so the
+ * middleware, the token generator and the startup log cannot disagree.
+ * @param settings - Settings carrying `authEnabled` and the stored token.
+ * @param env - Environment to read MCP_SKILLS_TOKEN and SECURE_LOCAL_NET from.
+ * @returns Whether auth is enforced, and the token to match with its source. An empty MCP_SKILLS_TOKEN counts as unset.
+ */
+export function resolveAuth(
+  settings: Pick<SettingsFile, 'authEnabled' | 'authToken'>,
+  env: NodeJS.ProcessEnv = process.env,
+): ResolvedAuth {
+  const enabled = isAuthEffective(settings, env);
+  if (env.MCP_SKILLS_TOKEN) {
+    return { enabled, token: env.MCP_SKILLS_TOKEN, tokenSource: 'env' };
+  }
+  if (settings.authToken) {
+    return { enabled, token: settings.authToken, tokenSource: 'settings' };
+  }
+  return { enabled, token: null, tokenSource: 'none' };
 }
 
 /** Constant-time comparison that does not leak token length (compares sha256 digests). */

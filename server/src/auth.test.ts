@@ -5,7 +5,7 @@ import type express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.ts';
-import { createAuthMiddleware } from './auth.ts';
+import { createAuthMiddleware, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
 
 describe('bearer auth', () => {
@@ -83,6 +83,30 @@ describe('bearer auth', () => {
     vi.stubEnv('MCP_SKILLS_TOKEN', 'from-env');
     await startApp();
     expect(await storedToken()).toBeNull();
+  });
+
+  it('treats an empty MCP_SKILLS_TOKEN as unset', async () => {
+    vi.stubEnv('MCP_SKILLS_TOKEN', '');
+    const app = await startApp();
+    const token = await storedToken();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect((await request(app).get('/api/status').set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    expect(resolveAuth(store.getSettings())).toEqual({ enabled: true, token, tokenSource: 'settings' });
+  });
+
+  it('names where the token in force comes from', () => {
+    const settings = { authEnabled: true, authToken: 'stored' };
+    expect(resolveAuth(settings, { MCP_SKILLS_TOKEN: 'env' })).toEqual({
+      enabled: true,
+      token: 'env',
+      tokenSource: 'env',
+    });
+    expect(resolveAuth(settings, { SECURE_LOCAL_NET: 'yes' }).enabled).toBe(false);
+    expect(resolveAuth({ authEnabled: true, authToken: null }, {})).toEqual({
+      enabled: true,
+      token: null,
+      tokenSource: 'none',
+    });
   });
 
   it('generates the token once, keeping it across reloads and restarts', async () => {

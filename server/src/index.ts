@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { buildApp } from './app.ts';
-import { authDisabledByEnv } from './auth.ts';
+import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
 import { tuneKeepAlive } from './http-tuning.ts';
 
@@ -19,14 +19,15 @@ async function main(): Promise<void> {
   const httpServer = app.listen(port, () => {
     console.log(`mcp-skills-manager listening on http://localhost:${port} (data dir: ${dataDir})`);
     const settings = store.getSettings();
+    const auth = resolveAuth(settings);
     if (authDisabledByEnv()) {
       console.log('Auth: disabled (SECURE_LOCAL_NET env var) — /api and /mcp are open on this network');
     } else if (!settings.authEnabled) {
       console.log('Auth: disabled (authEnabled: false in settings.json)');
-    } else if (process.env.MCP_SKILLS_TOKEN) {
+    } else if (auth.tokenSource === 'env') {
       console.log('Auth: bearer token from MCP_SKILLS_TOKEN env var (overrides settings.json)');
     } else {
-      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${settings.authToken}`);
+      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${auth.token}`);
     }
   });
 
