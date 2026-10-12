@@ -72,6 +72,21 @@ function isMarkdownFile(entry: Dirent): boolean {
 }
 
 /**
+ * Make an uploaded skill document declare the name it is being saved under. A document that
+ * declares another name would load as that skill, shadowing it or hiding the upload.
+ * @param content - The uploaded SKILL.md or flat `.md`.
+ * @param name - The name the upload was given.
+ * @returns The content untouched when it declares no name or this one; else a copy declaring `name`.
+ */
+function declaringName(content: Buffer, name: string): Buffer {
+  const { frontmatter, body } = parseMarkdown(content.toString('utf8'));
+  if (frontmatter.name === undefined || frontmatter.name === name) {
+    return content;
+  }
+  return Buffer.from(serializeMarkdown({ ...frontmatter, name }, body));
+}
+
+/**
  * Owns the flat, hand-editable state under DATA_DIR:
  *  - config/settings.json and config/workspaces/<slug>.json (JSON)
  *  - skills/<name>.md or skills/<name>/SKILL.md (Markdown + YAML frontmatter)
@@ -430,8 +445,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Create a skill from an uploaded .md / directory / zip. Files are written
-   * verbatim (frontmatter preserved). A `dir` import must include a SKILL.md;
-   * a `file` import is a single Markdown file written as `<name>.md`.
+   * verbatim (frontmatter preserved), except that a skill document declaring
+   * another `name` has it rewritten to the chosen one. A `dir` import must include
+   * a SKILL.md; a `file` import is a single Markdown file written as `<name>.md`.
    */
   async importSkill(input: {
     name: string;
@@ -449,7 +465,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         throw new HttpError(400, 'A file-format skill must contain exactly one Markdown file');
       }
       const relPath = fileSkillPath(name);
-      await writeBufferAtomic(path.join(this.skillsDir, relPath), only.content);
+      await writeBufferAtomic(path.join(this.skillsDir, relPath), declaringName(only.content, name));
       return this.reloadSkill(relPath, 'file');
     }
     // Validate every path up front (throws on traversal) so a bad entry never leaves a partial dir.
@@ -465,7 +481,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     for (const entry of entries) {
       const full = path.join(dir, entry.rel);
       await mkdir(path.dirname(full), { recursive: true });
-      await writeBufferAtomic(full, entry.content);
+      await writeBufferAtomic(full, entry.rel === SKILL_FILE ? declaringName(entry.content, name) : entry.content);
     }
     return this.reloadSkill(dirSkillPath(name), 'dir');
   }

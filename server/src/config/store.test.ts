@@ -362,6 +362,31 @@ describe('ConfigStore on-disk skill identity', () => {
     expect(store.getSkill('in-file')?.format).toBe('file');
   });
 
+  it('registers an upload under the chosen name, not the name its frontmatter declares', async () => {
+    await store.createSkill({ name: 'taken', description: 'original', body: 'b', format: 'dir' });
+    const asDir = await store.importSkill({
+      name: 'upload-dir',
+      format: 'dir',
+      files: [{ path: 'SKILL.md', content: skillMd('taken', 'uploaded dir') }],
+    });
+    const asFile = await store.importSkill({
+      name: 'upload-file',
+      format: 'file',
+      files: [{ path: 'x.md', content: skillMd('taken', 'uploaded file') }],
+    });
+    expect([asDir.name, asFile.name]).toEqual(['upload-dir', 'upload-file']);
+    await store.reload();
+    expect(store.getSkill('taken')?.description).toBe('original');
+    expect(store.getSkill('upload-dir')?.description).toBe('uploaded dir');
+    expect(store.getSkill('upload-file')?.description).toBe('uploaded file');
+  });
+
+  it('writes an upload verbatim when its declared name is the chosen one', async () => {
+    const raw = '---\ndescription: d\nname:   same\n---\nbody';
+    await store.importSkill({ name: 'same', format: 'file', files: [{ path: 'x.md', content: Buffer.from(raw) }] });
+    expect(await readFile(path.join(dir, 'skills/same.md'), 'utf8')).toBe(raw);
+  });
+
   it('renames a mismatched-folder skill, moving its folder to the new name', async () => {
     await dropDirSkill('My-Skill', 'name: my-skill\ndescription: d', { 'notes.txt': 'hi' });
     await store.reload();
