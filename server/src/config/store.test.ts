@@ -301,6 +301,39 @@ describe('ConfigStore on-disk skill identity', () => {
     expect(existsSync(path.join(dir, 'skills/My-Skill/notes.txt'))).toBe(true);
     expect(existsSync(path.join(dir, 'skills/my-skill'))).toBe(false);
   });
+
+  it('refuses to create a skill, or rename one, onto a name another skill holds', async () => {
+    await store.createSkill({ name: 'taken', description: 'd', body: 'b' });
+    await store.createSkill({ name: 'other', description: 'd', body: 'b' });
+    await expect(store.createSkill({ name: 'taken', description: 'again', body: 'b' })).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(store.renameSkill('other', 'taken')).rejects.toMatchObject({ status: 409 });
+    expect(store.getSkill('taken')?.description).toBe('d');
+  });
+
+  it('renames a mismatched-folder skill, moving its folder to the new name', async () => {
+    await dropDirSkill('My-Skill', 'name: my-skill\ndescription: d', { 'notes.txt': 'hi' });
+    await store.reload();
+    const renamed = await store.renameSkill('my-skill', 'renamed');
+    expect(renamed.path).toBe('renamed/SKILL.md');
+    expect(existsSync(path.join(dir, 'skills/My-Skill'))).toBe(false);
+    expect(existsSync(path.join(dir, 'skills/renamed/notes.txt'))).toBe(true);
+  });
+
+  it('creates a workspace-scoped skill and deletes a dir skill with its folder', async () => {
+    const scoped = await store.createSkill({
+      name: 'scoped',
+      description: 'd',
+      body: 'b',
+      format: 'dir',
+      global: false,
+    });
+    expect(scoped.global).toBe(false);
+    await store.deleteSkill('scoped');
+    expect(store.getSkill('scoped')).toBeUndefined();
+    expect(existsSync(path.join(dir, 'skills/scoped'))).toBe(false);
+  });
 });
 
 describe('ConfigStore skillToolMode resolution', () => {
