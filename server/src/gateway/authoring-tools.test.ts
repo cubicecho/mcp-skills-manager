@@ -30,6 +30,38 @@ async function connect(store: ConfigStore, workspaceSlug?: string): Promise<Clie
   return client;
 }
 
+/** One call an agent might make. */
+type Attempt = { name: string; arguments: Record<string, unknown> };
+
+/** The authoring tools that change nothing, so are allowed on a protected skill. */
+const NON_MUTATING_TOOLS = ['create_skill', 'read_skill_file'];
+
+/**
+ * Builds a call to every tool that changes an existing skill, for a skill holding a body passage and a file.
+ * @param skill - The skill to aim at.
+ * @param passage - Text present in its body.
+ * @param file - A supporting file it holds.
+ * @returns The attempts; they cover every mutating authoring tool, which the function asserts.
+ */
+function mutatingAttempts(skill: string, passage: string, file: string): Attempt[] {
+  const attempts: Attempt[] = [
+    { name: 'update_skill', arguments: { name: skill, body: 'hacked' } },
+    { name: 'update_skill', arguments: { name: skill, global: false } },
+    { name: 'edit_skill', arguments: { name: skill, edits: [{ old_text: passage, new_text: 'hacked' }] } },
+    { name: 'edit_skill', arguments: { name: skill, path: file, edits: [{ old_text: 'notes', new_text: 'hacked' }] } },
+    { name: 'rename_skill', arguments: { name: skill, new_name: 'renamed-away' } },
+    { name: 'delete_skill', arguments: { name: skill } },
+    { name: 'write_skill_file', arguments: { skill, path: file, content: 'hacked' } },
+    { name: 'write_skill_file', arguments: { skill, path: 'new.md', content: 'new' } },
+    { name: 'create_skill_folder', arguments: { skill, path: 'extra' } },
+    { name: 'move_skill_file', arguments: { skill, from: file, to: 'moved.md' } },
+    { name: 'delete_skill_file', arguments: { skill, path: file } },
+  ];
+  const mutating = authoringToolNameSchema.options.filter((name) => NON_MUTATING_TOOLS.includes(name) === false);
+  expect([...new Set(attempts.map((attempt) => attempt.name))].sort()).toEqual([...mutating].sort());
+  return attempts;
+}
+
 describe('MCP authoring tools', () => {
   let dir: string;
   let store: ConfigStore;
@@ -159,6 +191,44 @@ describe('MCP authoring tools', () => {
     expect(store.getSkill('renamed')).toBeUndefined();
   });
 
+  it('creates a folder, moves a file into it and deletes the file', async () => {
+    const client = await connect(store);
+    await client.callTool({ name: 'create_skill', arguments: { name: 'tree', body: 'b' } });
+    await client.callTool({ name: 'write_skill_file', arguments: { skill: 'tree', path: 'a.md', content: 'a' } });
+    const paths = () => store.getSkill('tree')?.files.map((f) => f.path);
+
+    const folder = await client.callTool({ name: 'create_skill_folder', arguments: { skill: 'tree', path: 'docs' } });
+    expect(firstText(folder)).toBe('Created folder "docs" in skill "tree".');
+    expect(paths()).toEqual(['a.md', 'docs']);
+
+    const moved = await client.callTool({
+      name: 'move_skill_file',
+      arguments: { skill: 'tree', from: 'a.md', to: 'docs/a.md' },
+    });
+    expect(firstText(moved)).toBe('Moved "a.md" to "docs/a.md" in skill "tree".');
+    expect(paths()).toEqual(['docs', 'docs/a.md']);
+
+    const deleted = await client.callTool({
+      name: 'delete_skill_file',
+      arguments: { skill: 'tree', path: 'docs/a.md' },
+    });
+    expect(firstText(deleted)).toBe('Deleted "docs/a.md" from skill "tree". It has no supporting files.');
+    // The folder the file left empty goes with it.
+    expect(paths()).toEqual([]);
+  });
+
+  it("serves a workspace only its own skills: another workspace's skill is not listed, loadable or readable", async () => {
+    await store.saveWorkspace({ name: 'Other', slug: 'other', enabled: true, skills: [] });
+    const other = await connect(store, 'other');
+    await other.callTool({ name: 'create_skill', arguments: { name: 'theirs', body: 'private' } });
+
+    const mine = await connect(store, 'examples');
+    expect((await mine.listTools()).tools.map((t) => t.name)).not.toContain('theirs');
+    expect(firstText(await mine.callTool({ name: 'list_skills' }))).not.toContain('theirs');
+    await expect(mine.callTool({ name: 'theirs' })).rejects.toThrow('Unknown skill tool "theirs"');
+    await expect(mine.readResource({ uri: 'skill://theirs' })).rejects.toThrow();
+  });
+
   it('refuses every mutating tool on a read-only skill, while still letting it be read', async () => {
     const client = await connect(store);
     await client.callTool({ name: 'create_skill', arguments: { name: 'locked', description: 'd', body: 'original' } });
@@ -169,17 +239,7 @@ describe('MCP authoring tools', () => {
     // A human marks it read-only (the REST/UI path).
     await store.updateSkill('locked', { readOnly: true });
 
-    const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
-      { name: 'update_skill', arguments: { name: 'locked', body: 'hacked' } },
-      { name: 'edit_skill', arguments: { name: 'locked', edits: [{ old_text: 'original', new_text: 'hacked' }] } },
-      { name: 'rename_skill', arguments: { name: 'locked', new_name: 'unlocked' } },
-      { name: 'delete_skill', arguments: { name: 'locked' } },
-      { name: 'write_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md', content: 'hacked' } },
-      { name: 'write_skill_file', arguments: { skill: 'locked', path: 'new.md', content: 'new' } },
-      { name: 'create_skill_folder', arguments: { skill: 'locked', path: 'extra' } },
-      { name: 'move_skill_file', arguments: { skill: 'locked', from: 'reference/notes.md', to: 'moved.md' } },
-      { name: 'delete_skill_file', arguments: { skill: 'locked', path: 'reference/notes.md' } },
-    ];
+    const attempts = mutatingAttempts('locked', 'original', 'reference/notes.md');
     for (const attempt of attempts) {
       const res = await client.callTool(attempt);
       expect((res as { isError?: boolean }).isError, attempt.name).toBe(true);
@@ -209,20 +269,7 @@ describe('MCP authoring tools', () => {
     await store.importSkillFromSource({ source: { repo: 'https://example.com/acme/skills.git' }, name: 'linked' });
     const client = await connect(store);
 
-    const attempts: Array<{ name: string; arguments: Record<string, unknown> }> = [
-      { name: 'update_skill', arguments: { name: 'linked', body: 'hacked' } },
-      { name: 'update_skill', arguments: { name: 'linked', global: false } },
-      { name: 'edit_skill', arguments: { name: 'linked', edits: [{ old_text: 'upstream', new_text: 'hacked' }] } },
-      {
-        name: 'edit_skill',
-        arguments: { name: 'linked', path: 'notes.md', edits: [{ old_text: 'notes', new_text: 'hacked' }] },
-      },
-      { name: 'rename_skill', arguments: { name: 'linked', new_name: 'unlinked' } },
-      { name: 'delete_skill', arguments: { name: 'linked' } },
-      { name: 'write_skill_file', arguments: { skill: 'linked', path: 'new.md', content: 'new' } },
-      { name: 'create_skill_folder', arguments: { skill: 'linked', path: 'extra' } },
-      { name: 'delete_skill_file', arguments: { skill: 'linked', path: 'notes.md' } },
-    ];
+    const attempts = mutatingAttempts('linked', 'upstream', 'notes.md');
     for (const attempt of attempts) {
       const res = await client.callTool(attempt);
       expect((res as { isError?: boolean }).isError, attempt.name).toBe(true);

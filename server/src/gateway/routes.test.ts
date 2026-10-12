@@ -89,6 +89,39 @@ describe('MCP HTTP router', () => {
     });
   });
 
+  describe('workspace endpoints (/w/:slug)', () => {
+    /**
+     * Builds the URL of a workspace's endpoint on the booted server.
+     * @param slug - The workspace slug.
+     * @returns The endpoint URL.
+     */
+    const workspaceUrl = (slug: string) => new URL(`${server.url.href}/w/${slug}`);
+
+    it('serves an enabled workspace its member skills only', async () => {
+      await store.createSkill({ name: 'outside', description: 'd', body: 'b' });
+      server = await boot(store);
+      const { client } = await connect(workspaceUrl('examples'));
+      const served = (await client.listResources()).resources.map((resource) => resource.uri);
+      expect(served).toContain('skill://getting-started');
+      expect(served).not.toContain('skill://outside');
+      await client.close();
+    });
+
+    it('answers 404 for an unknown workspace and for a disabled one', async () => {
+      await store.saveWorkspace({ name: 'Off', slug: 'off', enabled: false, skills: [] });
+      server = await boot(store);
+      for (const slug of ['nope', 'off']) {
+        const res = await fetch(workspaceUrl(slug), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        });
+        expect(res.status).toBe(404);
+        expect(await res.json()).toEqual({ error: `Unknown workspace "${slug}"` });
+      }
+    });
+  });
+
   describe('stateful (httpLiveUpdates)', () => {
     beforeEach(async () => {
       await store.updateSettings({ httpLiveUpdates: true });
