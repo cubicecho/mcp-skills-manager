@@ -323,9 +323,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     tags?: string[];
   }): Promise<Skill> {
     const name = slugSchema.parse(input.name);
-    if (this.skills.has(name)) {
-      throw new HttpError(409, `Skill "${name}" already exists`);
-    }
+    this.requireFreeName(name);
     const format = input.format ?? 'file';
     const relPath = format === 'dir' ? dirSkillPath(name) : fileSkillPath(name);
     const fullPath = path.join(this.skillsDir, relPath);
@@ -377,9 +375,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (target === name) {
       return existing;
     }
-    if (this.skills.has(target)) {
-      throw new HttpError(409, `Skill "${target}" already exists`);
-    }
+    this.requireFreeName(target, existing);
     const isDir = existing.format === 'dir';
     const relPath = isDir ? dirSkillPath(target) : fileSkillPath(target);
     if (isDir) {
@@ -391,7 +387,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       path.join(this.skillsDir, relPath),
       serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
     );
-    if (!isDir) {
+    const leavesOldFile = isDir === false && existing.path !== relPath;
+    if (leavesOldFile) {
       await rm(path.join(this.skillsDir, existing.path), { force: true });
     }
     this.skills.delete(name);
@@ -442,9 +439,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     files: { path: string; content: Buffer }[];
   }): Promise<Skill> {
     const name = slugSchema.parse(input.name);
-    if (this.skills.has(name)) {
-      throw new HttpError(409, `Skill "${name}" already exists`);
-    }
+    this.requireFreeName(name);
     if (input.files.length === 0) {
       throw new HttpError(400, 'An imported skill must contain at least one file');
     }
@@ -485,9 +480,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async importSkillFromSource(input: { name?: string; source: GitSource; global?: boolean }): Promise<Skill> {
     return this.withStagedSource(input.source, async (staged) => {
       const name = input.name ?? (await this.sourceSkillName(input.source, staged));
-      if (this.skills.has(name) || existsSync(path.join(this.skillsDir, name))) {
-        throw new HttpError(409, `Skill "${name}" already exists`);
-      }
+      this.requireFreeName(name);
       return this.exclusiveSync(name, () =>
         this.installStaged(staged, { name, source: input.source, global: input.global !== false, readOnly: false }),
       );
@@ -785,6 +778,23 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
+   * Refuse a name that is taken, in the catalogue or as a folder or flat file on disk. A skill's
+   * folder need not match its name, so the catalogue alone cannot say a folder is free.
+   * @param name - The slug about to be claimed.
+   * @param claimant - The skill claiming it, whose own folder and file are not a conflict.
+   * @throws HttpError 409 when the name or the storage it would use is taken.
+   */
+  private requireFreeName(name: string, claimant?: Skill): void {
+    const ownStorage = claimant ? [skillFolder(claimant), claimant.path] : [];
+    const isStorageTaken = [name, fileSkillPath(name)].some(
+      (rel) => ownStorage.includes(rel) === false && existsSync(path.join(this.skillsDir, rel)),
+    );
+    if (this.skills.has(name) || isStorageTaken) {
+      throw new HttpError(409, `Skill "${name}" already exists`);
+    }
+  }
+
+  /**
    * Make sure a skill has a folder to hold supporting files, promoting a `file` skill first.
    * @param skill - The skill about to receive a supporting file or folder.
    */
@@ -799,6 +809,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const fileFull = path.join(this.skillsDir, skill.path);
     const raw = await readFile(fileFull, 'utf8');
     const dir = this.skillRoot(skill);
+    if (existsSync(path.join(dir, SKILL_FILE))) {
+      throw new HttpError(
+        409,
+        `Skill "${skill.name}" cannot take supporting files: the folder "${skillFolder(skill)}" already holds another skill. Rename one of them first.`,
+      );
+    }
     await mkdir(dir, { recursive: true });
     await writeTextAtomic(path.join(dir, SKILL_FILE), raw);
     await rm(fileFull, { force: true });

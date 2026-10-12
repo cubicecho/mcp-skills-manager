@@ -312,6 +312,56 @@ describe('ConfigStore on-disk skill identity', () => {
     expect(store.getSkill('taken')?.description).toBe('d');
   });
 
+  it("refuses a new skill whose name is another skill's folder, leaving that skill intact", async () => {
+    await dropDirSkill('haxe-lang', 'name: haxe\ndescription: haxe');
+    await store.reload();
+    for (const format of ['dir', 'file'] as const) {
+      await expect(store.createSkill({ name: 'haxe-lang', description: 'd', body: 'b', format })).rejects.toMatchObject(
+        { status: 409 },
+      );
+    }
+    await expect(
+      store.importSkill({
+        name: 'haxe-lang',
+        format: 'dir',
+        files: [{ path: 'SKILL.md', content: skillMd('x', 'd') }],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await store.reload();
+    expect(store.getSkill('haxe')?.description).toBe('haxe');
+    expect(store.getSkill('haxe-lang')).toBeUndefined();
+  });
+
+  it('refuses a rename onto a folder that is on disk but is no skill', async () => {
+    await mkdir(path.join(dir, 'skills/stray'), { recursive: true });
+    await writeFile(path.join(dir, 'skills/stray/notes.txt'), 'kept');
+    await store.createSkill({ name: 'mover', description: 'd', body: 'b', format: 'dir' });
+    await expect(store.renameSkill('mover', 'stray')).rejects.toMatchObject({ status: 409 });
+    expect(store.getSkill('mover')).toBeDefined();
+  });
+
+  it('renames a skill to the name of its own folder or file', async () => {
+    await dropDirSkill('haxe-lang', 'name: haxe\ndescription: haxe');
+    await writeFile(path.join(dir, 'skills/stem.md'), '---\nname: declared\ndescription: flat\n---\n\nbody\n');
+    await store.reload();
+    expect((await store.renameSkill('haxe', 'haxe-lang')).path).toBe('haxe-lang/SKILL.md');
+    expect((await store.renameSkill('declared', 'stem')).path).toBe('stem.md');
+    await store.reload();
+    expect(store.getSkill('stem')?.description).toBe('flat');
+  });
+
+  it('refuses to promote a flat skill into a folder another skill holds', async () => {
+    await dropDirSkill('shared', 'name: in-folder\ndescription: folder');
+    await writeFile(path.join(dir, 'skills/shared.md'), '---\nname: in-file\ndescription: flat\n---\n\nbody\n');
+    await store.reload();
+    await expect(store.writeSupportingFile('in-file', 'notes.md', Buffer.from('n'))).rejects.toMatchObject({
+      status: 409,
+    });
+    await store.reload();
+    expect(store.getSkill('in-folder')?.description).toBe('folder');
+    expect(store.getSkill('in-file')?.format).toBe('file');
+  });
+
   it('renames a mismatched-folder skill, moving its folder to the new name', async () => {
     await dropDirSkill('My-Skill', 'name: my-skill\ndescription: d', { 'notes.txt': 'hi' });
     await store.reload();
