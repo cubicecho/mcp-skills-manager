@@ -69,9 +69,12 @@ function gitError(err: unknown, status: number, message: string): HttpError {
  * (which could point anywhere on the server) and git's own metadata are left behind.
  * @param from Absolute path of the folder to copy.
  * @param to Absolute path of the existing folder to copy into.
- * @param budget Remaining file allowance, shared across the whole tree.
+ * @param allowance How many more files may be copied.
+ * @returns The allowance left once this folder is copied.
+ * @throws HttpError 400 when the folder holds more files than the allowance.
  */
-async function copyTree(from: string, to: string, budget: { remaining: number }): Promise<void> {
+async function copyTree(from: string, to: string, allowance: number): Promise<number> {
+  let remaining = allowance;
   for (const entry of await readdir(from, { withFileTypes: true })) {
     const source = path.join(from, entry.name);
     const target = path.join(to, entry.name);
@@ -80,15 +83,16 @@ async function copyTree(from: string, to: string, budget: { remaining: number })
         continue;
       }
       await mkdir(target);
-      await copyTree(source, target, budget);
+      remaining = await copyTree(source, target, remaining);
     } else if (entry.isFile()) {
-      budget.remaining -= 1;
-      if (budget.remaining < 0) {
+      remaining -= 1;
+      if (remaining < 0) {
         throw new HttpError(400, `The source folder holds more than ${MAX_SOURCE_FILES} files`);
       }
       await copyFile(source, target);
     }
   }
+  return remaining;
 }
 
 /**
@@ -140,7 +144,7 @@ export async function fetchGitFolder(
     if (!isFolder) {
       throw new HttpError(400, `"${folder}" in ${source.repo} is not a folder`);
     }
-    await copyTree(root, destDir, { remaining: MAX_SOURCE_FILES });
+    await copyTree(root, destDir, MAX_SOURCE_FILES);
     return { commit };
   } finally {
     await rm(clone, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { type Dirent, existsSync } from 'node:fs';
+import { type Dirent, existsSync, type Stats } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -69,6 +69,19 @@ const WATCH_DEBOUNCE_MS = 300;
  */
 function isMarkdownFile(entry: Dirent): boolean {
   return entry.isFile() && entry.name.endsWith('.md');
+}
+
+/**
+ * Stat a path that may not be there.
+ * @param full - Absolute path.
+ * @returns Its stats, or undefined when it cannot be read (missing, or not permitted).
+ */
+async function statOrUndefined(full: string): Promise<Stats | undefined> {
+  try {
+    return await stat(full);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -674,10 +687,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const existing = this.requireSkill(name);
     const rel = this.requireDirRelPath(existing, relPath);
     const full = path.join(this.skillRoot(existing), rel);
-    let stats: Awaited<ReturnType<typeof stat>>;
-    try {
-      stats = await stat(full);
-    } catch {
+    const stats = await statOrUndefined(full);
+    if (stats === undefined) {
       throw new HttpError(404, `No file "${rel}" in skill "${name}"`);
     }
     if (!stats.isFile()) {
@@ -917,6 +928,20 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return path.join(this.skillsDir, skillFolder(skill));
   }
 
+  /**
+   * Tell whether an entry of the skills dir is a skill, and where it loads from.
+   * @param entry - A direct child of the skills dir.
+   * @returns The skill document's path relative to the skills dir and its layout; undefined for
+   *   anything else, such as a folder without a SKILL.md.
+   */
+  private skillEntryLocation(entry: Dirent): { relPath: string; format: Skill['format'] } | undefined {
+    if (entry.isDirectory()) {
+      const relPath = dirSkillPath(entry.name);
+      return existsSync(path.join(this.skillsDir, relPath)) ? { relPath, format: 'dir' } : undefined;
+    }
+    return isMarkdownFile(entry) ? { relPath: entry.name, format: 'file' } : undefined;
+  }
+
   /** The `<folder>/SKILL.md` relative path a `dir` skill loads from — using its real on-disk folder, not its name. */
   private dirSkillRelPath(skill: Skill): string {
     return dirSkillPath(skillFolder(skill));
@@ -930,22 +955,18 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   private async loadSettings(): Promise<SettingsFile> {
     const file = this.settingsFile;
-    let settings: SettingsFile;
-    let dirty = false;
-    if (existsSync(file)) {
-      settings = this.parseJson(file, await readFile(file, 'utf8'), settingsFileSchema.parse.bind(settingsFileSchema));
-    } else {
-      settings = settingsFileSchema.parse({});
-      dirty = true;
-    }
-    const auth = resolveAuth(settings);
+    const isOnDisk = existsSync(file);
+    const loaded = isOnDisk
+      ? this.parseJson(file, await readFile(file, 'utf8'), settingsFileSchema.parse.bind(settingsFileSchema))
+      : settingsFileSchema.parse({});
+    const auth = resolveAuth(loaded);
     const needsGeneratedToken = auth.enabled && auth.token === null;
+    const settings = needsGeneratedToken ? { ...loaded, authToken: randomBytes(32).toString('hex') } : loaded;
     if (needsGeneratedToken) {
-      settings.authToken = randomBytes(32).toString('hex');
-      dirty = true;
       console.log(`Generated auth token (persisted to ${file}):\n  ${settings.authToken}`);
     }
-    if (dirty) {
+    const needsWrite = needsGeneratedToken || isOnDisk === false;
+    if (needsWrite) {
       await mkdir(this.configDir, { recursive: true });
       await writeJsonAtomic(file, settings);
     }
@@ -959,20 +980,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const entries = await readdir(this.skillsDir, { withFileTypes: true });
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      let relPath: string;
-      let format: Skill['format'];
-      if (entry.isDirectory()) {
-        relPath = dirSkillPath(entry.name);
-        if (!existsSync(path.join(this.skillsDir, relPath))) {
-          continue; // a directory without a SKILL.md is not a skill
-        }
-        format = 'dir';
-      } else if (isMarkdownFile(entry)) {
-        relPath = entry.name;
-        format = 'file';
-      } else {
+      const location = this.skillEntryLocation(entry);
+      if (location === undefined) {
         continue;
       }
+      const { relPath, format } = location;
       try {
         const skill = await this.readSkill(relPath, format);
         const clash = skills.get(skill.name);
