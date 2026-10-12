@@ -79,3 +79,37 @@ export function decodeResourcePart(part: string, uri: string): string {
     throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
   }
 }
+
+/** What a `skill://` resource URI names: a skill's own document, or one of its bundled files. */
+export interface ParsedResourceUri {
+  /** The skill's name; empty when the URI names none. */
+  skill: string;
+  /** The bundled file's path relative to the skill's folder; absent for the skill's own document. */
+  path?: string;
+}
+
+/**
+ * Take a `skill://<name>` or `skill://<name>/<path>` URI apart.
+ * @param uri - The URI a client asked for.
+ * @returns The skill it names, and the bundled file when it names one.
+ * @throws McpError resource-not-found for another scheme, InvalidParams for a malformed percent-escape.
+ */
+export function parseResourceUri(uri: string): ParsedResourceUri {
+  const prefix = `${RESOURCE_SCHEME}://`;
+  if (uri.startsWith(prefix) === false) {
+    throw resourceNotFound(uri);
+  }
+  // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
+  // delimits them (a literal `?`/`#` in a filename would be percent-encoded).
+  const rest = uri.slice(prefix.length).replace(/[?#].*$/, '');
+  // Skill names never contain "/", so the first slash cleanly separates the
+  // skill name from a bundled-file path: skill://<name> vs skill://<name>/<path>.
+  const slash = rest.indexOf('/');
+  if (slash === -1) {
+    return { skill: decodeResourcePart(rest, uri) };
+  }
+  return {
+    skill: decodeResourcePart(rest.slice(0, slash), uri),
+    path: decodeResourcePart(rest.slice(slash + 1), uri),
+  };
+}

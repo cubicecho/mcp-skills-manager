@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import type { ConfigStore } from '../config/store.ts';
+import { sendError } from '../errors.ts';
 import { closeQuietly } from './close-quietly.ts';
 import { endpointDeps } from './endpoint.ts';
 import { McpSessionManager } from './session-manager.ts';
@@ -72,7 +73,7 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     const workspace = store.getWorkspace(slug);
     const isServed = workspace?.enabled === true;
     if (isServed === false) {
-      res.status(HttpStatus.NotFound).json({ error: `Unknown workspace "${slug}"` });
+      sendError(res, HttpStatus.NotFound, `Unknown workspace "${slug}"`);
       return;
     }
     await handle(req, res, slug);

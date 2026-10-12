@@ -231,10 +231,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
    * @returns How many passages were swapped.
    */
   const editBody = async (name: string, replacements: Replacement[]): Promise<number> => {
-    const skill = store.getSkill(name);
-    if (!skill) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
-    }
+    const skill = store.requireSkill(name);
     const { text, replaced } = applyReplacements(skill.body, replacements);
     await store.updateSkill(name, { body: text });
     return replaced;

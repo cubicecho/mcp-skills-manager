@@ -31,11 +31,10 @@ import {
 import { fileMimeType } from './mime.ts';
 import {
   decodeCursor,
-  decodeResourcePart,
   encodeCursor,
   fileResourceUri,
+  parseResourceUri,
   RESOURCE_PAGE_SIZE,
-  RESOURCE_SCHEME,
   resourceNotFound,
   SKILL_FILE_URI_TEMPLATE,
   SKILL_URI_TEMPLATE,
@@ -327,20 +326,10 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const { uri } = req.params;
-    const prefix = `${RESOURCE_SCHEME}://`;
-    if (uri.startsWith(prefix) === false) {
-      throw resourceNotFound(uri);
-    }
-    // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
-    // delimits them (a literal `?`/`#` in a filename would be percent-encoded).
-    const rest = uri.slice(prefix.length).replace(/[?#].*$/, '');
-    // Skill names never contain "/", so the first slash cleanly separates the
-    // skill name from a bundled-file path: skill://<name> vs skill://<name>/<path>.
-    const slash = rest.indexOf('/');
+    const { skill: skillName, path: relPath } = parseResourceUri(uri);
 
-    if (slash === -1) {
-      const name = decodeResourcePart(rest, uri);
-      const skill = name ? findByName(deps.getSkills(), name) : undefined;
+    if (relPath === undefined) {
+      const skill = skillName ? findByName(deps.getSkills(), skillName) : undefined;
       if (!skill) {
         throw resourceNotFound(uri);
       }
@@ -348,8 +337,6 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
     }
 
     // Bundled supporting file.
-    const skillName = decodeResourcePart(rest.slice(0, slash), uri);
-    const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
     const readSupportingFile = deps.readSupportingFile;
     const canReadFile = findByName(deps.getSkills(), skillName) !== undefined && readSupportingFile !== undefined;
@@ -499,6 +486,17 @@ function registerCompletionHandler(server: Server, deps: SkillServerDeps): void 
 }
 
 /**
+ * Send a notification without waiting on it; a client that has gone only costs a warning.
+ * @param method - The notification's method, for the log line.
+ * @param sent - The send in flight.
+ */
+function notifyQuietly(method: string, sent: Promise<void>): void {
+  sent.catch((err: unknown) => {
+    console.warn(`${method} notify failed: ${errorMessage(err)}`);
+  });
+}
+
+/**
  * Register resource subscriptions and push notifications when the served skill set changes on
  * disk. Only for a long-lived transport (stdio).
  * @param server - The MCP server to register the handlers on.
@@ -525,18 +523,12 @@ function registerLiveUpdates(
   // and nudge every subscribed URI to re-read. We over-notify rather than diff —
   // the client simply re-reads and the content is authoritative either way.
   const unsubscribe = onSkillsChanged(() => {
-    server.sendResourceListChanged().catch((err: unknown) => {
-      console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
-    });
+    notifyQuietly('resources/list_changed', server.sendResourceListChanged());
     if (servesPrompts) {
-      server.sendPromptListChanged().catch((err: unknown) => {
-        console.warn(`prompts/list_changed notify failed: ${errorMessage(err)}`);
-      });
+      notifyQuietly('prompts/list_changed', server.sendPromptListChanged());
     }
     for (const uri of subscriptions) {
-      server.sendResourceUpdated({ uri }).catch((err: unknown) => {
-        console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
-      });
+      notifyQuietly('resources/updated', server.sendResourceUpdated({ uri }));
     }
   });
 

@@ -67,6 +67,16 @@ function requireNotSkillFile(rel: string, message: string): void {
 }
 
 /**
+ * Order two named things by name, the one order the store lists and loads in.
+ * @param a - The first.
+ * @param b - The second.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` wants.
+ */
+function byName(a: { name: string }, b: { name: string }): number {
+  return a.name.localeCompare(b.name);
+}
+
+/**
  * Stat a path that may not be there.
  * @param full - Absolute path.
  * @returns Its stats, or undefined when it cannot be read (missing, or not permitted).
@@ -243,7 +253,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * @returns The skills sorted by name.
    */
   getSkills(): Skill[] {
-    return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...this.skills.values()].sort(byName);
   }
 
   /** Skills served on the root `/mcp` aggregate — every skill except those flagged `global: false`. */
@@ -676,7 +686,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * @returns The skill.
    * @throws HttpError 404 when no skill has that name.
    */
-  private requireSkill(name: string): Skill {
+  requireSkill(name: string): Skill {
     const skill = this.skills.get(name);
     if (!skill) {
       throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
@@ -732,7 +742,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * @returns The workspaces sorted by display name.
    */
   getWorkspaces(): WorkspaceConfig[] {
-    return [...this.workspaces.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...this.workspaces.values()].sort(byName);
   }
 
   /**
@@ -872,7 +882,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       return skills;
     }
     const entries = await readdir(this.skillsDir, { withFileTypes: true });
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of entries.sort(byName)) {
       const location = this.skillEntryLocation(entry);
       if (location === undefined) {
         continue;

@@ -1,3 +1,6 @@
+import type { ApiError } from '@mcp-skills/shared';
+import type { Response } from 'express';
+
 /** An error carrying an HTTP status code; rendered by the API error middleware as { error, detail? }. */
 export class HttpError extends Error {
   readonly status: number;
@@ -29,4 +32,15 @@ export function errorDetailMessage(err: unknown): string {
     return `${err.message}: ${err.detail}`;
   }
   return errorMessage(err);
+}
+
+/**
+ * Answer a request with the standard error envelope.
+ * @param res - The response to end.
+ * @param status - HTTP status code.
+ * @param message - What went wrong, as the caller reads it.
+ */
+export function sendError(res: Response, status: number, message: string): void {
+  const body: ApiError = { error: message };
+  res.status(status).json(body);
 }

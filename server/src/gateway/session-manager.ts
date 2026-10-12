@@ -4,6 +4,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
+import { sendError } from '../errors.ts';
 import { closeQuietly } from './close-quietly.ts';
 
 /** One live stateful session: its skill server and the transport that carries it. */
@@ -43,7 +44,7 @@ export class McpSessionManager {
     if (id) {
       const existing = this.sessions.get(id);
       if (!existing) {
-        res.status(HttpStatus.NotFound).json({ error: `Unknown MCP session "${id}"` });
+        sendError(res, HttpStatus.NotFound, `Unknown MCP session "${id}"`);
         return;
       }
       // The standalone GET request is the session's long-lived SSE push channel.
@@ -63,9 +64,11 @@ export class McpSessionManager {
     }
 
     if (isInitializeRequest(req.body) === false) {
-      res
-        .status(HttpStatus.BadRequest)
-        .json({ error: 'Missing Mcp-Session-Id header (send an initialize request to open a session)' });
+      sendError(
+        res,
+        HttpStatus.BadRequest,
+        'Missing Mcp-Session-Id header (send an initialize request to open a session)',
+      );
       return;
     }
 

@@ -3,6 +3,7 @@ import type { SettingsFile } from '@mcp-skills/shared';
 import { HttpStatus } from '@mcp-skills/shared';
 import type { RequestHandler } from 'express';
 import { EnvVar } from './core/defaults.ts';
+import { sendError } from './errors.ts';
 
 /** The effective bearer-auth state for one request. */
 export interface AuthConfig {
@@ -82,13 +83,13 @@ export function createAuthMiddleware(getAuth: () => AuthConfig): RequestHandler 
       return;
     }
     if (!token) {
-      res.status(HttpStatus.Unauthorized).json({ error: 'Auth is enabled but no token is configured' });
+      sendError(res, HttpStatus.Unauthorized, 'Auth is enabled but no token is configured');
       return;
     }
     const header = req.headers.authorization;
     const provided = header?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!provided || !tokensEqual(provided, token)) {
-      res.status(HttpStatus.Unauthorized).json({ error: 'Unauthorized' });
+      sendError(res, HttpStatus.Unauthorized, 'Unauthorized');
       return;
     }
     next();

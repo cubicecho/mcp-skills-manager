@@ -110,17 +110,9 @@ export function createApiRouter(deps: ApiDeps): Router {
   const startedAt = Date.now();
   const router = Router();
 
-  const requireSkill = (name: string): Skill => {
-    const skill = store.getSkill(name);
-    if (!skill) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
-    }
-    return skill;
-  };
-
   /** Refuse a content edit to a skill whose content is owned by its git source. */
   const requireUnlinked = (name: string): void => {
-    if (requireSkill(name).source) {
+    if (store.requireSkill(name).source) {
       throw new HttpError(
         HttpStatus.Conflict,
         `Skill "${name}" is linked to a git source`,
@@ -190,12 +182,12 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.get('/skills/:name', (req, res) => {
-    res.json(toDetail(store, requireSkill(req.params.name)));
+    res.json(toDetail(store, store.requireSkill(req.params.name)));
   });
 
   router.patch('/skills/:name', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     const update = updateSkillRequestSchema.parse(req.body);
     // A linked skill keeps its local-only settings (name, global, read-only) editable; its content is the repo's.
     const editsContent = update.description !== undefined || update.body !== undefined || update.tags !== undefined;
@@ -225,7 +217,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Link a skill to a folder in a git repo and replace its content with that folder.
   router.put('/skills/:name/source', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     const source = gitSourceSchema.parse(req.body);
     res.json(toDetail(store, await store.linkSkillSource(name, source)));
   });
@@ -254,7 +246,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Read one supporting file's content: GET /skills/:name/files/content?path=<relative path>
   router.get('/skills/:name/files/content', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     res.json(await store.readSupportingFile(name, requirePathQuery(req)));
   });
 
