@@ -96,15 +96,8 @@ function requireSkillName(request: { name?: string; title?: string }, action: 'c
   if (!name) {
     throw new HttpError(HttpStatus.BadRequest, `A "name" or "title" is required to ${action} a skill`);
   }
-  const parsed = slugSchema.safeParse(name);
-  if (!parsed.success) {
-    throw new HttpError(
-      HttpStatus.BadRequest,
-      `Invalid skill name "${name}"`,
-      'lowercase alphanumerics, dots, dashes, underscores',
-    );
-  }
-  return parsed.data;
+  // An explicit name was checked at the request boundary, and a slugified title is a slug by construction.
+  return name;
 }
 
 /**
@@ -239,16 +232,12 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   // Drop a skill's git link; its content stays as last synced and becomes editable again.
   router.delete('/skills/:name/source', async (req, res) => {
-    const name = req.params.name;
-    requireSkill(name);
-    res.json(toDetail(store, await store.unlinkSkillSource(name)));
+    res.json(toDetail(store, await store.unlinkSkillSource(req.params.name)));
   });
 
   // Replace a linked skill's folder with the newest copy from its source.
   router.post('/skills/:name/sync', async (req, res) => {
-    const name = req.params.name;
-    requireSkill(name);
-    const { skill, changed } = await store.syncSkill(name);
+    const { skill, changed } = await store.syncSkill(req.params.name);
     const response: SyncSkillResponse = { skill: toDetail(store, skill), changed };
     res.json(response);
   });
@@ -256,7 +245,6 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Export a skill as a .zip download.
   router.get('/skills/:name/export', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
     const zip = await store.exportSkillZip(name);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);

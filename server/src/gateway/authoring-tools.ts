@@ -321,17 +321,11 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       args: createArgs,
       run: async (input) => {
-        const resolved = resolveSkillName(input.name, input.title);
-        if (!resolved) {
+        // An explicit name was checked with the arguments, and a slugified title is a slug by construction.
+        const name = resolveSkillName(input.name, input.title);
+        if (!name) {
           throw new Error('Provide a "name" or a "title" to create a skill');
         }
-        const parsedName = slugSchema.safeParse(resolved);
-        if (!parsedName.success) {
-          throw new Error(
-            `Invalid skill name "${resolved}" — lowercase alphanumerics, dots, dashes, underscores, must start alphanumeric`,
-          );
-        }
-        const name = parsedName.data;
         // Default visibility follows the endpoint (global on root, scoped on a workspace); `global` overrides it.
         const global = input.global ?? !workspaceSlug;
         const skill = await guard(() =>
@@ -475,12 +469,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
         if (!target.success) {
           throw new Error(`Invalid skill name "${input.new_name}"`);
         }
+        // The store points every workspace that listed the skill at its new name.
         const skill = await guard(() => store.renameSkill(input.name, target.data));
-        if (workspaceSlug) {
-          // Keep the active workspace's member list pointing at the renamed skill.
-          await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
-          await guard(() => store.addSkillToWorkspace(workspaceSlug, skill.name));
-        }
         return `Renamed skill "${input.name}" to "${skill.name}". ${whereVisible(skill, workspaceSlug, toolNameOf(skill))}`;
       },
     }),
@@ -498,10 +488,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       args: deleteArgs,
       target: { skill: (input) => input.name, access: 'write' },
       run: async (input) => {
+        // The store drops the skill from every workspace that listed it.
         await guard(() => store.deleteSkill(input.name));
-        if (workspaceSlug) {
-          await guard(() => store.removeSkillFromWorkspace(workspaceSlug, input.name));
-        }
         return `Deleted skill "${input.name}".`;
       },
     }),

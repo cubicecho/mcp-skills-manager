@@ -806,16 +806,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.saveWorkspace({ ...workspace, skills: [...workspace.skills, name] });
   }
 
-  /** Remove a skill from a workspace's member list (no-op if absent or the workspace is gone). */
-  async removeSkillFromWorkspace(slug: string, name: string): Promise<void> {
-    const workspace = this.workspaces.get(slug);
-    const isMember = workspace?.skills.includes(name) === true;
-    if (!workspace || isMember === false) {
-      return;
-    }
-    await this.saveWorkspace({ ...workspace, skills: workspace.skills.filter((s) => s !== name) });
-  }
-
   private workspaceFile(slug: string): string {
     return path.join(this.workspacesDir, `${slug}.json`);
   }

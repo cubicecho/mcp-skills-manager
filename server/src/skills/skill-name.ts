@@ -5,7 +5,7 @@ import { slugify } from '@mcp-skills/shared';
  * @param name Explicit slug, when the caller gave one.
  * @param title Free-form title to slugify when there is no name.
  * @returns The name, or undefined when neither input yields one (no name, and no title or a title with no letter or
- *   digit). The result is not validated; check it against slugSchema.
+ *   digit). A slugified title is a valid slug; an explicit name comes back as given, so validate it at the boundary.
  */
 export function resolveSkillName(name: string | undefined, title: string | undefined): string | undefined {
   if (name !== undefined) {
