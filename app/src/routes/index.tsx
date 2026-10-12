@@ -20,24 +20,22 @@ import { formatDate } from '@/lib/format';
 import { isKeyOf } from '@/lib/is-key-of';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
+import {
+  collectTags,
+  FORMAT_LABELS,
+  type FormatFilter,
+  filterAndSort,
+  SCOPE_LABELS,
+  type ScopeFilter,
+  SORT_LABELS,
+  type SortKey,
+} from '@/lib/skill-list';
 import { ANY_TAG_OPTION, optionToTag, tagToOption } from '@/lib/tag-option';
 import { useToasts } from '@/lib/toast';
 
 export const Route = createFileRoute('/')({
   component: SkillsPage,
 });
-
-/** The scope filter's choices, with the label each shows. */
-const SCOPE_LABELS = { all: 'All scopes', global: 'Global', scoped: 'Workspace-scoped' } as const;
-type ScopeFilter = keyof typeof SCOPE_LABELS;
-
-/** The format filter's choices, with the label each shows. */
-const FORMAT_LABELS = { all: 'All formats', dir: 'Directory', file: 'File' } as const;
-type FormatFilter = keyof typeof FORMAT_LABELS;
-
-/** The sort orders, with the label each shows. */
-const SORT_LABELS = { name: 'Name (A–Z)', updated: 'Recently updated', used: 'Most used' } as const;
-type SortKey = keyof typeof SORT_LABELS;
 
 /**
  * Lists a label table as select options, in the table's order.
@@ -51,51 +49,6 @@ function toOptions(labels: Readonly<Record<string, string>>): SelectEntry[] {
 const SCOPE_OPTIONS = toOptions(SCOPE_LABELS);
 const FORMAT_OPTIONS = toOptions(FORMAT_LABELS);
 const SORT_OPTIONS = toOptions(SORT_LABELS);
-
-/** Apply the search query, scope/format/tag filters and sort to the raw skill list. */
-function filterAndSort(
-  skills: SkillSummary[],
-  query: string,
-  scope: ScopeFilter,
-  format: FormatFilter,
-  tag: string | undefined,
-  sort: SortKey,
-): SkillSummary[] {
-  const q = query.trim().toLowerCase();
-  const matched = skills.filter((skill) => {
-    if (scope === 'global' && !skill.global) {
-      return false;
-    }
-    if (scope === 'scoped' && skill.global) {
-      return false;
-    }
-    if (format !== 'all' && skill.format !== format) {
-      return false;
-    }
-    if (tag !== undefined && skill.tags.includes(tag) === false) {
-      return false;
-    }
-    const searched = `${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase();
-    if (q && searched.includes(q) === false) {
-      return false;
-    }
-    return true;
-  });
-  return matched.sort((a, b) => {
-    if (sort === 'updated') {
-      return b.updatedAt.localeCompare(a.updatedAt);
-    }
-    if (sort === 'used') {
-      return b.usage.count - a.usage.count || a.name.localeCompare(b.name);
-    }
-    return a.name.localeCompare(b.name);
-  });
-}
-
-/** All distinct tags across the skill list, sorted for a stable filter dropdown. */
-function collectTags(skills: SkillSummary[]): string[] {
-  return [...new Set(skills.flatMap((skill) => skill.tags))].sort((a, b) => a.localeCompare(b));
-}
 
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   const toast = useToasts();
