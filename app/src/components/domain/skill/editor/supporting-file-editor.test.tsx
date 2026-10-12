@@ -71,6 +71,35 @@ describe('SupportingFileEditor', () => {
     expect(editor()).toHaveValue('# Notes!');
   });
 
+  it('keeps what is typed while the saved file is still being read back', async () => {
+    const view = renderEditor();
+
+    await userEvent.type(editor(), '!');
+    await userEvent.click(saveButton());
+    await userEvent.type(editor(), '?');
+
+    // The refetch a save sets off lands, carrying the text as saved.
+    fileQuery = { data: { content: '# Notes!', binary: false, size: 8 }, isPending: false, error: null };
+    view.rerender(
+      <SupportingFileEditor skillName="pdf-forms" path={PATH} onDirtyChange={() => {}} onClose={() => {}} />,
+    );
+
+    expect(editor()).toHaveValue('# Notes!?');
+    expect(saveButton()).toBeEnabled();
+  });
+
+  it('takes a changed file as read when nothing is unsaved', () => {
+    const view = renderEditor();
+
+    fileQuery = { data: { content: '# Rewritten', binary: false, size: 11 }, isPending: false, error: null };
+    view.rerender(
+      <SupportingFileEditor skillName="pdf-forms" path={PATH} onDirtyChange={() => {}} onClose={() => {}} />,
+    );
+
+    expect(editor()).toHaveValue('# Rewritten');
+    expect(saveButton()).toBeDisabled();
+  });
+
   it('saves on Ctrl+S only when there is something to save', async () => {
     renderEditor();
 

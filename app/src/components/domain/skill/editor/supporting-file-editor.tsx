@@ -1,5 +1,5 @@
 import { useStore } from '@tanstack/react-form';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppForm } from '@/components/app-form';
 import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
@@ -44,10 +44,19 @@ export function SupportingFileEditor({
     },
   });
 
-  // The file arrives after the form exists, and again when a refetch finds it changed.
+  const savedNow = useRef(saved);
+  savedNow.current = saved;
+
+  // The file arrives after the form exists, and again when a refetch finds it changed. Unsaved edits
+  // outlive that: the refetch a save sets off lands while the reader may be typing again, and what
+  // they typed is then measured against the text it brought.
   useEffect(() => {
-    if (text !== undefined) {
-      setSaved(text);
+    if (text === undefined) {
+      return;
+    }
+    const untouched = savedNow.current === undefined || form.state.values.content === savedNow.current;
+    setSaved(text);
+    if (untouched) {
       form.reset({ content: text });
     }
   }, [text, form]);
