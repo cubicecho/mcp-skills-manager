@@ -23,16 +23,14 @@ function buildApi(store: ConfigStore): express.Express {
 }
 
 /**
- * Asserts a request-body validation failure without pinning its status or envelope.
- *
- * Whether errorMiddleware recognises a shared-schema ZodError depends on how zod is installed: with one copy the
- * answer is 400 { error: 'Validation failed', detail }, with a copy per package it is 500 with the issues as `error`.
+ * Asserts a request-body validation failure: 400 with the `Validation failed` envelope.
  * @param res Response to check.
- * @param issueMessage Zod issue message the response must carry.
+ * @param detail Text the issue list must carry: the offending field's path, or one of our own messages.
  */
-function expectValidationFailure(res: request.Response, issueMessage: string): void {
-  expect([400, 500]).toContain(res.status);
-  expect(JSON.stringify(res.body)).toContain(issueMessage);
+function expectValidationFailure(res: request.Response, detail: string): void {
+  expect(res.status).toBe(400);
+  expect(res.body.error).toBe('Validation failed');
+  expect(res.body.detail).toContain(detail);
 }
 
 describe('management REST API', () => {
@@ -114,13 +112,13 @@ describe('management REST API', () => {
       const typo = await request(api)
         .patch('/api/settings')
         .send({ disabledAuthoringTools: ['delete_skil'] });
-      expectValidationFailure(typo, 'Invalid enum value');
+      expectValidationFailure(typo, 'disabledAuthoringTools.0');
       expect(store.getDisabledAuthoringTools()).toEqual(['delete_skill']);
     });
 
     it('rejects an unknown settings key and leaves settings alone', async () => {
       const res = await request(api).patch('/api/settings').send({ authEnabled: false });
-      expectValidationFailure(res, "Unrecognized key(s) in object: 'authEnabled'");
+      expectValidationFailure(res, 'authEnabled');
       expect(store.getSettings().authEnabled).toBe(true);
     });
 
