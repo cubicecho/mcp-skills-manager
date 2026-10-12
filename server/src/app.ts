@@ -6,12 +6,15 @@ import { createApiRouter } from './api/router.ts';
 import { createAuthMiddleware, resolveAuth } from './auth.ts';
 import type { ConfigStore } from './config/store.ts';
 import { createMcpRouter } from './gateway/routes.ts';
+import type { McpSessionManager } from './gateway/session-manager.ts';
 
 /** What the HTTP app needs to be built. */
 export interface AppDeps {
   store: ConfigStore;
   /** The port the server will listen on; reported via GET /api/status. */
   port: number;
+  /** Holds the stateful MCP sessions, so the caller can close them on shutdown. */
+  sessions?: McpSessionManager;
   /** Override for tests; defaults to <repo>/app/dist. */
   appDistDir?: string;
 }
@@ -27,7 +30,7 @@ export function buildApp(deps: AppDeps): express.Express {
   const auth = createAuthMiddleware(() => resolveAuth(store.getSettings()));
 
   app.use('/api', auth, createApiRouter({ store, port }));
-  app.use('/mcp', auth, createMcpRouter({ store }));
+  app.use('/mcp', auth, createMcpRouter({ store, sessions: deps.sessions }));
 
   // Production: serve the built web UI with an SPA fallback for non-API GETs.
   const appDist = deps.appDistDir ?? path.resolve(import.meta.dirname, '../../app/dist');

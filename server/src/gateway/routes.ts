@@ -11,6 +11,8 @@ import { createSkillServer } from './skill-server.ts';
 /** What the MCP endpoints need from the process that mounts them. */
 export interface McpRouterDeps {
   store: ConfigStore;
+  /** Holds the stateful sessions; pass one to be able to close them on shutdown. */
+  sessions?: McpSessionManager;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface McpRouterDeps {
 export function createMcpRouter(deps: McpRouterDeps): Router {
   const { store } = deps;
   const router = Router();
-  const sessions = new McpSessionManager();
+  const sessions = deps.sessions ?? new McpSessionManager();
 
   // Stateless path: fresh server + transport per request, cleaned up on close.
   const handleStateless = async (req: Request, res: Response, buildServer: () => Server): Promise<void> => {

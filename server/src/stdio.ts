@@ -6,6 +6,7 @@ import { ConfigStore } from './config/store.ts';
 import { errorMessage } from './errors.ts';
 import { endpointDeps } from './gateway/endpoint.ts';
 import { createSkillServer } from './gateway/skill-server.ts';
+import { closeOnSignal } from './shutdown.ts';
 
 /**
  * stdio MCP entry point. Serves every skill by default, or only a workspace's
@@ -45,14 +46,13 @@ async function main(): Promise<void> {
       `${workspaceSlug ? ` from workspace "${workspaceSlug}"` : ''} (data dir: ${dataDir})`,
   );
 
-  const shutdown = () => {
-    store
-      .close()
-      .catch((err: unknown) => console.error(`Shutdown error: ${errorMessage(err)}`))
-      .finally(() => process.exit(0));
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  closeOnSignal(
+    [
+      { label: 'MCP server', close: () => server.close() },
+      { label: 'store', close: () => store.close() },
+    ],
+    { on: (signal, listener) => process.on(signal, listener), exit: (code) => process.exit(code), log: console.error },
+  );
 }
 
 main().catch((err: unknown) => {

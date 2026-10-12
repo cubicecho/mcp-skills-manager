@@ -13,16 +13,20 @@ import express from 'express';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
 import { createMcpRouter } from './routes.ts';
+import { McpSessionManager } from './session-manager.ts';
 
 /**
  * Boots the MCP router on a real (ephemeral-port) HTTP server so we can drive it
  * with the SDK's Streamable-HTTP client — the only way to exercise the stateful
  * session + SSE push path end to end. Auth is left off (bare express).
  */
-async function boot(store: ConfigStore): Promise<{ url: URL; close: () => Promise<void> }> {
+async function boot(
+  store: ConfigStore,
+  sessions?: McpSessionManager,
+): Promise<{ url: URL; close: () => Promise<void> }> {
   const app = express();
   app.use(express.json());
-  app.use('/mcp', createMcpRouter({ store }));
+  app.use('/mcp', createMcpRouter({ store, sessions }));
   const httpServer: HttpServer = await new Promise((resolve) => {
     const s = app.listen(0, () => resolve(s));
   });
@@ -150,6 +154,18 @@ describe('MCP HTTP router', () => {
       // client.close() aborts that SSE stream WITHOUT sending a DELETE. The server
       // sees the stream close and reclaims the session — no leaked store listener.
       await client.close();
+      await waitFor(() => store.listenerCount('change') === 0);
+    });
+
+    it('closes every live session, and its store listener, when the manager it was given is closed', async () => {
+      const sessions = new McpSessionManager();
+      server = await boot(store, sessions);
+      await connect(server.url);
+      await connect(server.url);
+      expect(sessions.size).toBe(2);
+
+      await sessions.closeAll();
+      expect(sessions.size).toBe(0);
       await waitFor(() => store.listenerCount('change') === 0);
     });
 

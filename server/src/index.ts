@@ -2,7 +2,9 @@ import path from 'node:path';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
+import { McpSessionManager } from './gateway/session-manager.ts';
 import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
+import { closeOnSignal } from './shutdown.ts';
 
 async function main(): Promise<void> {
   const dataDir = path.resolve(process.env.DATA_DIR ?? './data');
@@ -15,7 +17,8 @@ async function main(): Promise<void> {
   store.startWatching();
 
   const port = resolvePort(store.getSettings().port);
-  const app = buildApp({ store, port });
+  const sessions = new McpSessionManager();
+  const app = buildApp({ store, port, sessions });
   const httpServer = app.listen(port, () => {
     console.log(`mcp-skills-manager listening on http://localhost:${port} (data dir: ${dataDir})`);
     const settings = store.getSettings();
@@ -44,20 +47,15 @@ async function main(): Promise<void> {
     throw err;
   });
 
-  let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals) => {
-    if (shuttingDown) {
-      return;
-    }
-    shuttingDown = true;
-    console.log(`Received ${signal}; shutting down`);
-    httpServer.close();
-    store.close().then(() => {
-      process.exit(0);
-    });
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  closeOnSignal(
+    [
+      // Not awaited: it only settles once every connection has ended, and the sessions hold theirs open.
+      { label: 'HTTP server', close: () => void httpServer.close() },
+      { label: 'MCP sessions', close: () => sessions.closeAll() },
+      { label: 'store', close: () => store.close() },
+    ],
+    { on: (signal, listener) => process.on(signal, listener), exit: (code) => process.exit(code), log: console.log },
+  );
 }
 
 main().catch((err: unknown) => {
