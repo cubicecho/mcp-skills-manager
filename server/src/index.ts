@@ -2,7 +2,7 @@ import path from 'node:path';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
-import { tuneKeepAlive } from './http-tuning.ts';
+import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 
 async function main(): Promise<void> {
   const dataDir = path.resolve(process.env.DATA_DIR ?? './data');
@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   });
   store.startWatching();
 
-  const port = Number(process.env.PORT ?? store.getSettings().port);
+  const port = resolvePort(store.getSettings().port);
   const app = buildApp({ store, port });
   const httpServer = app.listen(port, () => {
     console.log(`mcp-skills-manager listening on http://localhost:${port} (data dir: ${dataDir})`);

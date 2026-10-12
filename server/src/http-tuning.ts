@@ -15,3 +15,18 @@ export function tuneKeepAlive(server: Server, env: NodeJS.ProcessEnv = process.e
   server.keepAliveTimeout = timeoutMs;
   return timeoutMs;
 }
+
+/** The highest TCP port number. */
+const MAX_PORT = 65_535;
+
+/**
+ * Pick the port to listen on: `PORT` when it names one, else the port in settings.
+ * @param settingsPort The `port` from settings.json.
+ * @param env Source of `PORT`; `0` asks the OS for any free port.
+ * @returns `PORT` when it is a whole number from 0 to 65535, else `settingsPort` (unset, empty or not a port).
+ */
+export function resolvePort(settingsPort: number, env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(env.PORT?.trim() || Number.NaN);
+  const isPort = Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_PORT;
+  return isPort ? parsed : settingsPort;
+}
