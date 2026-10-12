@@ -61,7 +61,7 @@ export function decodeCursor(cursor: string | undefined): number {
   const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
   const offset = Number.parseInt(decoded, 10);
   const isCanonicalOffset = Number.isInteger(offset) && offset >= 0 && String(offset) === decoded;
-  if (!isCanonicalOffset) {
+  if (isCanonicalOffset === false) {
     throw new McpError(ErrorCode.InvalidParams, `Invalid pagination cursor "${cursor}"`);
   }
   return offset;

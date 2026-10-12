@@ -26,7 +26,7 @@ const HEX = /^#?(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
  * wrong in dark mode, which is where a translucent chip is hardest to read.
  */
 function channels(hex: string): [number, number, number] | undefined {
-  if (!HEX.test(hex)) {
+  if (HEX.test(hex) === false) {
     return undefined;
   }
 

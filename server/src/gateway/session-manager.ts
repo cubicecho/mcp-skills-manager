@@ -61,7 +61,7 @@ export class McpSessionManager {
       return;
     }
 
-    if (!isInitializeRequest(req.body)) {
+    if (isInitializeRequest(req.body) === false) {
       res.status(400).json({ error: 'Missing Mcp-Session-Id header (send an initialize request to open a session)' });
       return;
     }

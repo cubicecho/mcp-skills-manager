@@ -185,7 +185,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
   const authoringTools: AuthoringTool[] = deps.authoring ? buildAuthoringTools(deps.authoring) : [];
   const activeAuthoringTools = (): AuthoringTool[] => {
     const store = deps.authoring?.store;
-    if (!store?.isAuthoringEnabled()) {
+    const isAuthoringOn = store?.isAuthoringEnabled() === true;
+    if (!store || isAuthoringOn === false) {
       return [];
     }
     const disabled = store.getDisabledAuthoringTools();
@@ -327,7 +328,7 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const { uri } = req.params;
     const prefix = `${RESOURCE_SCHEME}://`;
-    if (!uri.startsWith(prefix)) {
+    if (uri.startsWith(prefix) === false) {
       throw resourceNotFound(uri);
     }
     // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
@@ -352,7 +353,7 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
     // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
     const readSupportingFile = deps.readSupportingFile;
     const canReadFile = findByName(deps.getSkills(), skillName) !== undefined && readSupportingFile !== undefined;
-    if (!canReadFile) {
+    if (canReadFile === false) {
       throw resourceNotFound(uri);
     }
     let file: SkillFileRead;

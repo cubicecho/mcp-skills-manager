@@ -486,7 +486,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       rel: safeSkillRelPath(this.skillsDir, name, file.path),
       content: file.content,
     }));
-    if (!entries.some((entry) => entry.rel === SKILL_FILE)) {
+    const hasSkillFile = entries.some((entry) => entry.rel === SKILL_FILE);
+    if (hasSkillFile === false) {
       throw new HttpError(400, 'A directory skill must include a SKILL.md at its root');
     }
     const dir = path.join(this.skillsDir, name);
@@ -691,7 +692,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (stats === undefined) {
       throw new HttpError(404, `No file "${rel}" in skill "${name}"`);
     }
-    if (!stats.isFile()) {
+    if (stats.isFile() === false) {
       throw new HttpError(400, `"${rel}" is a directory, not a file`);
     }
     const buffer = await readFile(full);
@@ -902,7 +903,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Remove a skill from a workspace's member list (no-op if absent or the workspace is gone). */
   async removeSkillFromWorkspace(slug: string, name: string): Promise<void> {
     const workspace = this.workspaces.get(slug);
-    if (!workspace || !workspace.skills.includes(name)) {
+    const isMember = workspace?.skills.includes(name) === true;
+    if (!workspace || isMember === false) {
       return;
     }
     await this.saveWorkspace({ ...workspace, skills: workspace.skills.filter((s) => s !== name) });

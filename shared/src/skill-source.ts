@@ -37,7 +37,9 @@ function isAllowedRepo(repo: string): boolean {
  * @returns True for a relative path with no `..` segment or backslash.
  */
 function isRepoRelative(folder: string): boolean {
-  return !folder.includes('\\') && !folder.split('/').includes('..');
+  const hasBackslash = folder.includes('\\');
+  const climbsOut = folder.split('/').includes('..');
+  return hasBackslash === false && climbsOut === false;
 }
 
 /** Where to fetch a skill from: a repo, plus an optional ref and folder. Body of PUT /api/skills/:name/source. */

@@ -15,7 +15,7 @@ export function useSaveShortcut(onSave: () => void, enabled: boolean): void {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const isSaveChord = (event.metaKey || event.ctrlKey) && event.key === 's';
-      if (!isSaveChord) {
+      if (isSaveChord === false) {
         return;
       }
       event.preventDefault();

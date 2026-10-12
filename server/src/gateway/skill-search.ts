@@ -13,13 +13,15 @@ export function searchSkills(skills: Skill[], query: string, tags: string[]): Sk
   return skills.filter((skill) => {
     if (wantTags.length > 0) {
       const skillTags = skill.tags.map((t) => t.toLowerCase());
-      if (!wantTags.some((t) => skillTags.includes(t))) {
+      const hasWantedTag = wantTags.some((t) => skillTags.includes(t));
+      if (hasWantedTag === false) {
         return false;
       }
     }
     if (terms.length > 0) {
       const haystack = `${skill.name}\n${skill.description}\n${skill.tags.join(' ')}\n${skill.body}`.toLowerCase();
-      if (!terms.every((term) => haystack.includes(term))) {
+      const hasEveryTerm = terms.every((term) => haystack.includes(term));
+      if (hasEveryTerm === false) {
         return false;
       }
     }

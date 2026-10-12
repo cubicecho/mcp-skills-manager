@@ -58,7 +58,7 @@ export function SupportingFileEditor({
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && !write.isPending);
+  useSaveShortcut(save, dirty && write.isPending === false);
 
   return (
     <EditorFrame

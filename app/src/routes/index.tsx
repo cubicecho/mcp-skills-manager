@@ -50,10 +50,11 @@ function filterAndSort(
     if (format !== 'all' && skill.format !== format) {
       return false;
     }
-    if (tag !== undefined && !skill.tags.includes(tag)) {
+    if (tag !== undefined && skill.tags.includes(tag) === false) {
       return false;
     }
-    if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) {
+    const searched = `${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase();
+    if (q && searched.includes(q) === false) {
       return false;
     }
     return true;

@@ -19,7 +19,7 @@ import { useToasts } from '@/lib/toast';
  */
 function formatSyncedAt(iso: string | undefined): string | undefined {
   const date = iso ? new Date(iso) : undefined;
-  return date && !Number.isNaN(date.getTime())
+  return date && Number.isNaN(date.getTime()) === false
     ? date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : undefined;
 }

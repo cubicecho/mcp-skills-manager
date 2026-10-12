@@ -77,7 +77,7 @@ function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
 function requirePathQuery(req: Request): string {
   const relPath = req.query.path;
   const isUsable = typeof relPath === 'string' && relPath !== '';
-  if (!isUsable) {
+  if (isUsable === false) {
     throw new HttpError(400, 'A "path" query parameter is required');
   }
   return relPath;

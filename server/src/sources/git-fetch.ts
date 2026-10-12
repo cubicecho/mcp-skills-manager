@@ -141,7 +141,7 @@ export async function fetchGitFolder(
     const root = path.join(clone, folder);
     // lstat, not stat: a symlink standing in for the folder must not be followed out of the clone.
     const isFolder = (await lstat(root)).isDirectory();
-    if (!isFolder) {
+    if (isFolder === false) {
       throw new HttpError(400, `"${folder}" in ${source.repo} is not a folder`);
     }
     await copyTree(root, destDir, MAX_SOURCE_FILES);

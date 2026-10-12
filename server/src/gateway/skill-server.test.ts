@@ -578,8 +578,12 @@ describe('skill-server prompts', () => {
   /** The text of a prompt result's only message. */
   function promptText(res: { messages: Array<{ role: string; content: unknown }> }): string {
     expect(res.messages).toHaveLength(1);
-    expect(res.messages[0]?.role).toBe('user');
-    return (res.messages[0]?.content as { text: string }).text;
+    const [message] = res.messages;
+    if (message === undefined) {
+      throw new Error('prompt result had no message');
+    }
+    expect(message.role).toBe('user');
+    return (message.content as { text: string }).text;
   }
 
   it('does not advertise prompts when the endpoint cannot read skill files', async () => {

@@ -40,7 +40,7 @@ function toContent(file: RawFile): SkillFileContent {
 /** Drop a single shared top-level directory so `myskill/SKILL.md` becomes `SKILL.md`. Returns the stripped name too. */
 function stripCommonRoot(files: RawFile[]): { root: string | null; files: RawFile[] } {
   const tops = new Set(files.map((f) => (f.path.includes('/') ? f.path.slice(0, f.path.indexOf('/')) : '')));
-  if (tops.size === 1 && !tops.has('')) {
+  if (tops.size === 1 && tops.has('') === false) {
     const root = [...tops][0] ?? '';
     return { root, files: files.map((f) => ({ ...f, path: f.path.slice(root.length + 1) })) };
   }
@@ -56,7 +56,7 @@ function ensureSkillMd(files: RawFile[]): RawFile[] | null {
   if (files.some((f) => f.path === 'SKILL.md')) {
     return files;
   }
-  const rootMarkdown = files.filter((f) => !f.path.includes('/') && f.path.toLowerCase().endsWith('.md'));
+  const rootMarkdown = files.filter((f) => f.path.includes('/') === false && f.path.toLowerCase().endsWith('.md'));
   if (rootMarkdown.length === 1) {
     const chosen = rootMarkdown[0];
     return files.map((f) => (f === chosen ? { ...f, path: 'SKILL.md' } : f));
@@ -79,7 +79,7 @@ export function pickedToSkillFileContent(file: PickedFile): SkillFileContent {
 }
 
 function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): NormalizedUpload {
-  const nonEmpty = rawFiles.filter((f) => f.path && !f.path.endsWith('/'));
+  const nonEmpty = rawFiles.filter((f) => f.path && f.path.endsWith('/') === false);
   const { root, files: stripped } = stripCommonRoot(nonEmpty);
   const withSkillMd = ensureSkillMd(stripped);
   const defaultName = slugify(root ?? fallbackName);
@@ -106,7 +106,7 @@ export function normalizeUploadFile(file: PickedFile): NormalizedUpload {
   if (lower.endsWith('.zip')) {
     const entries = unzipSync(toRawFile(file).bytes);
     const rawFiles: RawFile[] = Object.entries(entries)
-      .filter(([name]) => !name.endsWith('/'))
+      .filter(([name]) => name.endsWith('/') === false)
       .map(([name, data]) => ({ path: name, bytes: data }));
     if (rawFiles.length === 0) {
       return { format: 'dir', defaultName: '', files: [], paths: [], error: 'The archive is empty.' };

@@ -50,7 +50,7 @@ export function SkillBodyEditor({
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && !update.isPending);
+  useSaveShortcut(save, dirty && update.isPending === false);
 
   const path = skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`;
 
