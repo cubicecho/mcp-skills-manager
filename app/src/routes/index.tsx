@@ -41,16 +41,30 @@ function filterAndSort(
 ): SkillSummary[] {
   const q = query.trim().toLowerCase();
   const matched = skills.filter((skill) => {
-    if (scope === 'global' && !skill.global) return false;
-    if (scope === 'scoped' && skill.global) return false;
-    if (format !== 'all' && skill.format !== format) return false;
-    if (tag !== undefined && !skill.tags.includes(tag)) return false;
-    if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) return false;
+    if (scope === 'global' && !skill.global) {
+      return false;
+    }
+    if (scope === 'scoped' && skill.global) {
+      return false;
+    }
+    if (format !== 'all' && skill.format !== format) {
+      return false;
+    }
+    if (tag !== undefined && !skill.tags.includes(tag)) {
+      return false;
+    }
+    if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) {
+      return false;
+    }
     return true;
   });
   return matched.sort((a, b) => {
-    if (sort === 'updated') return b.updatedAt.localeCompare(a.updatedAt);
-    if (sort === 'used') return b.usage.count - a.usage.count || a.name.localeCompare(b.name);
+    if (sort === 'updated') {
+      return b.updatedAt.localeCompare(a.updatedAt);
+    }
+    if (sort === 'used') {
+      return b.usage.count - a.usage.count || a.name.localeCompare(b.name);
+    }
     return a.name.localeCompare(b.name);
   });
 }

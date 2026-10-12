@@ -95,9 +95,13 @@ export function normalizeTags(input: unknown): string[] {
   const tags: string[] = [];
   for (const entry of raw) {
     const tag = String(entry).trim();
-    if (!tag) continue;
+    if (!tag) {
+      continue;
+    }
     const key = tag.toLowerCase();
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     tags.push(tag);
   }

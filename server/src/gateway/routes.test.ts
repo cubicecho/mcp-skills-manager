@@ -45,7 +45,9 @@ async function boot(
 /** Poll a predicate until true (or throw after ~1s) — for observing async server-side teardown. */
 async function waitFor(predicate: () => boolean): Promise<void> {
   for (let i = 0; i < 50; i++) {
-    if (predicate()) return;
+    if (predicate()) {
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error('waitFor timed out');
@@ -149,7 +151,9 @@ describe('MCP HTTP router', () => {
       });
 
       const first = (await client.listResources()).resources[0];
-      if (!first) throw new Error('expected at least one resource');
+      if (!first) {
+        throw new Error('expected at least one resource');
+      }
       await client.subscribeResource({ uri: first.uri });
 
       // Simulate the watcher firing after an on-disk edit.
