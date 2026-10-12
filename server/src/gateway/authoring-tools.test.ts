@@ -229,6 +229,40 @@ describe('MCP authoring tools', () => {
     await expect(mine.readResource({ uri: 'skill://theirs' })).rejects.toThrow();
   });
 
+  it('refuses, from a workspace endpoint, every authoring tool aimed at a skill the workspace does not serve', async () => {
+    await store.saveWorkspace({ name: 'Other', slug: 'other', enabled: true, skills: [] });
+    const other = await connect(store, 'other');
+    await other.callTool({ name: 'create_skill', arguments: { name: 'theirs', body: 'private passage' } });
+    await other.callTool({
+      name: 'write_skill_file',
+      arguments: { skill: 'theirs', path: 'notes.md', content: 'private notes' },
+    });
+    const before = JSON.stringify(store.getSkill('theirs'));
+
+    const mine = await connect(store, 'examples');
+    const attempts: Attempt[] = [
+      ...mutatingAttempts('theirs', 'private', 'notes.md'),
+      { name: 'read_skill_file', arguments: { skill: 'theirs', path: 'notes.md' } },
+    ];
+    for (const attempt of attempts) {
+      const res = (await mine.callTool(attempt)) as { isError?: boolean };
+      expect(res.isError, attempt.name).toBe(true);
+      expect(firstText(res), attempt.name).toBe(
+        'Skill "theirs" is not served by workspace "examples", so it cannot be read or changed from this endpoint.',
+      );
+    }
+    expect(JSON.stringify(store.getSkill('theirs'))).toBe(before);
+    expect(store.getSkill('renamed-away')).toBeUndefined();
+    expect((await store.readSupportingFile('theirs', 'notes.md')).content).toBe('private notes');
+
+    // The root endpoint, and the skill's own workspace, still reach it.
+    const root = await connect(store);
+    const read = await root.callTool({ name: 'read_skill_file', arguments: { skill: 'theirs', path: 'notes.md' } });
+    expect(firstText(read)).toBe('private notes');
+    const edited = await other.callTool({ name: 'update_skill', arguments: { name: 'theirs', body: 'changed' } });
+    expect((edited as { isError?: boolean }).isError).toBeFalsy();
+  });
+
   it('refuses every mutating tool on a read-only skill, while still letting it be read', async () => {
     const client = await connect(store);
     await client.callTool({ name: 'create_skill', arguments: { name: 'locked', description: 'd', body: 'original' } });
@@ -336,17 +370,18 @@ describe('MCP authoring tools', () => {
     expect(store.getSkill('getting-started')).toBeDefined();
   });
 
-  it('adds a renamed skill to the active workspace even when it was not a member', async () => {
+  it('refuses to rename a skill into the active workspace when it was not a member', async () => {
     await store.createSkill({ name: 'outsider', description: '', body: 'b', format: 'file' });
     expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started']);
     const client = await connect(store, 'examples');
-    const text = firstText(
-      await client.callTool({ name: 'rename_skill', arguments: { name: 'outsider', new_name: 'insider' } }),
-    );
-    expect(text).toMatchInlineSnapshot(
-      `"Renamed skill "outsider" to "insider". It is served globally on the root /mcp endpoint and included in workspace "examples". Load it by calling the tool named "insider"."`,
-    );
-    expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started', 'insider']);
+    const res = (await client.callTool({
+      name: 'rename_skill',
+      arguments: { name: 'outsider', new_name: 'insider' },
+    })) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(store.getSkill('outsider')).toBeDefined();
+    expect(store.getSkill('insider')).toBeUndefined();
+    expect(store.getWorkspace('examples')?.skills).toEqual(['getting-started']);
   });
 
   it('edits passages of a skill body, leaving the rest and the frontmatter as they were', async () => {

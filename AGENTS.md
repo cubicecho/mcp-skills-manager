@@ -45,7 +45,9 @@ one line per skill (`renderIndex` in `skill-render.ts`), not JSON. A skill autho
 workspace endpoint** is scoped to that workspace by default: written with a
 `global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
 see `ConfigStore.getGlobalSkills`) and appended to the workspace's member list.
-Root-authored skills are global. `create_skill`/`update_skill` take a `global`
+Root-authored skills are global. A workspace endpoint authors only the skills it
+serves: every authoring tool aimed at another skill is refused (`requireServed`),
+while the root endpoint reaches them all. `create_skill`/`update_skill` take a `global`
 argument to override either default (e.g. promote a workspace skill to global).
 New skills default to the `dir` layout so ref files can be attached.
 

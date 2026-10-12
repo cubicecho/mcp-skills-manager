@@ -16,7 +16,9 @@ import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
  * When these tools are served from a workspace endpoint (`workspaceSlug` set), a
  * newly created skill is scoped to that workspace: written with `global: false`
  * (hidden from the root `/mcp` aggregate) and appended to the workspace's member
- * list. Authored from the root endpoint, skills are global as usual.
+ * list. Authored from the root endpoint, skills are global as usual. A workspace
+ * endpoint reaches only the skills it serves: a tool aimed at any other skill is
+ * refused, while the root endpoint reaches every skill.
  *
  * A skill a human has marked read-only (frontmatter `readonly: true`) is off
  * limits: every tool that would change, rename or delete it — or anything in its
@@ -152,10 +154,30 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
   /**
+   * Refuse, on a workspace endpoint, a skill that workspace does not serve: the endpoint authors its own set only.
+   * The root endpoint reaches every skill, and an unknown name falls through to the store's 404.
+   * @param name - Slug the tool call addresses.
+   */
+  const requireServed = (name: string): void => {
+    if (workspaceSlug === undefined || store.getSkill(name) === undefined) {
+      return;
+    }
+    const workspace = store.getWorkspace(workspaceSlug);
+    const served = workspace ? store.getSkillsForWorkspace(workspace) : [];
+    const isServed = served.some((skill) => skill.name === name);
+    if (isServed === false) {
+      throw new Error(
+        `Skill "${name}" is not served by workspace "${workspaceSlug}", so it cannot be read or changed from this endpoint.`,
+      );
+    }
+  };
+
+  /**
    * Refuse to touch a skill a human has marked read-only, or one whose content is owned by a git source.
    * An unknown name falls through to the store's 404.
    */
   const requireWritable = (name: string): void => {
+    requireServed(name);
     if (store.getSkill(name)?.source) {
       throw new Error(
         `Skill "${name}" is managed from a git source and cannot be modified, renamed or deleted over MCP. ` +
@@ -470,6 +492,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       },
       run: async (args) => {
         const input = parseArgs(skillPathArgs, args);
+        requireServed(input.skill);
         const file = await guard(() => store.readSupportingFile(input.skill, input.path));
         if (file.binary) {
           return `${input.path} (${file.size} bytes, binary, base64):\n${file.content}`;
