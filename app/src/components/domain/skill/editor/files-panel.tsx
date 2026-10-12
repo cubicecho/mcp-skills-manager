@@ -13,9 +13,10 @@ import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Code } from '@/components/ui/code';
+import { DownloadButton } from '@/components/ui/download-button';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import type { PickedFile } from '@/components/ui/file-picker-base';
-import { Download, FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
+import { FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
 import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
@@ -140,22 +141,6 @@ export function FilesPanel({
     });
   };
 
-  const runExport = async () => {
-    try {
-      const blob = await exportSkill(skill.name);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `${skill.name}.zip`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.apiError(error);
-    }
-  };
-
   const fileCount = skill.files.filter((file) => file.type === 'file').length + 1;
   const toolbar = { variant: 'ghost', size: 'icon-sm' } as const;
 
@@ -213,7 +198,13 @@ export function FilesPanel({
                   />
                 </>
               )}
-              <ActionButton {...toolbar} label="Export .zip" onClick={runExport} iconSlot={<Download />} />
+              <DownloadButton
+                {...toolbar}
+                label="Export .zip"
+                filename={`${skill.name}.zip`}
+                source={() => exportSkill(skill.name)}
+                onError={toast.apiError}
+              />
               {!linked && <LinkSourceButton skill={skill} />}
               <RenameButton skill={skill} onRenamed={onRenamed} />
             </div>

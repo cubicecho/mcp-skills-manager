@@ -235,7 +235,9 @@ describe('FilesPanel', () => {
 
   it('downloads the export as <name>.zip', async () => {
     const downloads: string[] = [];
-    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:export', revokeObjectURL: () => {} });
+    // jsdom has neither; they stay defined, as the URL is revoked a task after the click.
+    URL.createObjectURL = () => 'blob:export';
+    URL.revokeObjectURL = () => {};
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       downloads.push(this.download);
     });
@@ -247,7 +249,6 @@ describe('FilesPanel', () => {
     await waitFor(() => expect(downloads).toEqual(['pdf-forms.zip']));
     expect(exportSkill).toHaveBeenCalledWith('pdf-forms');
     click.mockRestore();
-    vi.unstubAllGlobals();
   });
 
   it('reports an export that fails', async () => {
