@@ -112,7 +112,8 @@ export function useSkill(name: string) {
 export function useSkillFileContent(name: string, filePath: string | null) {
   return useQuery({
     queryKey: [...queryKeys.skill(name), 'file', filePath],
-    queryFn: () => api.readSkillFile(name, filePath as string),
+    // Only runs once a path is selected (`enabled`).
+    queryFn: () => api.readSkillFile(name, filePath ?? ''),
     enabled: filePath != null,
     staleTime: 0,
     gcTime: 0,

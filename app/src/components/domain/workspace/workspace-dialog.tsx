@@ -1,4 +1,4 @@
-import type { SkillToolMode, WorkspaceStatus } from '@mcp-skills/shared';
+import type { WorkspaceStatus } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
 import { InputField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
@@ -39,17 +39,19 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
   const createWorkspace = useCreateWorkspace();
   const updateWorkspace = useUpdateWorkspace(workspace?.slug ?? '');
 
+  // `inherit` (no override) vs a concrete skill-tool mode for this workspace's endpoint.
+  const initialToolMode: string = workspace?.skillToolMode ?? INHERIT;
   const form = useAppForm({
     defaultValues: {
       name: workspace?.name ?? '',
       description: workspace?.description ?? '',
       enabled: workspace?.enabled ?? true,
-      // `inherit` (no override) vs a concrete skill-tool mode for this workspace's endpoint.
-      toolMode: (workspace?.skillToolMode ?? INHERIT) as string,
+      toolMode: initialToolMode,
       skills: workspace?.skills ?? [],
     },
     onSubmit: async ({ value }) => {
-      const mode = value.toolMode === INHERIT ? undefined : (value.toolMode as SkillToolMode);
+      // The sentinel is not a mode, so it finds none: no override.
+      const mode = SKILL_TOOL_MODES.find((candidate) => candidate === value.toolMode);
       const body = { name: value.name, description: value.description, enabled: value.enabled, skills: value.skills };
       try {
         if (isEdit) {

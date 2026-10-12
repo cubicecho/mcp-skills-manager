@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { SkillUsage } from '@mcp-skills/shared';
 import { skillUsageSchema } from '@mcp-skills/shared';
+import { z } from 'zod';
 import { USAGE_FLUSH_MS } from '../core/defaults.ts';
 import { errorMessage } from '../errors.ts';
 import { writeJsonAtomic } from './atomic-file.ts';
@@ -100,7 +101,7 @@ export class UsageTracker {
       return new Map();
     }
     try {
-      const parsed = JSON.parse(await readFile(this.file, 'utf8')) as Record<string, unknown>;
+      const parsed = z.record(z.string(), z.unknown()).parse(JSON.parse(await readFile(this.file, 'utf8')));
       const usage = new Map<string, SkillUsage>();
       for (const [name, value] of Object.entries(parsed)) {
         const result = skillUsageSchema.safeParse(value);

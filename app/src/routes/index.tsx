@@ -17,6 +17,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
+import { isKeyOf } from '@/lib/is-key-of';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
 import { ANY_TAG_OPTION, optionToTag, tagToOption } from '@/lib/tag-option';
@@ -26,9 +27,30 @@ export const Route = createFileRoute('/')({
   component: SkillsPage,
 });
 
-type ScopeFilter = 'all' | 'global' | 'scoped';
-type FormatFilter = 'all' | 'dir' | 'file';
-type SortKey = 'name' | 'updated' | 'used';
+/** The scope filter's choices, with the label each shows. */
+const SCOPE_LABELS = { all: 'All scopes', global: 'Global', scoped: 'Workspace-scoped' } as const;
+type ScopeFilter = keyof typeof SCOPE_LABELS;
+
+/** The format filter's choices, with the label each shows. */
+const FORMAT_LABELS = { all: 'All formats', dir: 'Directory', file: 'File' } as const;
+type FormatFilter = keyof typeof FORMAT_LABELS;
+
+/** The sort orders, with the label each shows. */
+const SORT_LABELS = { name: 'Name (A–Z)', updated: 'Recently updated', used: 'Most used' } as const;
+type SortKey = keyof typeof SORT_LABELS;
+
+/**
+ * Lists a label table as select options, in the table's order.
+ * @param labels - Label by option value.
+ * @returns One option per entry.
+ */
+function toOptions(labels: Readonly<Record<string, string>>): SelectEntry[] {
+  return Object.entries(labels).map(([value, label]) => ({ value, label }));
+}
+
+const SCOPE_OPTIONS = toOptions(SCOPE_LABELS);
+const FORMAT_OPTIONS = toOptions(FORMAT_LABELS);
+const SORT_OPTIONS = toOptions(SORT_LABELS);
 
 /** Apply the search query, scope/format/tag filters and sort to the raw skill list. */
 function filterAndSort(
@@ -74,24 +96,6 @@ function filterAndSort(
 function collectTags(skills: SkillSummary[]): string[] {
   return [...new Set(skills.flatMap((skill) => skill.tags))].sort((a, b) => a.localeCompare(b));
 }
-
-const SCOPE_OPTIONS: SelectEntry[] = [
-  { value: 'all', label: 'All scopes' },
-  { value: 'global', label: 'Global' },
-  { value: 'scoped', label: 'Workspace-scoped' },
-];
-
-const FORMAT_OPTIONS: SelectEntry[] = [
-  { value: 'all', label: 'All formats' },
-  { value: 'dir', label: 'Directory' },
-  { value: 'file', label: 'File' },
-];
-
-const SORT_OPTIONS: SelectEntry[] = [
-  { value: 'name', label: 'Name (A–Z)' },
-  { value: 'updated', label: 'Recently updated' },
-  { value: 'used', label: 'Most used' },
-];
 
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   const toast = useToasts();
@@ -186,14 +190,22 @@ function SkillsPage() {
         aria-label="Filter by scope"
         options={SCOPE_OPTIONS}
         value={scope}
-        onValueChange={(value) => setScope(value as ScopeFilter)}
+        onValueChange={(value) => {
+          if (isKeyOf(SCOPE_LABELS, value)) {
+            setScope(value);
+          }
+        }}
       />
       <OptionSelect
         className="w-40"
         aria-label="Filter by format"
         options={FORMAT_OPTIONS}
         value={format}
-        onValueChange={(value) => setFormat(value as FormatFilter)}
+        onValueChange={(value) => {
+          if (isKeyOf(FORMAT_LABELS, value)) {
+            setFormat(value);
+          }
+        }}
       />
       {allTags.length > 0 && (
         <OptionSelect
@@ -212,7 +224,11 @@ function SkillsPage() {
         aria-label="Sort skills"
         options={SORT_OPTIONS}
         value={sort}
-        onValueChange={(value) => setSort(value as SortKey)}
+        onValueChange={(value) => {
+          if (isKeyOf(SORT_LABELS, value)) {
+            setSort(value);
+          }
+        }}
       />
     </div>
   ) : undefined;

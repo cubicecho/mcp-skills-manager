@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { FileText, Folder, Upload } from '@/components/ui/icons';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { isKeyOf } from '@/lib/is-key-of';
 import { useCreateSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { GIT_SKILL_FORM_ID, GitSkillForm } from './git-skill-form';
@@ -18,7 +19,16 @@ import { UPLOAD_SKILL_FORM_ID, UploadSkillForm, type UploadStatus } from './uplo
 
 const CREATE_SKILL_FORM_ID = 'create-skill-form';
 
-type Tab = 'create' | 'upload' | 'git';
+/** The dialog's tabs, with the label each shows. */
+const TAB_LABELS = { create: 'Create skill', upload: 'Upload', git: 'From Git' } as const;
+type Tab = keyof typeof TAB_LABELS;
+
+/** What the create form starts with. */
+const CREATE_DEFAULTS: { title: string; description: string; format: SkillFormat } = {
+  title: '',
+  description: '',
+  format: 'file',
+};
 
 const IDLE_UPLOAD: UploadStatus = { ready: false, pending: false, dirty: false };
 
@@ -40,7 +50,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [git, setGit] = useState<UploadStatus>(IDLE_UPLOAD);
 
   const form = useAppForm({
-    defaultValues: { title: '', description: '', format: 'file' as SkillFormat },
+    defaultValues: CREATE_DEFAULTS,
     onSubmit: async ({ value }) => {
       const name = slugify(value.title);
       try {
@@ -77,11 +87,18 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         description="A skill is a Markdown document agents can load over MCP. Create one from scratch, upload an existing one, or link one to a git repo."
         hasUnsavedChanges={isDirty || upload.dirty || git.dirty}
         content={
-          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+          <Tabs
+            value={tab}
+            onValueChange={(value) => {
+              if (isKeyOf(TAB_LABELS, value)) {
+                setTab(value);
+              }
+            }}
+          >
             <TabsList className="w-full">
-              <TabsTrigger value="create">Create skill</TabsTrigger>
-              <TabsTrigger value="upload">Upload</TabsTrigger>
-              <TabsTrigger value="git">From Git</TabsTrigger>
+              <TabsTrigger value="create">{TAB_LABELS.create}</TabsTrigger>
+              <TabsTrigger value="upload">{TAB_LABELS.upload}</TabsTrigger>
+              <TabsTrigger value="git">{TAB_LABELS.git}</TabsTrigger>
             </TabsList>
             <TabsContent value="create">
               <form

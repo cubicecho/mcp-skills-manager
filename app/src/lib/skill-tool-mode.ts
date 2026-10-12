@@ -1,4 +1,5 @@
 import type { SkillToolMode } from '@mcp-skills/shared';
+import { skillToolModeSchema } from '@mcp-skills/shared';
 
 /** Short labels for each skill-tool mode, shared by the settings page and the workspace override select. */
 export const SKILL_TOOL_MODE_LABELS: Record<SkillToolMode, string> = {
@@ -7,11 +8,11 @@ export const SKILL_TOOL_MODE_LABELS: Record<SkillToolMode, string> = {
 };
 
 /**
- * The modes in display order, derived from the label map so a new mode added to
- * `SkillToolMode` forces a label (compile error) and then renders everywhere the
- * selects map over this list — no per-component `<SelectItem>` to keep in sync.
+ * The modes in display order, read from the schema: a new mode added to `SkillToolMode`
+ * forces a label (compile error) and then renders everywhere the selects map over this
+ * list — no per-component `<SelectItem>` to keep in sync.
  */
-export const SKILL_TOOL_MODES = Object.keys(SKILL_TOOL_MODE_LABELS) as SkillToolMode[];
+export const SKILL_TOOL_MODES: readonly SkillToolMode[] = skillToolModeSchema.options;
 
 /** One-line explanation of each mode's trade-off, shown under the settings select. */
 export const SKILL_TOOL_MODE_HINTS: Record<SkillToolMode, string> = {

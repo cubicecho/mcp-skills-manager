@@ -1,4 +1,4 @@
-import type { SkillFileContent } from '@mcp-skills/shared';
+import type { SkillFileContent, SkillFormat } from '@mcp-skills/shared';
 import { slugify } from '@mcp-skills/shared';
 import { unzipSync } from 'fflate';
 import type { PickedFile } from '@/components/ui/file-picker-base';
@@ -9,7 +9,7 @@ import type { PickedFile } from '@/components/ui/file-picker-base';
  * (base64-encoded) that the POST /api/skills/import endpoint understands.
  */
 export interface NormalizedUpload {
-  format: 'file' | 'dir';
+  format: SkillFormat;
   /** Slug derived from the file / folder / archive name; user-editable before import. */
   defaultName: string;
   files: SkillFileContent[];
