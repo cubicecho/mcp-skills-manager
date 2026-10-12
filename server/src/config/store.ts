@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { type Dirent, existsSync, type Stats } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   GitSource,
@@ -21,7 +21,6 @@ import {
   settingsFileSchema,
   skillSchema,
   skillSourceSchema,
-  slugify,
   slugSchema,
   workspaceConfigSchema,
 } from '@mcp-skills/shared';
@@ -30,8 +29,9 @@ import { zipSync } from 'fflate';
 import { resolveAuth } from '../auth.ts';
 import { AUTH_TOKEN_BYTES, WATCH_DEBOUNCE_MS } from '../core/defaults.ts';
 import { errorMessage, HttpError } from '../errors.ts';
-import { parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
+import { localFlags, parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
+import { SkillSync, type StagedSource, type SyncTarget } from '../sources/skill-sync.ts';
 import { parseJsonFile, writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
 import { migrateLegacyWorkspaces } from './legacy-workspaces.ts';
 import { isBinary, pruneEmptyDirs, safeRelPath, toPosix, walkEntries } from './skill-files.ts';
@@ -50,26 +50,6 @@ export interface ConfigState {
 export interface ConfigStoreOptions {
   /** Fetches a linked skill's folder from its git source. */
   fetchSource?: SkillSourceFetcher;
-}
-
-/** A source folder fetched into the staging area, ready to be moved into place. */
-interface StagedSource {
-  /** Scratch directory holding the staged folder; removed once the sync finishes. */
-  work: string;
-  /** The fetched skill folder, with a SKILL.md at its root. */
-  dir: string;
-  /** Commit the folder was fetched from. */
-  commit: string;
-}
-
-/**
- * Write a skill's local-only settings the way frontmatter keeps them: only the non-default value
- * is stored, so the key is dropped when the skill is global, or writable.
- * @param flags - Whether the skill is served on the root endpoint, and whether agents may edit it.
- * @returns The `global` and `readonly` frontmatter keys.
- */
-function localFlags(flags: { global: boolean; readOnly: boolean }): Pick<SkillFrontmatter, 'global' | 'readonly'> {
-  return { global: flags.global ? undefined : false, readonly: flags.readOnly ? true : undefined };
 }
 
 /**
@@ -136,15 +116,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private readonly usage: UsageTracker;
   /** Absolute path to usage.json — kept at the dataDir root, OUTSIDE the watched dirs, so writes don't trigger reloads. */
   readonly usageFile: string;
-  /**
-   * Staging area for skills fetched from git. Kept OUTSIDE the watched dirs (a staged SKILL.md
-   * under skills/ would load as a skill) but on the same filesystem, so moving a fetched
-   * folder into place is a single rename.
-   */
-  private readonly syncDir: string;
-  private readonly fetchSource: SkillSourceFetcher;
-  /** Names of skills with a sync or link in flight; a second one is refused rather than interleaved. */
-  private readonly syncing = new Set<string>();
+  /** Fetches linked skills from git and swaps them in; it stages under `.sync`, outside the watched dirs. */
+  private readonly sync: SkillSync;
 
   constructor(dataDir: string, options: ConfigStoreOptions = {}) {
     super();
@@ -160,8 +133,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.settingsFile = path.join(this.configDir, 'settings.json');
     this.usageFile = path.join(dataDir, 'usage.json');
     this.usage = new UsageTracker(this.usageFile);
-    this.syncDir = path.join(dataDir, '.sync');
-    this.fetchSource = options.fetchSource ?? fetchGitFolder;
+    this.sync = new SkillSync(
+      { skillsDir: this.skillsDir, syncDir: path.join(dataDir, '.sync') },
+      options.fetchSource ?? fetchGitFolder,
+    );
   }
 
   /** Create directories, seed defaults on first run and load everything. */
@@ -515,10 +490,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * @throws HttpError 409 when the name is taken, 400 when the folder has no SKILL.md or yields no name.
    */
   async importSkillFromSource(input: { name?: string; source: GitSource; global?: boolean }): Promise<Skill> {
-    return this.withStagedSource(input.source, async (staged) => {
-      const name = input.name ?? (await this.sourceSkillName(input.source, staged));
+    return this.sync.withStagedSource(input.source, async (staged) => {
+      const name = input.name ?? (await this.sync.sourceSkillName(input.source, staged));
       this.requireFreeName(name);
-      return this.exclusiveSync(name, () =>
+      return this.sync.exclusiveSync(name, () =>
         this.installStaged(staged, { name, source: input.source, global: input.global !== false, readOnly: false }),
       );
     });
@@ -533,7 +508,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    */
   async linkSkillSource(name: string, source: GitSource): Promise<Skill> {
     this.requireSkill(name);
-    return this.exclusiveSync(name, () => this.replaceFromSource(name, source));
+    return this.sync.exclusiveSync(name, () => this.replaceFromSource(name, source));
   }
 
   /**
@@ -548,7 +523,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       throw new HttpError(HttpStatus.BadRequest, `Skill "${name}" is not linked to a git source`);
     }
     const source: GitSource = { repo: linked.repo, ref: linked.ref, path: linked.path };
-    const skill = await this.exclusiveSync(name, () => this.replaceFromSource(name, source));
+    const skill = await this.sync.exclusiveSync(name, () => this.replaceFromSource(name, source));
     return { skill, changed: skill.source?.commit !== linked.commit };
   }
 
@@ -566,7 +541,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** Fetch `source` and swap it in for the skill called `name`, carrying over its local-only settings. */
   private async replaceFromSource(name: string, source: GitSource): Promise<Skill> {
-    return this.withStagedSource(source, (staged) => {
+    return this.sync.withStagedSource(source, (staged) => {
       // Looked up after the fetch, so a rename or delete that landed meanwhile is seen.
       const existing = this.requireSkill(name);
       return this.installStaged(staged, {
@@ -579,99 +554,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Run a sync for `name`, refusing a second one while the first is still in flight. */
-  private async exclusiveSync<T>(name: string, run: () => Promise<T>): Promise<T> {
-    if (this.syncing.has(name)) {
-      throw new HttpError(HttpStatus.Conflict, `Skill "${name}" is already syncing`);
-    }
-    this.syncing.add(name);
-    try {
-      return await run();
-    } finally {
-      this.syncing.delete(name);
-    }
-  }
-
-  /** Fetch a source into the staging area, hand it to `use`, and clean the staging area up afterwards. */
-  private async withStagedSource<T>(source: GitSource, use: (staged: StagedSource) => Promise<T>): Promise<T> {
-    await mkdir(this.syncDir, { recursive: true });
-    const work = await mkdtemp(path.join(this.syncDir, 'sync-'));
-    try {
-      const dir = path.join(work, 'skill');
-      await mkdir(dir);
-      const { commit } = await this.fetchSource(source, dir);
-      if (!existsSync(path.join(dir, SKILL_FILE))) {
-        throw new HttpError(HttpStatus.BadRequest, 'The source folder has no SKILL.md at its root');
-      }
-      return await use({ work, dir, commit });
-    } finally {
-      await rm(work, { recursive: true, force: true });
-    }
-  }
-
-  /** The name a freshly imported source gets: its declared `name`, else its folder's (or repo's) name. */
-  private async sourceSkillName(source: GitSource, staged: StagedSource): Promise<string> {
-    const { frontmatter } = parseMarkdown(await readFile(path.join(staged.dir, SKILL_FILE), 'utf8'));
-    const declared = slugSchema.safeParse(frontmatter.name);
-    if (declared.success) {
-      return declared.data;
-    }
-    const basename = (source.path ?? source.repo.replace(/\.git$/, '')).split(/[/:]/).pop() ?? '';
-    const derived = slugSchema.safeParse(slugify(basename));
-    if (!derived.success) {
-      throw new HttpError(
-        HttpStatus.BadRequest,
-        'Could not derive a skill name from the source; give the skill a name',
-      );
-    }
-    return derived.data;
-  }
-
-  /**
-   * Move a staged source folder into place as the skill `name`. Upstream's SKILL.md is rewritten so
-   * the local identity and local-only settings win and the link (with the fetched commit) is recorded.
-   */
-  private async installStaged(
-    staged: StagedSource,
-    target: { name: string; source: GitSource; global: boolean; readOnly: boolean; replaces?: Skill },
-  ): Promise<Skill> {
-    const { name, source, replaces } = target;
-    const skillFile = path.join(staged.dir, SKILL_FILE);
-    const upstream = parseMarkdown(await readFile(skillFile, 'utf8'));
-    const frontmatter: SkillFrontmatter = {
-      ...upstream.frontmatter,
-      // The local name stays the identity even when upstream declares another, so workspace
-      // membership and usage stats never orphan.
-      name,
-      ...localFlags(target),
-      source: {
-        repo: source.repo,
-        ...(source.ref ? { ref: source.ref } : {}),
-        ...(source.path ? { path: source.path } : {}),
-        commit: staged.commit,
-        syncedAt: new Date().toISOString(),
-      },
-    };
-    await writeTextAtomic(skillFile, serializeMarkdown(frontmatter, upstream.body));
-
-    const folder = replaces ? skillFolder(replaces) : name;
-    const live = path.join(this.skillsDir, folder);
-    const retired = path.join(staged.work, 'old');
-    const hadFolder = existsSync(live);
-    if (hadFolder) {
-      await rename(live, retired);
-    }
-    try {
-      await rename(staged.dir, live);
-    } catch (err) {
-      if (hadFolder) {
-        await rename(retired, live);
-      }
-      throw err;
-    }
-    if (replaces?.format === 'file') {
-      await rm(path.join(this.skillsDir, replaces.path), { force: true });
-    }
+  /** Move a staged source folder into place and load the skill it now holds. */
+  private async installStaged(staged: StagedSource, target: SyncTarget): Promise<Skill> {
+    const folder = await this.sync.installStaged(staged, target);
     return this.reloadSkill(dirSkillPath(folder), 'dir');
   }
 

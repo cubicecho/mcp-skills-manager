@@ -66,3 +66,16 @@ export function serializeMarkdown(frontmatter: SkillFrontmatter, body: string): 
   const yaml = stringifyYaml(Object.fromEntries(entries)).trimEnd();
   return `---\n${yaml}\n---\n\n${normalizedBody}\n`;
 }
+
+/**
+ * Write a skill's local-only settings the way frontmatter keeps them: only the non-default value
+ * is stored, so the key is dropped when the skill is global, or writable.
+ * @param flags - Whether the skill is served on the root endpoint, and whether agents may edit it.
+ * @returns The `global` and `readonly` frontmatter keys.
+ */
+export function localFlags(flags: {
+  global: boolean;
+  readOnly: boolean;
+}): Pick<SkillFrontmatter, 'global' | 'readonly'> {
+  return { global: flags.global ? undefined : false, readonly: flags.readOnly ? true : undefined };
+}
