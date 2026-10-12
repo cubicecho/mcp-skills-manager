@@ -16,7 +16,7 @@ import { FileText, Folder, Lock, Pencil, Plus, Search, Trash2 } from '@/componen
 import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatDate } from '@/lib/format';
+import { formatCount, formatDate, joinStats } from '@/lib/format';
 import { isKeyOf } from '@/lib/is-key-of';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
@@ -260,9 +260,7 @@ function SkillsPage() {
                       <TableCell>
                         <Badge variant="outline" className="gap-1 font-normal">
                           {skill.format === 'dir' ? <Folder className="size-3" /> : <FileText className="size-3" />}
-                          {skill.format}
-                          {skill.files.length > 0 &&
-                            ` · ${skill.files.length} file${skill.files.length === 1 ? '' : 's'}`}
+                          {joinStats(skill.format, skill.files.length > 0 && formatCount(skill.files.length, 'file'))}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">

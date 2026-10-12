@@ -127,6 +127,7 @@
         "app/src/lib/readable-text-color.ts",
         "app/src/lib/error-message.ts",
         "app/src/lib/form-binding.ts",
+        "app/src/lib/format.ts",
         "app/src/components/action-button.tsx",
         "app/src/components/unsaved-changes-guard.tsx",
         "app/src/components/app-form.tsx",

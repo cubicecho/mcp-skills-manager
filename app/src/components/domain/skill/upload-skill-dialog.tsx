@@ -8,6 +8,7 @@ import { Alert } from '@/components/ui/alert';
 import { Code } from '@/components/ui/code';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import { FileText, Folder } from '@/components/ui/icons';
+import { formatCount, joinStats } from '@/lib/format';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
@@ -138,8 +139,10 @@ export function UploadSkillForm({
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-2 text-sm font-medium">
               {upload.format === 'dir' ? <FileArchive className="size-4" /> : <FileText className="size-4" />}
-              {upload.format === 'dir' ? 'Directory skill' : 'File skill'} · {upload.paths.length} file
-              {upload.paths.length === 1 ? '' : 's'}
+              {joinStats(
+                upload.format === 'dir' ? 'Directory skill' : 'File skill',
+                formatCount(upload.paths.length, 'file'),
+              )}
             </span>
             <ul className="max-h-40 overflow-y-auto rounded-md border bg-muted/40 p-2 font-mono text-xs text-muted-foreground">
               {upload.paths.map((filePath) => (

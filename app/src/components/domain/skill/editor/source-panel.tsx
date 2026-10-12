@@ -9,20 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RefreshCw } from '@/components/ui/icons';
+import { formatDateTime } from '@/lib/format';
 import { useUnlinkSkillSource } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
-
-/**
- * Format when a skill was last synced.
- * @param iso - The sync time as stored.
- * @returns A local date and time, or nothing when the time does not parse.
- */
-function formatSyncedAt(iso: string | undefined): string | undefined {
-  const date = iso ? new Date(iso) : undefined;
-  return date && Number.isNaN(date.getTime()) === false
-    ? date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-    : undefined;
-}
 
 /**
  * Where a linked skill comes from and how to bring it up to date: its repo, ref, folder and synced
@@ -34,7 +23,7 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
   const toast = useToasts();
   const unlink = useUnlinkSkillSource(skill.name);
   const { sync, pending } = useSyncNow(skill.name);
-  const syncedAt = formatSyncedAt(source.syncedAt);
+  const syncedAt = formatDateTime(source.syncedAt ?? '');
 
   return (
     <Section

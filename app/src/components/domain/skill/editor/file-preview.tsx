@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from '@/components/ui/code';
 import { Lock, Pencil } from '@/components/ui/icons';
-import { formatBytes, formatCount, formatDate } from '@/lib/format';
+import { formatBytes, formatCount, formatDate, joinStats } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
 import type { SlotNode } from '@/lib/utils';
 
@@ -55,10 +55,10 @@ function EditButton({ onEdit }: { onEdit: () => void }) {
 
 /** The skill's own Markdown, rendered: what an agent gets when it loads the skill. */
 function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => void }) {
-  const facts = [
+  const facts = joinStats(
     `Updated ${formatDate(skill.updatedAt)}`,
     skill.usage.count > 0 ? `loaded ${formatCount(skill.usage.count, 'time')}` : 'never loaded',
-  ].join(' · ');
+  );
   return (
     <PreviewFrame
       title={skill.name}
