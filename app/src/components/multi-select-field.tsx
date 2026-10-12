@@ -1,12 +1,18 @@
-import type { ComponentProps } from 'react';
-import { bindToForm, type FieldProps, splitProps, useFieldContext, useFieldError } from '@/components/app-form';
-import { FormField } from '@/components/form-field';
-import { MultiSelect, type MultiSelectOption } from '@/components/multi-select';
+import type { ComponentProps } from "react";
+import {
+  bindToForm,
+  type FieldProps,
+  splitProps,
+  useFieldContext,
+  useFieldError,
+} from "@/components/app-form";
+import { FormField } from "@/components/form-field";
+import { MultiSelect, type MultiSelectOption } from "@/components/multi-select";
 
 type MultiSelectFieldProps = FieldProps &
   Omit<
     ComponentProps<typeof MultiSelect>,
-    'id' | 'value' | 'onValueChange' | 'aria-describedby' | 'aria-invalid' | 'aria-required'
+    "id" | "value" | "onValueChange" | "aria-describedby" | "aria-invalid" | "aria-required"
   >;
 
 function BoundMultiSelectField(props: MultiSelectFieldProps) {
@@ -20,7 +26,7 @@ function BoundMultiSelectField(props: MultiSelectFieldProps) {
       error={error}
       // The function form, because `MultiSelect`'s root renders a `Popover` and the id has to
       // land on the trigger — the same reason `SelectField` uses it.
-      control={(wired) => (
+      controlSlot={(wired) => (
         <MultiSelect
           {...control}
           {...wired}
@@ -50,7 +56,7 @@ function BoundMultiSelectField(props: MultiSelectFieldProps) {
  */
 export const MultiSelectField = bindToForm<MultiSelectFieldProps, readonly string[]>(
   BoundMultiSelectField,
-  'MultiSelectField',
+  "MultiSelectField",
 );
 
 export type { MultiSelectOption };

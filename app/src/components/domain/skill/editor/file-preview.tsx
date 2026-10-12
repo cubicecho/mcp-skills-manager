@@ -13,47 +13,44 @@ import { CodeBlock } from '@/components/ui/code';
 import { Lock, Pencil } from '@/components/ui/icons';
 import { formatBytes, formatCount, formatDate } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
+import type { SlotNode } from '@/lib/utils';
 
 /** The pane a file is read in: its name, path and facts pinned over a body that scrolls. */
 function PreviewFrame({
   title,
   path,
   description,
-  action,
-  badges,
-  content,
+  actionSlot,
+  badgesSlot,
+  contentSlot,
 }: {
   title: string;
   path: string;
   description?: ReactNode;
-  action?: ReactNode;
-  badges?: ReactNode;
-  content: ReactNode;
+  actionSlot?: SlotNode;
+  badgesSlot?: SlotNode;
+  contentSlot: SlotNode;
 }) {
   return (
     <StickyHeaderContentFooter
       width="prose"
-      header={
+      headerSlot={
         <PageHeader
           title={title}
-          breadcrumbs={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
+          breadcrumbsSlot={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
           description={description}
-          action={action}
-          content={badges}
+          actionSlot={actionSlot}
+          contentSlot={badgesSlot}
         />
       }
       contentClassName="pb-10"
-      content={content}
+      contentSlot={contentSlot}
     />
   );
 }
 
 function EditButton({ onEdit }: { onEdit: () => void }) {
-  return (
-    <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit}>
-      <Pencil />
-    </ActionButton>
-  );
+  return <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit} iconSlot={<Pencil />} />;
 }
 
 /** The skill's own Markdown, rendered: what an agent gets when it loads the skill. */
@@ -67,8 +64,8 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
       title={skill.name}
       path={skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`}
       description={skill.description || undefined}
-      action={skill.source ? undefined : <EditButton onEdit={onEdit} />}
-      badges={
+      actionSlot={skill.source ? undefined : <EditButton onEdit={onEdit} />}
+      badgesSlot={
         <div className="flex flex-wrap items-center gap-1.5">
           {skill.source && (
             <Badge variant="outline" className="gap-1 font-normal" title="Synced from a git repo; not edited here">
@@ -93,10 +90,13 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
           <span className="text-muted-foreground text-xs">{facts}</span>
         </div>
       }
-      content={
+      contentSlot={
         <>
           {skill.source && <SourcePanel skill={skill} source={skill.source} />}
-          <Markdown content={skill.body} empty="This skill has no body yet." />
+          <Markdown
+            content={skill.body}
+            emptySlot={<p className="text-foreground/60">This skill has no body yet.</p>}
+          />
         </>
       }
     />
@@ -113,7 +113,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
       title={path.slice(path.lastIndexOf('/') + 1)}
       path={`skills/${skill.name}/${path}`}
       description={data ? formatBytes(data.size) : undefined}
-      action={
+      actionSlot={
         markdown && !skill.source ? (
           <EditButton onEdit={onEdit} />
         ) : (
@@ -129,7 +129,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
           </Badge>
         )
       }
-      content={
+      contentSlot={
         <>
           <FileLoadState
             file={file}
@@ -138,7 +138,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
           {data &&
             !data.binary &&
             (markdown ? (
-              <Markdown content={data.content} empty="This file is empty." />
+              <Markdown content={data.content} emptySlot={<p className="text-foreground/60">This file is empty.</p>} />
             ) : (
               <CodeBlock content={data.content} />
             ))}

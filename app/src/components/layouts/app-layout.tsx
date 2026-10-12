@@ -50,12 +50,12 @@ function Brand({ compact = false }: { compact?: boolean }) {
 /** The one fact the rail adds about a skill: it follows a git repo, agents cannot change it, or the root endpoint does not serve it. */
 function skillStatus(skill: SkillSummary): SidebarNavItemStatus | undefined {
   if (skill.source) {
-    return { label: 'synced from git', icon: <GitBranch /> };
+    return { label: 'synced from git', iconSlot: <GitBranch /> };
   }
   if (skill.readOnly) {
-    return { label: 'read-only for agents', icon: <Lock /> };
+    return { label: 'read-only for agents', iconSlot: <Lock /> };
   }
-  return skill.global ? undefined : { label: 'workspace-scoped', icon: <Layers /> };
+  return skill.global ? undefined : { label: 'workspace-scoped', iconSlot: <Layers /> };
 }
 
 /** Every skill as a row that opens it, under a row for the full list with its filters. */
@@ -70,12 +70,12 @@ function SkillNav() {
       <SidebarSection
         as="nav"
         label="Main"
-        content={[
+        contentSlot={[
           <SidebarLink
             key="/"
             to="/"
             label="All skills"
-            icon={<BookMarked />}
+            iconSlot={<BookMarked />}
             count={skills.data?.length}
             active={Boolean(matchRoute({ to: '/' }))}
           />,
@@ -84,10 +84,15 @@ function SkillNav() {
       <SidebarSection
         as="nav"
         title="Skills"
-        action={
-          <ActionButton variant="ghost" size="icon-sm" label="New skill" side="right" onClick={() => setNewOpen(true)}>
-            <Plus />
-          </ActionButton>
+        actionSlot={
+          <ActionButton
+            variant="ghost"
+            size="icon-sm"
+            label="New skill"
+            side="right"
+            onClick={() => setNewOpen(true)}
+            iconSlot={<Plus />}
+          />
         }
         status={
           <QueryState
@@ -96,10 +101,10 @@ function SkillNav() {
             count={list.length}
             compact
             rows={3}
-            empty={<EmptyState compact title="No skills yet." className="px-2" />}
+            emptySlot={<EmptyState compact title="No skills yet." className="px-2" />}
           />
         }
-        content={list.map((skill) => {
+        contentSlot={list.map((skill) => {
           // The skill's own Markdown counts, so a number here always means more than one file.
           const files = skill.files.filter((file) => file.type === 'file').length + 1;
           return (
@@ -108,7 +113,7 @@ function SkillNav() {
               to="/skills/$name"
               params={{ name: skill.name }}
               label={skill.name}
-              icon={skill.format === 'dir' ? <Folder /> : <FileText />}
+              iconSlot={skill.format === 'dir' ? <Folder /> : <FileText />}
               count={files > 1 ? files : undefined}
               status={skillStatus(skill)}
               title={skill.description || undefined}
@@ -133,51 +138,56 @@ export function AppLayout({ children }: { children: ReactNode }) {
       sidebarWidth="auto"
       divider="none"
       sidebarHideBelow="md"
-      sidebar={
+      sidebarSlot={
         <Sidebar
           label="MCP Skills"
-          header={<Brand />}
-          content={<SkillNav />}
-          footer={
+          headerSlot={<Brand />}
+          contentSlot={<SkillNav />}
+          footerSlot={
             <>
               <ServerStats />
               <SidebarLink
                 to="/workspaces"
                 label="Workspaces"
-                icon={<Layers />}
+                iconSlot={<Layers />}
                 count={status?.workspaceCount}
                 active={isActive('/workspaces', pathname)}
               />
               <SidebarLink
                 to="/settings"
                 label="Settings"
-                icon={<Settings />}
+                iconSlot={<Settings />}
                 active={isActive('/settings', pathname)}
               />
-              {status?.authEnabled && <SidebarNavItem label="Lock" icon={<Lock />} onClick={lock} />}
+              {status?.authEnabled && <SidebarNavItem label="Lock" iconSlot={<Lock />} onClick={lock} />}
               <ThemePicker variant="compact" />
             </>
           }
         />
       }
-      brand={<Brand compact />}
-      nav={NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <BarLink key={to} to={to} label={label} icon={<Icon />} active={isActive(to, pathname)} />
+      brandSlot={<Brand compact />}
+      navSlot={NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <BarLink key={to} to={to} label={label} iconSlot={<Icon />} active={isActive(to, pathname)} />
       ))}
       navLabel="Main"
-      action={
+      actionSlot={
         <>
           {status?.authEnabled && (
-            <ActionButton variant="ghost" size="icon-sm" label="Lock" hint="Forget the stored token" onClick={lock}>
-              <Lock />
-            </ActionButton>
+            <ActionButton
+              variant="ghost"
+              size="icon-sm"
+              label="Lock"
+              hint="Forget the stored token"
+              onClick={lock}
+              iconSlot={<Lock />}
+            />
           )}
           <ThemePicker variant="compact" />
         </>
       }
       // Pages bring their own inset and scroll their own body (PageLayout). Under `md` a skill's file
       // list stacks over its preview, taller than the screen, so there main scrolls instead.
-      content={<main className="h-full min-h-0 overflow-y-auto md:overflow-hidden">{children}</main>}
+      contentSlot={<main className="h-full min-h-0 overflow-y-auto md:overflow-hidden">{children}</main>}
     />
   );
 }

@@ -18,9 +18,13 @@ export function RenameButton({ skill, onRenamed }: { skill: SkillDetail; onRenam
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ActionButton variant="ghost" size="icon-sm" label="Rename skill" onClick={() => setOpen(true)}>
-        <Pencil />
-      </ActionButton>
+      <ActionButton
+        variant="ghost"
+        size="icon-sm"
+        label="Rename skill"
+        onClick={() => setOpen(true)}
+        iconSlot={<Pencil />}
+      />
       {open && (
         <PathPromptDialog
           onClose={() => setOpen(false)}

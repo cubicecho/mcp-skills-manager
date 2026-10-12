@@ -42,11 +42,16 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
       description="This skill's content comes from a git repo, so it is not edited here. Sync it to pull the newest version."
       surface="card"
       className="mb-6"
-      action={
+      actionSlot={
         <>
-          <Button size="sm" variant="outline" disabled={pending || unlink.isPending} onClick={sync}>
-            <RefreshCw className={pending ? 'animate-spin' : undefined} /> {pending ? 'Syncing…' : 'Sync now'}
-          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending || unlink.isPending}
+            onClick={sync}
+            content={pending ? 'Syncing…' : 'Sync now'}
+            iconSlot={<RefreshCw className={pending ? 'animate-spin' : undefined} />}
+          />
           <ConfirmButton
             variant="ghost"
             size="icon-sm"
@@ -61,20 +66,19 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
                 onError: toast.apiError,
               })
             }
-          >
-            <Unlink />
-          </ConfirmButton>
+            iconSlot={<Unlink />}
+          />
         </>
       }
-      content={
+      contentSlot={
         <>
           <DescriptionList
-            content={[
+            contentSlot={[
               <PropertyRow
                 key="repo"
                 label="Repository"
                 value={<Code className="break-all">{source.repo}</Code>}
-                action={<CopyButton value={source.repo} label="Copy repository URL" />}
+                actionSlot={<CopyButton value={source.repo} label="Copy repository URL" />}
               />,
               <PropertyRow key="ref" label="Branch or tag" value={source.ref ?? 'Default branch'} />,
               <PropertyRow
@@ -87,7 +91,9 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
                 label="Synced commit"
                 value={source.commit ? <Code>{shortCommit(source.commit)}</Code> : 'Not synced yet'}
                 hint={syncedAt ? `Synced ${syncedAt}` : undefined}
-                action={source.commit ? <CopyButton value={source.commit} label="Copy full commit SHA" /> : undefined}
+                actionSlot={
+                  source.commit ? <CopyButton value={source.commit} label="Copy full commit SHA" /> : undefined
+                }
               />,
             ]}
           />

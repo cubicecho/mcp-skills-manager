@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
-export type ToastTone = 'error' | 'success';
+/** What kind of message a toast is, which picks its colour and how long it stays. */
+export type ToastTone = "error" | "warning" | "positive" | "info";
 
 type Toast = { id: number; message: string; tone: ToastTone };
 
@@ -11,20 +12,26 @@ type ShowToast = (message: string, tone?: ToastTone) => void;
 
 const ToastContext = createContext<ShowToast | null>(null);
 
-/** Errors linger — the user has to read a reason; confirmations do not. */
+/** Errors and warnings linger — the user has to read a reason; confirmations do not. */
 const DURATION_MS: Record<ToastTone, number> = {
   error: 6000,
-  success: 3000,
+  warning: 6000,
+  positive: 3000,
+  info: 3000,
 };
 
 const TONE_CLASS: Record<ToastTone, string> = {
-  error: 'bg-destructive',
-  success: 'bg-primary',
+  error: "bg-negative",
+  warning: "bg-warning",
+  positive: "bg-positive",
+  info: "bg-info",
 };
 
 const TONE_TEXT_CLASS: Record<ToastTone, string> = {
-  error: 'text-destructive-foreground',
-  success: 'text-primary-foreground',
+  error: "text-negative-foreground",
+  warning: "text-warning-foreground",
+  positive: "text-positive-foreground",
+  info: "text-info-foreground",
 };
 
 /**
@@ -35,12 +42,13 @@ const TONE_TEXT_CLASS: Record<ToastTone, string> = {
  * router's full-screen container.
  */
 const VIEWPORT_STYLE = {
-  position: 'fixed',
+  position: "fixed",
   right: 16,
   bottom: 16,
   zIndex: 50,
-} as unknown as React.CSSProperties;
+} as React.CSSProperties;
 
+/** Holds the toasts and draws them over the app. Put it once, near the root. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(0);
@@ -56,7 +64,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const show = useCallback<ShowToast>(
-    (message, tone = 'error') => {
+    (message, tone = "error") => {
       const id = nextId.current++;
       setToasts((prev) => [...prev, { id, message, tone }]);
       timers.current.set(
@@ -72,7 +80,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      for (const timer of pending.values()) clearTimeout(timer);
+      for (const timer of pending.values()) {
+        clearTimeout(timer);
+      }
       pending.clear();
     };
   }, []);
@@ -95,11 +105,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={toast.id}
               role="alert"
               className={cn(
-                'cube-rn-view',
+                "cube-rn-view",
                 `max-w-sm flex-row items-start gap-3 rounded-lg px-4 py-3 shadow-lg ${TONE_CLASS[toast.tone]}`,
               )}
             >
-              <span className={cn('cube-rn-text', `flex-1 text-sm ${TONE_TEXT_CLASS[toast.tone]}`)}>
+              <span className={cn("cube-rn-text", `flex-1 text-sm ${TONE_TEXT_CLASS[toast.tone]}`)}>
                 {toast.message}
               </span>
               <button
@@ -108,7 +118,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 aria-label="Dismiss"
                 className="cube-rn-view cube-rn-pressable shrink-0"
               >
-                <span className={cn('cube-rn-text', `text-sm font-medium ${TONE_TEXT_CLASS[toast.tone]}`)}>×</span>
+                <span
+                  className={cn(
+                    "cube-rn-text",
+                    `text-sm font-medium ${TONE_TEXT_CLASS[toast.tone]}`,
+                  )}
+                >
+                  ×
+                </span>
               </button>
             </div>
           ))}
@@ -125,7 +142,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function useToast(): ShowToast {
   const show = useContext(ToastContext);
   if (!show) {
-    throw new Error('useToast must be used inside <ToastProvider>');
+    throw new Error("useToast must be used inside <ToastProvider>");
   }
   return show;
 }

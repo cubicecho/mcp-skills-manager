@@ -35,7 +35,7 @@ function ToggleRow({
     <SettingRow
       title={label}
       description={description}
-      action={({ titleId, descriptionId }) => (
+      actionSlot={({ titleId, descriptionId }) => (
         <Switch
           checked={checked}
           disabled={disabled}
@@ -64,7 +64,7 @@ function McpOptionsCard() {
       }
       loading={isPending}
       contentClassName="flex flex-col gap-4"
-      content={
+      contentSlot={
         settings && (
           <>
             <ToggleRow
@@ -152,15 +152,15 @@ function SettingsPage() {
       title="Settings"
       description="Server status and configuration."
       width="prose"
-      content={
+      contentSlot={
         <div className="flex flex-col gap-6 py-6">
           <CardLayout
             title="Status"
             loading={isPending}
-            content={
+            contentSlot={
               data && (
                 <DescriptionList
-                  content={[
+                  contentSlot={[
                     <PropertyRow key="version" label="Version" value={data.version} />,
                     <PropertyRow key="port" label="Port" value={String(data.port)} />,
                     <PropertyRow key="uptime" label="Uptime" value={formatDuration(data.uptimeSeconds)} />,
@@ -183,17 +183,13 @@ function SettingsPage() {
                 automatically, but you can force an immediate re-read here.
               </>
             }
-            content={
-              <Button variant="outline" onClick={reload}>
-                <RefreshCw /> Reload config
-              </Button>
-            }
+            contentSlot={<Button variant="outline" onClick={reload} content="Reload config" iconSlot={<RefreshCw />} />}
           />
 
           <CardLayout
             title="Connect over stdio"
             description="Run the server as a stdio MCP process instead of HTTP."
-            content={
+            contentSlot={
               <CodeBlock
                 content={`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a workspace's skills\nmcp-skills-stdio --data-dir /path/to/data --workspace backend`}
               />

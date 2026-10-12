@@ -78,7 +78,7 @@ export function GitSkillForm({
         Link a skill to a folder in a git repo. Its content comes from the repo, so it is not edited here; sync it to
         pull the newest version.
       </p>
-      <GitSourceFields form={form} fields="source" autoFocus />
+      <GitSourceFields form={form} autoFocus />
       <InputField
         form={form}
         name="name"

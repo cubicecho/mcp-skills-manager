@@ -15,7 +15,7 @@ export function useToasts() {
   const show = useToast();
   return useMemo(
     () => ({
-      success: (message: string) => show(message, 'success'),
+      success: (message: string) => show(message, 'positive'),
       error: (message: string) => show(message),
       apiError: (error: unknown) => show(apiErrorMessage(error)),
     }),

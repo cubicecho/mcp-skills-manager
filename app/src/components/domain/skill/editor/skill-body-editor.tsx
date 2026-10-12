@@ -61,7 +61,7 @@ export function SkillBodyEditor({
       onClose={onClose}
       saving={update.isPending}
       dirty={dirty}
-      content={
+      contentSlot={
         <>
           <InputField
             form={form}
@@ -97,7 +97,7 @@ export function SkillBodyEditor({
                 onValueChange={field.handleChange}
                 onBlur={field.handleBlur}
                 placeholder="# My skill…"
-                empty="Nothing to preview yet."
+                emptySlot={<p className="text-foreground/60">Nothing to preview yet.</p>}
               />
             )}
           </form.AppField>

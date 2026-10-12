@@ -86,7 +86,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         title="New skill"
         description="A skill is a Markdown document agents can load over MCP. Create one from scratch, upload an existing one, or link one to a git repo."
         hasUnsavedChanges={isDirty || upload.dirty || git.dirty}
-        content={
+        contentSlot={
           <Tabs
             value={tab}
             onValueChange={(value) => {
@@ -149,13 +149,13 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                           {
                             value: 'file',
                             label: 'Single file',
-                            icon: <FileText className="size-4" />,
+                            iconSlot: <FileText className="size-4" />,
                             description: `skills/${name || 'name'}.md`,
                           },
                           {
                             value: 'dir',
                             label: 'Directory',
-                            icon: <Folder className="size-4" />,
+                            iconSlot: <Folder className="size-4" />,
                             description: `skills/${name || 'name'}/SKILL.md`,
                           },
                         ]}
@@ -173,25 +173,29 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             </TabsContent>
           </Tabs>
         }
-        footerActions={(close) => (
+        footerActionsSlot={(close) => (
           <>
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={close} content="Cancel" />
             {tab === 'create' && (
-              <form.SubmitButton form={CREATE_SKILL_FORM_ID} pendingLabel="Creating…">
-                Create &amp; edit
-              </form.SubmitButton>
+              <form.SubmitButton form={CREATE_SKILL_FORM_ID} pendingLabel="Creating…" content="Create & edit" />
             )}
             {tab === 'upload' && (
-              <Button type="submit" form={UPLOAD_SKILL_FORM_ID} disabled={!upload.ready || upload.pending}>
-                <Upload /> {upload.pending ? 'Importing…' : 'Import skill'}
-              </Button>
+              <Button
+                type="submit"
+                form={UPLOAD_SKILL_FORM_ID}
+                disabled={!upload.ready || upload.pending}
+                content={upload.pending ? 'Importing…' : 'Import skill'}
+                iconSlot={<Upload />}
+              />
             )}
             {tab === 'git' && (
-              <Button type="submit" form={GIT_SKILL_FORM_ID} disabled={!git.ready || git.pending}>
-                <GitBranch /> {git.pending ? 'Fetching…' : 'Link skill'}
-              </Button>
+              <Button
+                type="submit"
+                form={GIT_SKILL_FORM_ID}
+                disabled={!git.ready || git.pending}
+                content={git.pending ? 'Fetching…' : 'Link skill'}
+                iconSlot={<GitBranch />}
+              />
             )}
           </>
         )}

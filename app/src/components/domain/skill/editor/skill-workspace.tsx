@@ -52,7 +52,7 @@ export function SkillWorkspace({
       sidebarWidth="md"
       stackBelow="md"
       divider="line"
-      sidebar={
+      sidebarSlot={
         <FilesPanel
           skill={skill}
           selected={path}
@@ -60,7 +60,7 @@ export function SkillWorkspace({
           onRenamed={onRenamed}
         />
       }
-      content={
+      contentSlot={
         <FilePane key={path} skill={skill} path={path} startEditing={startEditing} onEditStarted={onEditStarted} />
       }
     />
@@ -138,7 +138,7 @@ function FilePane({
       ) : (
         <StickyHeaderContentFooter
           contentClassName="p-4"
-          content={
+          contentSlot={
             path === SKILL_MD_KEY ? (
               <SkillBodyEditor skill={skill} onDirtyChange={setDirty} onClose={close} />
             ) : (

@@ -36,9 +36,8 @@ function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
       title={`Delete workspace "${workspace.name}"?`}
       description="This removes the workspace and its endpoint. The skills themselves are not deleted."
       onConfirm={() => remove.mutate(workspace.slug, { onError: toast.apiError })}
-    >
-      <Trash2 />
-    </ConfirmButton>
+      iconSlot={<Trash2 />}
+    />
   );
 }
 
@@ -51,9 +50,7 @@ function WorkspacesPage() {
   const origin = mcpOrigin(status?.port);
 
   const newWorkspaceButton = (
-    <Button onClick={() => setDialog({ mode: 'create' })}>
-      <Plus /> New workspace
-    </Button>
+    <Button onClick={() => setDialog({ mode: 'create' })} content="New workspace" iconSlot={<Plus />} />
   );
 
   return (
@@ -66,19 +63,19 @@ function WorkspacesPage() {
             over stdio with <Code>--workspace &lt;slug&gt;</Code>).
           </>
         }
-        action={newWorkspaceButton}
-        content={
+        actionSlot={newWorkspaceButton}
+        contentSlot={
           <div className="flex flex-col gap-6 py-6">
             <QueryState
               query={workspaces}
               what="workspaces"
               count={data?.length ?? 0}
-              empty={
+              emptySlot={
                 <EmptyState
                   icon={Layers}
                   title="No workspaces yet"
                   description="Create a workspace to serve a tailored set of skills to a specific agent."
-                  action={newWorkspaceButton}
+                  actionSlot={newWorkspaceButton}
                 />
               }
             />
@@ -137,9 +134,8 @@ function WorkspacesPage() {
                             size="icon-sm"
                             label={`Edit ${workspace.name}`}
                             onClick={() => setDialog({ mode: 'edit', workspace })}
-                          >
-                            <Pencil />
-                          </ActionButton>
+                            iconSlot={<Pencil />}
+                          />
                           <DeleteWorkspaceButton workspace={workspace} />
                         </div>
                       </TableCell>

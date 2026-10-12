@@ -40,14 +40,14 @@ export function TokenGate({ children }: { children: ReactNode }) {
     <form.AppForm>
       <CenteredLayout
         level={1}
-        icon={<KeyRound />}
+        iconSlot={<KeyRound />}
         title="Authentication required"
         description={
           <>
             Enter the server token (from <Code>MCP_SKILLS_TOKEN</Code> or <Code>settings.json</Code>).
           </>
         }
-        content={
+        contentSlot={
           <form
             id={TOKEN_FORM_ID}
             onSubmit={(event) => {
@@ -58,10 +58,8 @@ export function TokenGate({ children }: { children: ReactNode }) {
             <PasswordField form={form} name="token" label="Token" autoFocus placeholder="Bearer token" />
           </form>
         }
-        footerActions={
-          <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…">
-            Unlock
-          </form.SubmitButton>
+        footerActionsSlot={
+          <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…" content="Unlock" />
         }
       />
     </form.AppForm>

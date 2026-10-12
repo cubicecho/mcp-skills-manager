@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 export type SelectProps = {
   /** Controlled when passed; otherwise the select holds its own, starting at `defaultValue`. */
@@ -29,11 +29,11 @@ export type SelectProps = {
 export type SelectTriggerProps = {
   id?: string | undefined;
   disabled?: boolean | undefined;
-  'aria-labelledby'?: string | undefined;
-  'aria-describedby'?: string | undefined;
-  'aria-invalid'?: boolean | undefined;
-  'aria-required'?: boolean | undefined;
-  'aria-label'?: string | undefined;
+  "aria-labelledby"?: string | undefined;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
+  "aria-required"?: boolean | undefined;
+  "aria-label"?: string | undefined;
   className?: string | undefined;
   onBlur?: (() => void) | undefined;
   children: ReactNode;
@@ -76,10 +76,16 @@ export type SelectSeparatorProps = {
   className?: string | undefined;
 };
 
+/** The select trigger's box, which matches an input's. */
 export const SELECT_TRIGGER_CLASS =
-  'border-input bg-background h-10 w-full flex-row items-center justify-between rounded-md border px-3 py-2';
-export const SELECT_TRIGGER_TEXT_CLASS = 'text-foreground text-sm';
-export const SELECT_ITEM_CLASS = 'w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2';
-export const SELECT_ITEM_TEXT_CLASS = 'text-sm text-popover-foreground';
-export const SELECT_LABEL_CLASS = 'px-2 py-1.5 text-muted-foreground text-xs';
-export const SELECT_SEPARATOR_CLASS = '-mx-1 my-1 h-px bg-border';
+  "border-foreground/15 bg-background h-10 w-full flex-row items-center justify-between rounded-md border px-3 py-2";
+/** The type of the chosen value in the trigger. */
+export const SELECT_TRIGGER_TEXT_CLASS = "text-foreground text-sm";
+/** One option's row, with room at its start for the tick. */
+export const SELECT_ITEM_CLASS = "w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2";
+/** The type of an option's label. */
+export const SELECT_ITEM_TEXT_CLASS = "text-sm text-foreground";
+/** The heading over a group of options. */
+export const SELECT_LABEL_CLASS = "px-2 py-1.5 text-foreground/60 text-xs";
+/** The rule between groups of options. */
+export const SELECT_SEPARATOR_CLASS = "-mx-1 my-1 h-px bg-foreground/10";

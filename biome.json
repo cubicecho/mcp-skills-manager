@@ -125,6 +125,8 @@
         "app/src/lib/utils.ts",
         "app/src/lib/tree.ts",
         "app/src/lib/readable-text-color.ts",
+        "app/src/lib/error-message.ts",
+        "app/src/lib/form-binding.ts",
         "app/src/components/action-button.tsx",
         "app/src/components/app-form.tsx",
         "app/src/components/app-icons.tsx",

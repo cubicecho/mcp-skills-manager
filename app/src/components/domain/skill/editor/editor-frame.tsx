@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
 import { Save } from '@/components/app-icons';
 import { Section } from '@/components/section';
 import { Button } from '@/components/ui/button';
 import { X } from '@/components/ui/icons';
+import type { SlotNode } from '@/lib/utils';
 
 /** A file path as a `Section` title: the path as written, not the uppercase overline. */
 export const FILE_TITLE = 'font-mono text-sm normal-case tracking-normal text-foreground';
@@ -14,7 +14,7 @@ export function EditorFrame({
   onClose,
   saving,
   dirty,
-  content,
+  contentSlot,
 }: {
   path: string;
   onSave: () => void;
@@ -22,25 +22,26 @@ export function EditorFrame({
   onClose: () => void;
   saving: boolean;
   dirty: boolean;
-  content: ReactNode;
+  contentSlot: SlotNode;
 }) {
   return (
     <Section
       surface="card"
       title={path}
       titleClassName={FILE_TITLE}
-      action={
+      actionSlot={
         <>
-          <Button variant="outline" onClick={onClose}>
-            <X /> Close
-          </Button>
-          <Button onClick={onSave} disabled={!dirty || saving}>
-            <Save /> {saving ? 'Saving…' : 'Save'}
-          </Button>
+          <Button variant="outline" onClick={onClose} content="Close" iconSlot={<X />} />
+          <Button
+            onClick={onSave}
+            disabled={!dirty || saving}
+            content={saving ? 'Saving…' : 'Save'}
+            iconSlot={<Save />}
+          />
         </>
       }
       contentClassName="gap-3"
-      content={content}
+      contentSlot={contentSlot}
     />
   );
 }

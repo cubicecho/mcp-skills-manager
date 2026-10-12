@@ -67,7 +67,7 @@ export function PathPromptDialog({ prompt, onClose }: { prompt: PathPrompt; onCl
         size="sm"
         title={prompt.title}
         description={prompt.description}
-        content={
+        contentSlot={
           <form
             id={PATH_PROMPT_FORM_ID}
             className="py-1"
@@ -87,14 +87,10 @@ export function PathPromptDialog({ prompt, onClose }: { prompt: PathPrompt; onCl
             />
           </form>
         }
-        footerActions={(close) => (
+        footerActionsSlot={(close) => (
           <>
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
-            <form.SubmitButton form={PATH_PROMPT_FORM_ID} pendingLabel="Working…">
-              {prompt.submitLabel}
-            </form.SubmitButton>
+            <Button type="button" variant="outline" onClick={close} content="Cancel" />
+            <form.SubmitButton form={PATH_PROMPT_FORM_ID} pendingLabel="Working…" content={prompt.submitLabel} />
           </>
         )}
       />

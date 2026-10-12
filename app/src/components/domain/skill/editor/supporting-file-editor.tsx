@@ -67,7 +67,7 @@ export function SupportingFileEditor({
       onClose={onClose}
       saving={write.isPending}
       dirty={dirty}
-      content={
+      contentSlot={
         <>
           <FileLoadState
             file={file}
@@ -81,7 +81,7 @@ export function SupportingFileEditor({
                   value={field.state.value}
                   onValueChange={field.handleChange}
                   onBlur={field.handleBlur}
-                  empty="Nothing to preview yet."
+                  emptySlot={<p className="text-foreground/60">Nothing to preview yet.</p>}
                 />
               )}
             </form.AppField>

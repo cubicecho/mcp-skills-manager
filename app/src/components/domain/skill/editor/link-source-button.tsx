@@ -49,16 +49,20 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
 
   return (
     <form.AppForm>
-      <ActionButton variant="ghost" size="icon-sm" label="Link to Git source" onClick={() => setOpen(true)}>
-        <GitBranch />
-      </ActionButton>
+      <ActionButton
+        variant="ghost"
+        size="icon-sm"
+        label="Link to Git source"
+        onClick={() => setOpen(true)}
+        iconSlot={<GitBranch />}
+      />
       <DialogLayout
         open={open}
         onOpenChange={handleOpenChange}
         title="Link to Git source"
         description="Point this skill at a folder in a git repo and keep it in step by syncing."
         hasUnsavedChanges={isUnchanged === false}
-        content={
+        contentSlot={
           <form
             id={LINK_SOURCE_FORM_ID}
             className="flex flex-col gap-4 py-1"
@@ -72,17 +76,18 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
               title={`The content of "${skill.name}" is replaced`}
               description="Its Markdown and every supporting file are swapped for the folder in the repo, and it can no longer be edited here or by agents while linked. Its id, workspaces and settings are kept. Export a .zip first to keep a copy."
             />
-            <GitSourceFields form={form} fields="source" autoFocus />
+            <GitSourceFields form={form} autoFocus />
           </form>
         }
-        footerActions={(close) => (
+        footerActionsSlot={(close) => (
           <>
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
-            <form.SubmitButton form={LINK_SOURCE_FORM_ID} disabled={hasNoSource || link.isPending}>
-              <GitBranch /> {link.isPending ? 'Fetching…' : 'Link & replace'}
-            </form.SubmitButton>
+            <Button type="button" variant="outline" onClick={close} content="Cancel" />
+            <form.SubmitButton
+              form={LINK_SOURCE_FORM_ID}
+              disabled={hasNoSource || link.isPending}
+              content={link.isPending ? 'Fetching…' : 'Link & replace'}
+              iconSlot={<GitBranch />}
+            />
           </>
         )}
       />

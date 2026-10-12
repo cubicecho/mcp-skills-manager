@@ -161,21 +161,21 @@ export function FilesPanel({
 
   return (
     <StickyHeaderContentFooter
-      header={
+      headerSlot={
         <PageHeader
           level={2}
           // A narrow pane: the skill's name keeps 10rem, not the page header's 16, before its buttons
           // drop to a line of their own.
           className="[&_[data-slot=page-header-titles]]:basis-40"
           title={skill.name}
-          icon={skill.format === 'dir' ? <Folder /> : <FileText />}
+          iconSlot={skill.format === 'dir' ? <Folder /> : <FileText />}
           description={
             <>
               {formatCount(fileCount, 'file')} under{' '}
               <Code>{skill.format === 'dir' ? `skills/${skill.name}/` : `skills/${skill.path}`}</Code>
             </>
           }
-          action={
+          actionSlot={
             <div className="flex shrink-0 flex-wrap items-center gap-1">
               {linked ? (
                 <ActionButton
@@ -184,31 +184,36 @@ export function FilesPanel({
                   hint={syncNow.pending ? 'Syncing…' : undefined}
                   disabled={syncNow.pending}
                   onClick={syncNow.sync}
-                >
-                  <RefreshCw className={syncNow.pending ? 'animate-spin' : undefined} />
-                </ActionButton>
+                  iconSlot={<RefreshCw className={syncNow.pending ? 'animate-spin' : undefined} />}
+                />
               ) : (
                 <>
-                  <ActionButton {...toolbar} label="New file" disabled={busy} onClick={() => newFile()}>
-                    <FilePlus />
-                  </ActionButton>
-                  <ActionButton {...toolbar} label="New folder" disabled={busy} onClick={() => newFolder()}>
-                    <FolderPlus />
-                  </ActionButton>
+                  <ActionButton
+                    {...toolbar}
+                    label="New file"
+                    disabled={busy}
+                    onClick={() => newFile()}
+                    iconSlot={<FilePlus />}
+                  />
+                  <ActionButton
+                    {...toolbar}
+                    label="New folder"
+                    disabled={busy}
+                    onClick={() => newFolder()}
+                    iconSlot={<FolderPlus />}
+                  />
                   <FilePickerButton {...toolbar} label="Add files" multiple read="bytes" onPickMany={upload} />
                   <FilePickerButton
                     {...toolbar}
                     label="Add folder"
-                    icon={<FolderUp />}
+                    iconSlot={<FolderUp />}
                     directory
                     read="bytes"
                     onPickMany={upload}
                   />
                 </>
               )}
-              <ActionButton {...toolbar} label="Export .zip" onClick={runExport}>
-                <Download />
-              </ActionButton>
+              <ActionButton {...toolbar} label="Export .zip" onClick={runExport} iconSlot={<Download />} />
               {!linked && <LinkSourceButton skill={skill} />}
               <RenameButton skill={skill} onRenamed={onRenamed} />
             </div>
@@ -216,7 +221,7 @@ export function FilesPanel({
         />
       }
       contentClassName="px-2 pb-4"
-      content={
+      contentSlot={
         <>
           <FileTree<FileEntry>
             label="Skill files"
@@ -274,17 +279,21 @@ function FileActions({
     <>
       {isDir && (
         <>
-          <ActionButton {...button} label={`New file in ${node.path}`} onClick={() => onNewFile(node.path)}>
-            <FilePlus />
-          </ActionButton>
-          <ActionButton {...button} label={`New folder in ${node.path}`} onClick={() => onNewFolder(node.path)}>
-            <FolderPlus />
-          </ActionButton>
+          <ActionButton
+            {...button}
+            label={`New file in ${node.path}`}
+            onClick={() => onNewFile(node.path)}
+            iconSlot={<FilePlus />}
+          />
+          <ActionButton
+            {...button}
+            label={`New folder in ${node.path}`}
+            onClick={() => onNewFolder(node.path)}
+            iconSlot={<FolderPlus />}
+          />
         </>
       )}
-      <ActionButton {...button} label={`Rename ${node.path}`} onClick={() => onRename(node)}>
-        <Pencil />
-      </ActionButton>
+      <ActionButton {...button} label={`Rename ${node.path}`} onClick={() => onRename(node)} iconSlot={<Pencil />} />
       <ConfirmButton
         {...button}
         label={`Delete ${node.path}`}
@@ -295,9 +304,8 @@ function FileActions({
             : 'The file is deleted from the skill on disk, and anything linking to it breaks.'
         }
         onConfirm={() => onDelete(node)}
-      >
-        <Trash2 />
-      </ConfirmButton>
+        iconSlot={<Trash2 />}
+      />
     </>
   );
 }

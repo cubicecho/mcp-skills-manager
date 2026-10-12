@@ -50,7 +50,7 @@ export function SkillFlags({ skill }: { skill: SkillDetail }) {
             <Code>/mcp</Code>, served only on workspaces that list it (frontmatter <Code>global: false</Code>).
           </>
         }
-        action={({ titleId, descriptionId }) => (
+        actionSlot={({ titleId, descriptionId }) => (
           <Switch
             aria-labelledby={titleId}
             aria-describedby={descriptionId}
@@ -76,7 +76,7 @@ export function SkillFlags({ skill }: { skill: SkillDetail }) {
             </>
           )
         }
-        action={({ titleId, descriptionId }) => (
+        actionSlot={({ titleId, descriptionId }) => (
           <Switch
             aria-labelledby={titleId}
             aria-describedby={descriptionId}

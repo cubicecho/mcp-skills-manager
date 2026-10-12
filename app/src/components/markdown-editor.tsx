@@ -1,9 +1,9 @@
-import { type ReactNode, useState } from 'react';
-import { Markdown } from '@/components/markdown';
-import { SplitLayout } from '@/components/split-layout';
-import { SegmentedButton, SegmentedGroup } from '@/components/ui/segmented';
-import { Textarea, type TextareaProps } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import { Markdown } from "@/components/markdown";
+import { SplitLayout } from "@/components/split-layout";
+import { SegmentedButton, SegmentedGroup } from "@/components/ui/segmented";
+import { Textarea, type TextareaProps } from "@/components/ui/textarea";
+import { cn, type SlotNode } from "@/lib/utils";
 
 /**
  * The three views, in the order the toggle draws them, with the name each is shown by.
@@ -13,24 +13,26 @@ import { cn } from '@/lib/utils';
  * needed.
  */
 const VIEWS = [
-  { value: 'edit', label: 'Edit' },
-  { value: 'split', label: 'Split' },
-  { value: 'preview', label: 'Preview' },
+  { value: "edit", label: "Edit" },
+  { value: "split", label: "Split" },
+  { value: "preview", label: "Preview" },
 ] as const;
 
-export type MarkdownEditorView = (typeof VIEWS)[number]['value'];
+/** Which panes the editor shows: the source, the preview, or both. */
+export type MarkdownEditorView = (typeof VIEWS)[number]["value"];
 
-const isView = (value: string): value is MarkdownEditorView => VIEWS.some((view) => view.value === value);
+const isView = (value: string): value is MarkdownEditorView =>
+  VIEWS.some((view) => view.value === value);
 
 /**
  * A pane's floor, shared so the two are the same height when either is short: sixteen rem, enough
  * to read as somewhere to write rather than a one-line field.
  */
-const PANE_FLOOR = 'min-h-64';
+const PANE_FLOOR = "min-h-64";
 
 export type MarkdownEditorProps = Omit<
   TextareaProps,
-  'value' | 'defaultValue' | 'onChange' | 'onChangeText' | 'children'
+  "value" | "defaultValue" | "onChange" | "onChangeText" | "children"
 > & {
   /** The Markdown source. The caller holds it: this component keeps no copy. */
   value: string;
@@ -50,45 +52,28 @@ export type MarkdownEditorProps = Omit<
    * What the preview draws while the source is blank: "Nothing to preview yet." Left out, the
    * preview is an empty box.
    */
-  empty?: ReactNode;
+  emptySlot?: SlotNode;
   /** The editor's root: its width, its margin. */
   className?: string | undefined;
 };
 
 /**
  * A Markdown source and its rendering: a textarea, a `Markdown` preview, and a toggle between
- * edit, split and preview.
+ * edit, split and preview. Nothing in the preview is editable; the source is always the textarea.
  *
- * It is an editor in the plain sense — a field you type in, with what you typed drawn beside it.
- * Nothing in the preview is editable, and nothing turns into a field when it is clicked: the
- * source is always the textarea, and the textarea is always a textarea.
- *
- * - **The value is the caller's** (`value`, `onValueChange`). Saving, a dirty flag, a debounce
- *   and autosave are the screen's, as they are for every other control.
- * - **The view is the caller's or the component's.** `view` with `onViewChange` holds it outside;
- *   without them it starts at `defaultView` and is held here. It is the one piece of state this
- *   holds, and it is a display preference, not data.
- * - **The rest of the props are the textarea's** — `id`, `placeholder`, `disabled`, `aria-label`,
- *   `aria-invalid`, `name`, `onBlur` — so it is a `FormField`'s `control` like any other.
- *
- * **On a narrow screen `split` is one pane, the source.** Below `lg` there is no room to read two
- * columns, and stacking them puts the preview a screen away from the line being typed; the toggle
- * is still there, and Preview shows the other half. The panes are a `SplitLayout`, so the
- * breakpoint is the one every other split turns at.
- *
- * The textarea stays mounted in all three views — in `preview` it is hidden, not removed — so
- * its undo history, its selection and its scroll position survive a look at the preview.
- *
- * The preview is the plain `Markdown`. An app whose documents need its own links or plugins
- * renders its own `Markdown` beside a `Textarea`; this is the editor for Markdown as written.
+ * The value is the caller's (`value`, `onValueChange`), and the rest of the props are the
+ * textarea's, so it is a `FormField`'s `controlSlot` like any other. The view is held here from
+ * `defaultView`, or outside with `view` and `onViewChange`. Below `lg`, `split` shows the source
+ * alone. The textarea stays mounted in all three views, so its undo history and selection survive
+ * a look at the preview.
  */
 export function MarkdownEditor({
   value,
   onValueChange,
   view: heldView,
   onViewChange,
-  defaultView = 'split',
-  empty,
+  defaultView = "split",
+  emptySlot,
   className,
   ...textarea
 }: MarkdownEditorProps) {
@@ -96,18 +81,23 @@ export function MarkdownEditor({
   const view = heldView ?? ownView;
 
   const preview = (
-    <div data-slot="markdown-editor-preview" className={cn('rounded-md border border-border bg-card p-4', PANE_FLOOR)}>
-      <Markdown content={value} empty={empty} />
+    <div
+      data-slot="markdown-editor-preview"
+      className={cn("rounded-md border border-foreground/10 bg-secondary p-4", PANE_FLOOR)}
+    >
+      <Markdown content={value} emptySlot={emptySlot} />
     </div>
   );
 
   return (
-    <div data-slot="markdown-editor" className={cn('flex min-w-0 flex-col gap-2', className)}>
+    <div data-slot="markdown-editor" className={cn("flex min-w-0 flex-col gap-2", className)}>
       <SegmentedGroup
         aria-label="Editor view"
         value={view}
         onValueChange={(next) => {
-          if (!isView(next)) return;
+          if (isView(next) === false) {
+            return;
+          }
           setOwnView(next);
           onViewChange?.(next);
         }}
@@ -120,7 +110,7 @@ export function MarkdownEditor({
         ))}
       </SegmentedGroup>
       <SplitLayout
-        first={
+        firstSlot={
           // One pane holds the textarea in every view, so React keeps the same element — and the
           // browser its undo history — whichever view is showing. In `preview` the pane's other
           // child is the document.
@@ -133,17 +123,17 @@ export function MarkdownEditor({
               className={cn(
                 // `block`, because a textarea is inline and an inline box sits on a text line: the
                 // pane would be the line's descender taller than the field in it.
-                'block font-mono leading-relaxed',
+                "block font-mono leading-relaxed",
                 PANE_FLOOR,
                 // Beside the preview it is as tall as the preview, so the two panes end together.
-                view === 'split' && 'lg:h-full',
-                view === 'preview' && 'hidden',
+                view === "split" && "lg:h-full",
+                view === "preview" && "hidden",
               )}
             />
-            {view === 'preview' ? preview : null}
+            {view === "preview" ? preview : null}
           </>
         }
-        second={view === 'split' ? preview : undefined}
+        secondSlot={view === "split" ? preview : undefined}
         // Below `lg` the second pane is not stacked under the first but left out: see the
         // component note. `lg:block` is the pane's own display, put back where the panes sit
         // side by side.

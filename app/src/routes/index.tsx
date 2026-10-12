@@ -108,9 +108,8 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
       title={`Delete skill "${skill.name}"?`}
       description={`This permanently removes the skill file${skill.format === 'dir' ? ' and its directory' : ''}. It will also be dropped from any workspace that references it.`}
       onConfirm={() => remove.mutate(skill.name, { onError: toast.apiError })}
-    >
-      <Trash2 />
-    </ConfirmButton>
+      iconSlot={<Trash2 />}
+    />
   );
 }
 
@@ -170,11 +169,7 @@ function SkillsPage() {
     setTag(undefined);
   };
 
-  const newSkillButton = (
-    <Button onClick={() => setNewOpen(true)}>
-      <Plus /> New skill
-    </Button>
-  );
+  const newSkillButton = <Button onClick={() => setNewOpen(true)} content="New skill" iconSlot={<Plus />} />;
 
   const filters = hasSkills ? (
     <div className="flex flex-wrap items-center gap-2">
@@ -238,31 +233,27 @@ function SkillsPage() {
       <PageLayout
         title="Skills"
         description="Markdown documents served to agents over MCP. Each is exposed as both a tool and a resource."
-        action={newSkillButton}
-        headerContent={filters}
-        content={
+        actionSlot={newSkillButton}
+        headerContentSlot={filters}
+        contentSlot={
           <div className="flex flex-col gap-6 pb-6">
             <QueryState
               query={skills}
               what="skills"
               count={visible.length}
-              empty={
+              emptySlot={
                 hasSkills ? (
                   <EmptyState
                     icon={Search}
                     title="No skills match your filters"
-                    action={
-                      <Button variant="outline" onClick={clearFilters}>
-                        Clear filters
-                      </Button>
-                    }
+                    actionSlot={<Button variant="outline" onClick={clearFilters} content="Clear filters" />}
                   />
                 ) : (
                   <EmptyState
                     icon={BookMarked}
                     title="No skills yet"
                     description="Create one, or upload a folder or zip you already have."
-                    action={newSkillButton}
+                    actionSlot={newSkillButton}
                   />
                 )
               }
@@ -333,11 +324,13 @@ function SkillsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <ActionButton variant="ghost" size="icon-sm" asChild label={`Edit ${skill.name}`}>
-                            <Link to="/skills/$name" params={{ name: skill.name }}>
-                              <Pencil />
-                            </Link>
-                          </ActionButton>
+                          <ActionButton
+                            variant="ghost"
+                            size="icon-sm"
+                            label={`Edit ${skill.name}`}
+                            linkSlot={<Link to="/skills/$name" params={{ name: skill.name }} />}
+                            iconSlot={<Pencil />}
+                          />
                           <DeleteSkillButton skill={skill} />
                         </div>
                       </TableCell>

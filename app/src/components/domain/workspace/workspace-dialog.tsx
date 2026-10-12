@@ -80,7 +80,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
           </>
         }
         hasUnsavedChanges={isDirty}
-        content={
+        contentSlot={
           <form
             id={WORKSPACE_FORM_ID}
             className="flex min-w-0 flex-col gap-4 py-1"
@@ -143,14 +143,10 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
             />
           </form>
         }
-        footerActions={(close) => (
+        footerActionsSlot={(close) => (
           <>
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
-            <form.SubmitButton form={WORKSPACE_FORM_ID} pendingLabel="Saving…">
-              {isEdit ? 'Save' : 'Create'}
-            </form.SubmitButton>
+            <Button type="button" variant="outline" onClick={close} content="Cancel" />
+            <form.SubmitButton form={WORKSPACE_FORM_ID} pendingLabel="Saving…" content={isEdit ? 'Save' : 'Create'} />
           </>
         )}
       />

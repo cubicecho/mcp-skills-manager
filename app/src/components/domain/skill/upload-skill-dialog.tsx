@@ -106,7 +106,7 @@ export function UploadSkillForm({
         <FilePickerButton
           variant="outline"
           label="Choose .md or .zip"
-          icon={<FileText />}
+          iconSlot={<FileText />}
           accept=".md,.markdown,.zip,application/zip"
           read="bytes"
           onPickMany={([file]) => file && stage(() => normalizeUploadFile(file))}
@@ -114,7 +114,7 @@ export function UploadSkillForm({
         <FilePickerButton
           variant="outline"
           label="Choose folder"
-          icon={<Folder />}
+          iconSlot={<Folder />}
           directory
           read="bytes"
           onPickMany={(files) => files.length > 0 && stage(() => normalizeUploadFolder(files))}

@@ -1,10 +1,18 @@
-import type { AnyFieldApi, DeepKeys, DeepValue } from '@tanstack/react-form';
-import { useStore } from '@tanstack/react-form';
-import type { ComponentType, ReactNode } from 'react';
-import * as React from 'react';
-import { FieldDescription, FieldError, FieldTitle } from '@/components/ui/field';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { cn } from '@/lib/utils';
+import type { AnyFieldApi, DeepKeys } from "@tanstack/react-form";
+import { useStore } from "@tanstack/react-form";
+import type { ReactNode } from "react";
+import * as React from "react";
+import { FieldDescription, FieldError, FieldTitle } from "@/components/ui/field";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { messageOf } from "@/lib/error-message";
+import {
+  type BindableForm,
+  type FormBinding,
+  fieldOf,
+  type NamesOfType,
+  type ValuesOf,
+} from "@/lib/form-binding";
+import { cn, type SlotNode } from "@/lib/utils";
 
 /** One choice. `description` is the line under it — what picking this one means. */
 export type RadioOption = {
@@ -12,53 +20,16 @@ export type RadioOption = {
   label: ReactNode;
   description?: ReactNode | undefined;
   /** The picture over the label, in the `card` variant. */
-  icon?: ReactNode | undefined;
+  iconSlot?: SlotNode | undefined;
   /** A hover hint on the web and the accessibility hint on device. */
   hint?: string | undefined;
   disabled?: boolean | undefined;
 };
 
-/**
- * What the field needs off a form, and nothing else — structural, so a plain `useForm` binds as
- * well as the web registry's `useAppForm` does.
- */
-type BindableForm = {
-  state: { values: unknown };
-  // Not `=> ReactNode`: TanStack types `Field` as a function component that may return a promise.
-  Field: (props: never) => ReactNode | Promise<ReactNode>;
-};
-
-type ValuesOf<TForm extends BindableForm> = TForm extends { state: { values: infer TValues } } ? TValues : never;
-
-/** The fields of `TValues` holding a string — the only ones a radio group can write. */
-type StringNames<TValues> = {
-  [TName in DeepKeys<TValues>]: NonNullable<DeepValue<TValues, TName>> extends string ? TName : never;
-}[DeepKeys<TValues>] &
-  DeepKeys<TValues>;
-
-type Validate<TValue> = (context: { value: TValue; fieldApi: AnyFieldApi; signal: AbortSignal }) => unknown;
-type Listen<TValue> = (context: { value: TValue; fieldApi: AnyFieldApi }) => void;
-
-type RadioGroupFieldProps<TForm extends BindableForm, TName extends DeepKeys<ValuesOf<TForm>>> = {
-  form: TForm;
-  /** A string field of the form's values. Checked: `naem` is a type error, not an empty field. */
-  name: TName;
-  validators?:
-    | Partial<
-        Record<
-          'onMount' | 'onChange' | 'onChangeAsync' | 'onBlur' | 'onBlurAsync' | 'onSubmit' | 'onSubmitAsync',
-          Validate<DeepValue<ValuesOf<TForm>, TName>>
-        >
-      >
-    | undefined;
-  /** How long to wait before running the async validators, in milliseconds. */
-  asyncDebounceMs?: number | undefined;
-  listeners?:
-    | Partial<
-        Record<'onMount' | 'onUnmount' | 'onChange' | 'onBlur' | 'onSubmit', Listen<DeepValue<ValuesOf<TForm>, TName>>>
-      >
-    | undefined;
-
+type RadioGroupFieldProps<
+  TForm extends BindableForm,
+  TName extends DeepKeys<ValuesOf<TForm>>,
+> = FormBinding<TForm, TName> & {
   options: readonly RadioOption[];
   /** The group's name, drawn as a title and pointed at by `aria-labelledby`. */
   label?: ReactNode | undefined;
@@ -67,13 +38,13 @@ type RadioGroupFieldProps<TForm extends BindableForm, TName extends DeepKeys<Val
   /** Marks the group required: an asterisk on the title and `aria-required` on the group. */
   required?: boolean | undefined;
   /** The title row's far end. */
-  action?: ReactNode | undefined;
+  actionSlot?: SlotNode | undefined;
   /** Draws a placeholder where the options go, for a form whose values are still loading. */
   loading?: boolean | undefined;
   /** `row` (the default), `card` or `segmented` — see `RadioGroup`. */
-  variant?: 'row' | 'card' | 'segmented' | undefined;
+  variant?: "row" | "card" | "segmented" | undefined;
   /** How the options are laid out. Defaults to the variant's own. */
-  orientation?: 'vertical' | 'horizontal' | undefined;
+  orientation?: "vertical" | "horizontal" | undefined;
   disabled?: boolean | undefined;
   loop?: boolean | undefined;
   className?: string | undefined;
@@ -84,18 +55,9 @@ type RadioGroupFieldProps<TForm extends BindableForm, TName extends DeepKeys<Val
   groupClassName?: string | undefined;
 };
 
-function messageOf(error: unknown): string | undefined {
-  if (error == null) return undefined;
-  if (typeof error === 'string') return error;
-  if (typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 type BodyProps = Omit<
   RadioGroupFieldProps<BindableForm, never>,
-  'form' | 'name' | 'validators' | 'asyncDebounceMs' | 'listeners'
+  "form" | "name" | "validators" | "asyncDebounceMs" | "listeners"
 > & { field: AnyFieldApi };
 
 function RadioGroupFieldBody({
@@ -104,7 +66,7 @@ function RadioGroupFieldBody({
   label,
   description,
   required = false,
-  action,
+  actionSlot,
   loading = false,
   variant,
   orientation,
@@ -130,14 +92,16 @@ function RadioGroupFieldBody({
   const error = isTouched || attempts > 0 ? messageOf(errors[0]) : undefined;
 
   const value: unknown = field.state.value;
-  const describedBy = [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(' ');
+  const describedBy = [description ? descriptionId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(" ");
 
   const title = label ? (
     <FieldTitle id={labelId} className={labelClassName}>
       {label}
       {required ? (
-        <span aria-hidden className="cube-rn-text text-destructive">
-          {' *'}
+        <span aria-hidden className="cube-rn-text text-negative">
+          {" *"}
         </span>
       ) : null}
     </FieldTitle>
@@ -145,11 +109,15 @@ function RadioGroupFieldBody({
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: React Native has no fieldset; role="group" is the cross-platform form
-    <div role="group" data-slot="radio-group-field" className={cn('cube-rn-view', 'w-full min-w-0 gap-2', className)}>
-      {action ? (
+    <div
+      role="group"
+      data-slot="radio-group-field"
+      className={cn("cube-rn-view", "w-full min-w-0 gap-2", className)}
+    >
+      {actionSlot ? (
         <div className="cube-rn-view min-w-0 flex-row items-center gap-2">
           {title}
-          <div className="cube-rn-view ml-auto shrink-0">{action}</div>
+          <div className="cube-rn-view ml-auto shrink-0">{actionSlot}</div>
         </div>
       ) : (
         title
@@ -158,11 +126,15 @@ function RadioGroupFieldBody({
         <div
           aria-hidden
           data-slot="radio-group-field-skeleton"
-          className={cn('cube-rn-view', 'h-16 w-full rounded-md bg-muted', loadingClassName)}
+          className={cn(
+            "cube-rn-view",
+            "h-16 w-full rounded-md bg-foreground/10",
+            loadingClassName,
+          )}
         />
       ) : (
         <RadioGroup
-          value={typeof value === 'string' ? value : ''}
+          value={typeof value === "string" ? value : ""}
           onValueChange={(next) => {
             field.handleChange(next);
             // The arrow keys move focus between options, so a blur happens on the way to a
@@ -185,7 +157,7 @@ function RadioGroupFieldBody({
               value={option.value}
               label={option.label}
               description={option.description}
-              icon={option.icon}
+              iconSlot={option.iconSlot}
               hint={option.hint}
               disabled={option.disabled}
             />
@@ -231,7 +203,10 @@ function RadioGroupFieldBody({
  * />
  * ```
  */
-export function RadioGroupField<TForm extends BindableForm, TName extends StringNames<ValuesOf<TForm>>>({
+export function RadioGroupField<
+  TForm extends BindableForm,
+  TName extends NamesOfType<ValuesOf<TForm>, string>,
+>({
   form,
   name,
   validators,
@@ -239,18 +214,15 @@ export function RadioGroupField<TForm extends BindableForm, TName extends String
   listeners,
   ...body
 }: RadioGroupFieldProps<TForm, TName>) {
-  // The generic `Field` cannot be described without repeating the twenty-odd type parameters
-  // already correct on `form`. The cast is here, once, and `name` above is what it protects.
-  const Subscribe = form.Field as ComponentType<{
-    name: unknown;
-    validators?: unknown | undefined;
-    asyncDebounceMs?: number | undefined;
-    listeners?: unknown | undefined;
-    children: (field: AnyFieldApi) => ReactNode;
-  }>;
+  const Subscribe = fieldOf(form);
 
   return (
-    <Subscribe name={name} validators={validators} asyncDebounceMs={asyncDebounceMs} listeners={listeners}>
+    <Subscribe
+      name={name}
+      validators={validators}
+      asyncDebounceMs={asyncDebounceMs}
+      listeners={listeners}
+    >
       {(field) => <RadioGroupFieldBody {...body} field={field} />}
     </Subscribe>
   );

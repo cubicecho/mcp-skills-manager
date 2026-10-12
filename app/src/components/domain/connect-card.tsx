@@ -17,14 +17,14 @@ export function ConnectCard({
   const toast = useToasts();
   return (
     <CardLayout
-      icon={<Plug />}
+      iconSlot={<Plug />}
       title={`Connect: ${label}`}
       description={description}
-      content={
+      contentSlot={
         <CodeBlock
           content={endpoint}
           wrap
-          action={
+          actionSlot={
             <CopyButton
               value={endpoint}
               label="Copy endpoint URL"
