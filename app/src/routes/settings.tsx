@@ -8,9 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Code, CodeBlock } from '@/components/ui/code';
 import { RefreshCw } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
-import { reloadConfig } from '@/lib/api';
 import { formatDuration } from '@/lib/format';
-import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
+import { useReloadConfig, useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { useToasts } from '@/lib/toast';
 
@@ -137,13 +136,15 @@ function SettingsPage() {
   const toast = useToasts();
   const { data, isPending } = useServerStatus();
 
-  const reload = async () => {
-    try {
-      const result = await reloadConfig();
-      toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
-    } catch (error) {
-      toast.apiError(error);
-    }
+  const reloadConfig = useReloadConfig();
+
+  const reload = () => {
+    reloadConfig.mutate(undefined, {
+      onSuccess: (result) => {
+        toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
+      },
+      onError: toast.apiError,
+    });
   };
 
   return (

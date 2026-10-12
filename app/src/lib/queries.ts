@@ -146,6 +146,20 @@ export function useUpdateSettings() {
 }
 
 /**
+ * Asks the server to re-read its files, then marks every cached resource stale: a reload can change any of them.
+ * @returns The mutation, resolving to the reloaded skill and workspace counts.
+ */
+export function useReloadConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.reloadConfig(),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+/**
  * Creates a skill and caches its detail.
  * @returns The mutation.
  */
