@@ -1,5 +1,11 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "plugins": ["./no-negation.grit"],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -28,20 +34,34 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "useExhaustiveDependencies": "warn",
         "useHookAtTopLevel": "error",
         "noUnusedImports": "error",
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "noUnusedFunctionParameters": "error"
       },
       "style": {
         "useImportType": "error",
-        "noNonNullAssertion": "off",
-        "noUnusedTemplateLiteral": "off"
+        "useConst": "error",
+        "useBlockStatements": "error",
+        "noCommonJs": "error",
+        "noEnum": "error",
+        "noNamespace": "error",
+        "noParameterProperties": "error",
+        "noNonNullAssertion": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["kebab-case"]
+          }
+        },
+        "noUnusedTemplateLiteral": "off",
+        "noMagicNumbers": "warn"
       },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "error"
       }
     }
   },
@@ -60,6 +80,7 @@
       "**/*.css",
       "!**/dist",
       "!**/node_modules",
+      "!.claude",
       "!**/data",
       "!site",
       "!**/*.gen.ts"
@@ -67,24 +88,63 @@
   },
   "overrides": [
     {
+      "includes": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noMagicNumbers": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUnknownAtRules": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["app/src/routes/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "app/src/components/ui/**",
+        "app/cubeui-*.css",
+        "app/src/lib/color.ts",
+        "app/src/lib/utils.ts",
+        "app/src/lib/tree.ts",
+        "app/src/lib/readable-text-color.ts",
         "app/src/components/action-button.tsx",
         "app/src/components/app-form.tsx",
+        "app/src/components/app-icons.tsx",
         "app/src/components/card-layout.tsx",
         "app/src/components/centered-layout.tsx",
         "app/src/components/confirm-button.tsx",
         "app/src/components/description-list.tsx",
         "app/src/components/dialog-layout.tsx",
         "app/src/components/field-row.tsx",
+        "app/src/components/file-tree.tsx",
         "app/src/components/form-field.tsx",
         "app/src/components/header-content-footer.tsx",
-        "app/src/components/multi-select.tsx",
+        "app/src/components/markdown-editor.tsx",
+        "app/src/components/markdown.tsx",
         "app/src/components/multi-select-field.tsx",
+        "app/src/components/multi-select.tsx",
         "app/src/components/option-select.tsx",
-        "app/src/components/page.tsx",
         "app/src/components/page-header.tsx",
         "app/src/components/page-layout.tsx",
+        "app/src/components/page.tsx",
         "app/src/components/password-field.tsx",
         "app/src/components/password-input.tsx",
         "app/src/components/query-state.tsx",
@@ -96,16 +156,9 @@
       ],
       "linter": {
         "enabled": false
-      }
-    },
-    {
-      "includes": ["**/*.css"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noUnknownAtRules": "off"
-          }
-        }
+      },
+      "formatter": {
+        "enabled": false
       }
     }
   ]

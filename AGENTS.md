@@ -87,7 +87,7 @@ npm run dev:server       # Express + MCP server only (port 3001, DATA_DIR=./data
 npm run dev:app          # Vite dev server only (port 3000, proxies /api + /mcp)
 
 # Quality — run before every commit
-npm run check            # biome check + tsc --noEmit for all packages
+npm run check            # biome check --write (fixes what it can) + tsc --noEmit; CI runs `biome ci`
 npm run check:fix        # biome with auto-fix
 npm run lint / lint:fix  # biome lint only
 npm test                 # vitest run
@@ -104,7 +104,7 @@ docker compose up        # run the container; ./data mounted at /data
 
 | Choice | Why |
 | --- | --- |
-| **Biome** | Single formatter+linter; enforces `useImportType`, `noUnusedImports` |
+| **Biome** | Single formatter+linter on the org config: `useImportType`, `noUnusedImports`, `useBlockStatements`, `noMagicNumbers`, kebab-case filenames, and `no-negation.grit` (negate a logic check with `=== false`, not `!`). Vendored cubeui files are excluded |
 | **Express 5 + @modelcontextprotocol/sdk** | `StreamableHTTPServerTransport` (stateless) for `/mcp`; `StdioServerTransport` for the CLI entry. One `Server` per request/process exposing tools + resources |
 | **Flat-file config** | `DATA_DIR/config/{settings.json,workspaces/<slug>.json}` (JSON) + `DATA_DIR/skills/<name>.md` or `<name>/SKILL.md` (Markdown + YAML frontmatter); hand-editable, watched (chokidar, debounced) + `POST /api/reload`; atomic writes, mode 0600 |
 | **Node ≥22.18 type stripping** | Server dev runs `.ts` directly (`node --watch`), no build step; `tsc` with `rewriteRelativeImportExtensions` emits `dist/` for prod — so **use `.ts` extensions in all relative imports** in `server/` and `shared/` |

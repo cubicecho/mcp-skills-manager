@@ -30,7 +30,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check": "npm run check:biome && npm run check:types",
-    "check:biome": "biome check .",
+    "check:biome": "biome check --write .",
     "check:fix": "biome check --write .",
     "check:types": "tsc --noEmit -p shared/tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p app/tsconfig.json",
     "test": "vitest run",
@@ -38,7 +38,7 @@
     "clean": "rm -rf node_modules shared/dist server/dist app/dist"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.6",
+    "@biomejs/biome": "2.5.11",
     "@types/node": "^22.13.0",
     "concurrently": "^9.1.2",
     "typescript": "^7.0.2",
