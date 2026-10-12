@@ -81,16 +81,22 @@ export type SettingsFile = z.infer<typeof settingsFileSchema>;
  * The subset of settings safe to expose over the management API — everything
  * except the bearer token. Returned by GET /api/settings.
  */
-export const settingsViewSchema = z.object({
-  authEnabled: z.boolean(),
-  authoringEnabled: z.boolean(),
-  disabledAuthoringTools: z.array(z.string()),
-  skillToolMode: skillToolModeSchema,
-  httpLiveUpdates: z.boolean(),
-});
+export const settingsViewSchema = settingsFileSchema
+  .pick({
+    authEnabled: true,
+    authoringEnabled: true,
+    disabledAuthoringTools: true,
+    skillToolMode: true,
+    httpLiveUpdates: true,
+  })
+  .strip();
 export type SettingsView = z.infer<typeof settingsViewSchema>;
 
-/** Fields an operator may change via PATCH /api/settings (auth/token are managed out of band). */
+/**
+ * Fields an operator may change via PATCH /api/settings (auth/token are managed out of band).
+ * Written out rather than derived from the file schema: a `partial()` of it would fill an absent
+ * key with the file's default, and a patch must leave what it does not name alone.
+ */
 export const updateSettingsRequestSchema = z
   .object({
     authoringEnabled: z.boolean().optional(),

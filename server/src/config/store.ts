@@ -12,6 +12,7 @@ import type {
   SkillFileRead,
   SkillFrontmatter,
   SkillUsage,
+  UpdateSkillRequest,
   WorkspaceConfig,
 } from '@mcp-skills/shared';
 import {
@@ -19,6 +20,7 @@ import {
   isReadOnlyFlag,
   normalizeTags,
   settingsFileSchema,
+  settingsViewSchema,
   skillSchema,
   skillSourceSchema,
   slugSchema,
@@ -276,13 +278,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /** The token-free subset of settings exposed over the management API. */
   getSettingsView(): SettingsView {
-    return {
-      authEnabled: this.settings.authEnabled,
-      authoringEnabled: this.settings.authoringEnabled,
-      disabledAuthoringTools: this.settings.disabledAuthoringTools,
-      skillToolMode: this.settings.skillToolMode,
-      httpLiveUpdates: this.settings.httpLiveUpdates,
-    };
+    return settingsViewSchema.parse(this.settings);
   }
 
   /**
@@ -359,10 +355,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /** Update an existing skill's description, body, global visibility and/or read-only flag in place, preserving unknown frontmatter and format. */
-  async updateSkill(
-    name: string,
-    patch: { description?: string; body?: string; global?: boolean; readOnly?: boolean; tags?: string[] },
-  ): Promise<Skill> {
+  async updateSkill(name: string, patch: Omit<UpdateSkillRequest, 'name'>): Promise<Skill> {
     const existing = this.requireSkill(name);
     // Tags: undefined → keep existing; a list → replace (empty clears the key).
     const nextTags = patch.tags !== undefined ? normalizeTags(patch.tags) : existing.tags;

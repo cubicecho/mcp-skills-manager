@@ -1,16 +1,10 @@
 import { z } from 'zod';
-import { LENGTH_LIMITS, MAX_SKILL_FILES } from './defaults.ts';
+import { MAX_SKILL_FILES } from './defaults.ts';
 import { skillToolModeSchema } from './settings.ts';
-import {
-  fileEncodingSchema,
-  skillFileSchema,
-  skillFormatSchema,
-  skillFrontmatterSchema,
-  skillRelPathSchema,
-} from './skill.ts';
-import { gitSourceSchema, skillSourceSchema } from './skill-source.ts';
+import { fileEncodingSchema, skillFormatSchema, skillRelPathSchema, skillSchema } from './skill.ts';
+import { gitSourceSchema } from './skill-source.ts';
 import { slugSchema } from './slug.ts';
-import { workspaceConfigSchema } from './workspace.ts';
+import { workspaceConfigSchema, workspaceNameSchema } from './workspace.ts';
 
 /**
  * DTOs for the management REST API (/api/*).
@@ -26,33 +20,16 @@ export const skillUsageSchema = z.object({
 });
 export type SkillUsage = z.infer<typeof skillUsageSchema>;
 
-/** A skill without its body — the shape returned by GET /api/skills. */
-export const skillSummarySchema = z.object({
-  name: slugSchema,
-  description: z.string(),
-  format: skillFormatSchema,
-  /** Whether the skill is served on the root `/mcp` aggregate (false → workspace-scoped only). */
-  global: z.boolean().default(true),
-  /** Whether agents are barred from modifying the skill over MCP (the web UI can still edit it). */
-  readOnly: z.boolean().default(false),
-  path: z.string(),
-  updatedAt: z.string(),
-  files: z.array(skillFileSchema),
-  /** Normalized tags/categories for organising and filtering. */
-  tags: z.array(z.string()).default([]),
-  /** The git folder the skill is linked to; a linked skill's content is locked until it is unlinked. */
-  source: skillSourceSchema.optional(),
+/** A skill with its full Markdown body, as loaded, plus its usage — GET /api/skills/:name. */
+export const skillDetailSchema = skillSchema.extend({
   /** Load-usage stats for the skill. */
   usage: skillUsageSchema.default({ count: 0, lastUsedAt: null }),
 });
-export type SkillSummary = z.infer<typeof skillSummarySchema>;
-
-/** A skill with its full Markdown body — GET /api/skills/:name. */
-export const skillDetailSchema = skillSummarySchema.extend({
-  body: z.string(),
-  frontmatter: skillFrontmatterSchema,
-});
 export type SkillDetail = z.infer<typeof skillDetailSchema>;
+
+/** A skill without its body — the shape returned by GET /api/skills. */
+export const skillSummarySchema = skillDetailSchema.omit({ body: true, frontmatter: true });
+export type SkillSummary = z.infer<typeof skillSummarySchema>;
 
 /** Body of POST /api/skills. */
 export const createSkillRequestSchema = z.object({
@@ -176,7 +153,7 @@ export type WorkspaceStatus = z.infer<typeof workspaceStatusSchema>;
 
 /** Body of POST /api/workspaces. */
 export const createWorkspaceRequestSchema = z.object({
-  name: z.string().min(1).max(LENGTH_LIMITS.workspaceName),
+  name: workspaceNameSchema,
   /** Slug for the URL; derived from `name` when omitted. */
   slug: slugSchema.optional(),
   enabled: z.boolean().optional(),
@@ -189,7 +166,7 @@ export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema
 
 /** Body of PATCH /api/workspaces/:slug; a new name moves the slug with it. */
 export const updateWorkspaceRequestSchema = z.object({
-  name: z.string().min(1).max(LENGTH_LIMITS.workspaceName).optional(),
+  name: workspaceNameSchema.optional(),
   enabled: z.boolean().optional(),
   description: z.string().optional(),
   /** Full replacement of the member list when provided. */

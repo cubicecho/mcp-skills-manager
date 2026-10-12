@@ -10,11 +10,14 @@ import { slugSchema } from './slug.ts';
  * in hand-editable JSON under DATA_DIR/config/workspaces/<slug>.json.
  */
 
+/** A workspace's human-facing display name; at most 100 characters. */
+export const workspaceNameSchema = z.string().min(1).max(LENGTH_LIMITS.workspaceName);
+
 /** One workspace config file, DATA_DIR/config/workspaces/<slug>.json. */
 export const workspaceConfigSchema = z
   .object({
     /** Human-facing display name. */
-    name: z.string().min(1).max(LENGTH_LIMITS.workspaceName),
+    name: workspaceNameSchema,
     /** URL slug — the route segment at /mcp/w/<slug>, also the config filename. */
     slug: slugSchema,
     /** Disable to 404 the workspace's endpoint without deleting it. */
