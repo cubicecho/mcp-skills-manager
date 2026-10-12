@@ -19,6 +19,7 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { formatDate } from '@/lib/format';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
+import { ANY_TAG_OPTION, optionToTag, tagToOption } from '@/lib/tag-option';
 import { useToasts } from '@/lib/toast';
 
 export const Route = createFileRoute('/')({
@@ -35,7 +36,7 @@ function filterAndSort(
   query: string,
   scope: ScopeFilter,
   format: FormatFilter,
-  tag: string,
+  tag: string | undefined,
   sort: SortKey,
 ): SkillSummary[] {
   const q = query.trim().toLowerCase();
@@ -43,7 +44,7 @@ function filterAndSort(
     if (scope === 'global' && !skill.global) return false;
     if (scope === 'scoped' && skill.global) return false;
     if (format !== 'all' && skill.format !== format) return false;
-    if (tag !== 'all' && !skill.tags.includes(tag)) return false;
+    if (tag !== undefined && !skill.tags.includes(tag)) return false;
     if (q && !`${skill.name} ${skill.description} ${skill.tags.join(' ')}`.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -132,12 +133,12 @@ function SkillsPage() {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [format, setFormat] = useState<FormatFilter>('all');
-  const [tag, setTag] = useState('all');
+  const [tag, setTag] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<SortKey>('name');
 
   const allTags = useMemo(() => (data ? collectTags(data) : []), [data]);
-  // A previously selected tag can disappear when skills change — fall back to "all".
-  const activeTag = tag !== 'all' && !allTags.includes(tag) ? 'all' : tag;
+  // A previously selected tag can disappear when skills change — fall back to no tag filter.
+  const activeTag = tag !== undefined && allTags.includes(tag) ? tag : undefined;
   const visible = useMemo(
     () => (data ? filterAndSort(data, query, scope, format, activeTag, sort) : []),
     [data, query, scope, format, activeTag, sort],
@@ -147,7 +148,7 @@ function SkillsPage() {
     setQuery('');
     setScope('all');
     setFormat('all');
-    setTag('all');
+    setTag(undefined);
   };
 
   const newSkillButton = (
@@ -183,9 +184,12 @@ function SkillsPage() {
         <OptionSelect
           className="w-40"
           aria-label="Filter by tag"
-          options={[{ value: 'all', label: 'All tags' }, ...allTags.map((t) => ({ value: t, label: t }))]}
-          value={activeTag}
-          onValueChange={setTag}
+          options={[
+            { value: ANY_TAG_OPTION, label: 'All tags' },
+            ...allTags.map((t) => ({ value: tagToOption(t), label: t })),
+          ]}
+          value={tagToOption(activeTag)}
+          onValueChange={(value) => setTag(optionToTag(value))}
         />
       )}
       <OptionSelect
