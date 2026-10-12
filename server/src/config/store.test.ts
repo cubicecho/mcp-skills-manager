@@ -3,12 +3,15 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { ConfigStore } from './store.ts';
 
 const skillMd = (name: string, description: string) =>
   Buffer.from(`---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n`);
+
+/** Wait long enough for the file watcher to start, or to debounce and report a change it saw. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 600));
 
 /** File paths only (directories are listed too, but most assertions care about the files). */
 const filePaths = (skill: { files: { path: string; type: 'file' | 'dir' }[] }) =>
@@ -62,7 +65,7 @@ describe('ConfigStore supporting files & import', () => {
   it('rejects a directory import that lacks a SKILL.md', async () => {
     await expect(
       store.importSkill({ name: 'nomd', format: 'dir', files: [{ path: 'reference.md', content: Buffer.from('x') }] }),
-    ).rejects.toThrow(/SKILL\.md/);
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it('promotes a file skill to a directory when a supporting file is added', async () => {
@@ -80,18 +83,22 @@ describe('ConfigStore supporting files & import', () => {
 
   it('rejects path traversal in a supporting file path', async () => {
     await store.createSkill({ name: 'safe', description: 'd', body: '# Safe', format: 'dir' });
-    await expect(store.writeSupportingFile('safe', '../escape.txt', Buffer.from('x'))).rejects.toThrow(/Unsafe/);
-    await expect(store.writeSupportingFile('safe', 'nested/../../escape.txt', Buffer.from('x'))).rejects.toThrow(
-      /Unsafe/,
-    );
+    await expect(store.writeSupportingFile('safe', '../escape.txt', Buffer.from('x'))).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(store.writeSupportingFile('safe', 'nested/../../escape.txt', Buffer.from('x'))).rejects.toMatchObject({
+      status: 400,
+    });
     expect(existsSync(path.join(dir, 'skills/escape.txt'))).toBe(false);
     expect(existsSync(path.join(dir, 'escape.txt'))).toBe(false);
   });
 
   it('refuses to write or delete SKILL.md as a supporting file', async () => {
     await store.createSkill({ name: 'guard', description: 'd', body: '# Guard', format: 'dir' });
-    await expect(store.writeSupportingFile('guard', 'SKILL.md', Buffer.from('x'))).rejects.toThrow(/SKILL\.md/);
-    await expect(store.deleteSupportingFile('guard', 'SKILL.md')).rejects.toThrow(/SKILL\.md/);
+    await expect(store.writeSupportingFile('guard', 'SKILL.md', Buffer.from('x'))).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(store.deleteSupportingFile('guard', 'SKILL.md')).rejects.toMatchObject({ status: 400 });
   });
 
   it('deletes a supporting file and prunes the directory it empties', async () => {
@@ -129,7 +136,7 @@ describe('ConfigStore supporting files & import', () => {
     expect(skill.format).toBe('dir');
     expect(dirPaths(skill)).toEqual(['reference', 'reference/examples']);
     expect(existsSync(path.join(dir, 'skills/folders/reference/examples'))).toBe(true);
-    await expect(store.createSupportingFolder('folders', 'reference/examples')).rejects.toThrow(/already exists/);
+    await expect(store.createSupportingFolder('folders', 'reference/examples')).rejects.toMatchObject({ status: 409 });
   });
 
   it('renames a file, pruning the folder it leaves empty', async () => {
@@ -172,8 +179,8 @@ describe('ConfigStore supporting files & import', () => {
         { path: 'b/y.txt', content: Buffer.from('y') },
       ],
     });
-    await expect(store.moveSupportingPath('mvbad', 'a', 'a/child')).rejects.toThrow(/into itself/);
-    await expect(store.moveSupportingPath('mvbad', 'a/x.txt', 'b/y.txt')).rejects.toThrow(/already exists/);
+    await expect(store.moveSupportingPath('mvbad', 'a', 'a/child')).rejects.toMatchObject({ status: 400 });
+    await expect(store.moveSupportingPath('mvbad', 'a/x.txt', 'b/y.txt')).rejects.toMatchObject({ status: 409 });
   });
 
   it('deletes a folder recursively', async () => {
@@ -752,10 +759,17 @@ describe('ConfigStore usage analytics', () => {
     expect(store.getUsage('after')).toEqual({ count: 0, lastUsedAt: null });
   });
 
-  it('keeps usage.json out of the watched dirs (never under config/ or skills/)', () => {
-    expect(store.usageFile).toBe(path.join(dir, 'usage.json'));
-    expect(store.usageFile.startsWith(store.configDir)).toBe(false);
-    expect(store.usageFile.startsWith(store.skillsDir)).toBe(false);
+  it('fires no change event when usage is recorded', async () => {
+    await store.createSkill({ name: 'watched', description: 'd', body: '# watched' });
+    const onChange = vi.fn();
+    store.on('change', onChange);
+    store.startWatching();
+    await settle();
+
+    store.recordSkillUse('watched');
+    await vi.waitFor(() => expect(existsSync(store.usageFile)).toBe(true), { timeout: 2000 });
+    await settle();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 
