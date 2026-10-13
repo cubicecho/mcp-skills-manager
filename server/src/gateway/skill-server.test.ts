@@ -242,6 +242,19 @@ describe('skill-server loader mode', () => {
     );
   });
 
+  it('refuses wrong-typed arguments rather than reading them as absent', async () => {
+    await expect(client.callTool({ name: 'search_skills', arguments: { query: 5 } })).rejects.toThrow(
+      /Invalid arguments for search_skills: query: /,
+    );
+    await expect(client.callTool({ name: 'search_skills', arguments: { tags: 'git' } })).rejects.toThrow(
+      /Invalid arguments for search_skills: tags: /,
+    );
+    await expect(client.callTool({ name: 'load_skill', arguments: { name: 5 } })).rejects.toThrow(
+      /Invalid arguments for load_skill: name: /,
+    );
+    await expect(client.callTool({ name: 'load_skill' })).rejects.toThrow(/Invalid arguments for load_skill: name: /);
+  });
+
   it('refuses a per-skill tool name, which it does not advertise', async () => {
     await expect(client.callTool({ name: 'pdf-forms' })).rejects.toThrow(/Unknown skill tool "pdf-forms"/);
     await expect(client.callTool({ name: 'commit_messages' })).rejects.toThrow(/Unknown skill tool/);

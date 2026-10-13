@@ -14,6 +14,7 @@ import {
   SubscribeRequestSchema,
   UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import { errorMessage } from '../errors.ts';
 import { bundledFiles, skillToolNames } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
@@ -167,6 +168,29 @@ function findByName(skills: Skill[], name: string): Skill | undefined {
   return skills.find((s) => s.name === name);
 }
 
+/** What `search_skills` takes: both are optional, and neither given lists everything. */
+const searchArgsSchema = z.strictObject({ query: z.string().default(''), tags: z.array(z.string()).default([]) });
+
+/** What `load_skill` takes. */
+const loadArgsSchema = z.strictObject({ name: z.string() });
+
+/**
+ * Check a meta-tool's arguments, so a wrong-typed one is refused rather than read as absent.
+ * @param toolName - The tool being called, named in the error.
+ * @param schema - What the tool takes.
+ * @param args - What the caller sent.
+ * @returns The arguments, with defaults filled in.
+ * @throws McpError naming each argument that does not fit.
+ */
+function parseToolArgs<T>(toolName: string, schema: z.ZodType<T>, args: unknown): T {
+  const result = schema.safeParse(args ?? {});
+  if (result.success === false) {
+    const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '(arguments)'}: ${issue.message}`);
+    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for ${toolName}: ${issues.join('; ')}`);
+  }
+  return result.data;
+}
+
 /**
  * Register `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
  * @param server - The MCP server to register the handlers on.
@@ -242,15 +266,12 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
       return textResult(renderIndex(skills, skillToolMode(), skillToolNames(skills)));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
-      const args = req.params.arguments ?? {};
-      const query = typeof args.query === 'string' ? args.query : '';
-      const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
+      const { query, tags } = parseToolArgs(SEARCH_TOOL_NAME, searchArgsSchema, req.params.arguments);
       const skills = deps.getSkills();
       return textResult(renderIndex(searchSkills(skills, query, tags), skillToolMode(), skillToolNames(skills)));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
-      const raw = req.params.arguments?.name;
-      const wanted = typeof raw === 'string' ? raw : '';
+      const { name: wanted } = parseToolArgs(LOAD_TOOL_NAME, loadArgsSchema, req.params.arguments);
       // Resolve by the skill's real name only — the exact field `list_skills`
       // advertises. A sanitized-tool-name fallback would be ambiguous (distinct
       // slugs like `commit.messages` and `commit_messages` collide).
