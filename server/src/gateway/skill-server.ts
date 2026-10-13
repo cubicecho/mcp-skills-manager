@@ -270,7 +270,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
         return { ...textResult(errorMessage(err)), isError: true };
       }
     }
-    const skill = findByToolName(req.params.name);
+    // Loader mode advertises no per-skill tools, so it answers none.
+    const skill = skillToolMode() === 'loader' ? undefined : findByToolName(req.params.name);
     if (!skill) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill tool "${req.params.name}"`);
     }

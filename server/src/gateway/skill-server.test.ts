@@ -241,6 +241,11 @@ describe('skill-server loader mode', () => {
       /Unknown skill/,
     );
   });
+
+  it('refuses a per-skill tool name, which it does not advertise', async () => {
+    await expect(client.callTool({ name: 'pdf-forms' })).rejects.toThrow(/Unknown skill tool "pdf-forms"/);
+    await expect(client.callTool({ name: 'commit_messages' })).rejects.toThrow(/Unknown skill tool/);
+  });
 });
 
 describe('skill-server metadata surfacing', () => {
