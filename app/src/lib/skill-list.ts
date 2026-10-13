@@ -2,14 +2,17 @@ import type { SkillSummary } from '@mcp-skills/shared';
 
 /** The scope filter's choices, with the label each shows. */
 export const SCOPE_LABELS = { all: 'All scopes', global: 'Global', scoped: 'Workspace-scoped' } as const;
+/** One choice of the scope filter. */
 export type ScopeFilter = keyof typeof SCOPE_LABELS;
 
 /** The format filter's choices, with the label each shows. */
 export const FORMAT_LABELS = { all: 'All formats', dir: 'Directory', file: 'File' } as const;
+/** One choice of the format filter. */
 export type FormatFilter = keyof typeof FORMAT_LABELS;
 
 /** The sort orders, with the label each shows. */
 export const SORT_LABELS = { name: 'Name (A–Z)', updated: 'Recently updated', used: 'Most used' } as const;
+/** One of the sort orders. */
 export type SortKey = keyof typeof SORT_LABELS;
 
 /** What the skills page narrows its list by, and the order it shows the rest in. */
@@ -28,7 +31,8 @@ export const NO_FILTERS: SkillListFilters = { query: '', scope: 'all', format: '
 
 /**
  * Narrows the skill list to what the filters allow and orders it.
- * @param skills - The full list; left as it is.
+ *
+ * @param skills - The full list; not mutated.
  * @param filters - The search text, scope, format, tag and sort order to apply.
  * @returns The matching skills, sorted.
  */
@@ -65,7 +69,12 @@ export function filterAndSort(skills: SkillSummary[], filters: SkillListFilters)
   });
 }
 
-/** All distinct tags across the skill list, sorted for a stable filter dropdown. */
+/**
+ * Collects the distinct tags across the skill list.
+ *
+ * @param skills - The skills whose tags to gather.
+ * @returns Each tag once, sorted, so the filter dropdown keeps a stable order.
+ */
 export function collectTags(skills: SkillSummary[]): string[] {
   return [...new Set(skills.flatMap((skill) => skill.tags))].sort((a, b) => a.localeCompare(b));
 }

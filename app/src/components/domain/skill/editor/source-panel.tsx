@@ -15,10 +15,16 @@ import { useToasts } from '@/lib/toast';
 /**
  * Where a linked skill comes from and how to bring it up to date: its repo, ref, folder and synced
  * commit, a Sync now button, Unlink, and the local settings that survive a sync.
- * @param props.skill - The linked skill.
- * @param props.source - Its git source.
  */
-export function SourcePanel({ skill, source }: { skill: SkillDetail; source: SkillSource }) {
+export function SourcePanel({
+  skill,
+  source,
+}: {
+  /** The linked skill. */
+  skill: SkillDetail;
+  /** Its git source. */
+  source: SkillSource;
+}) {
   const toast = useToasts();
   const unlink = useUnlinkSkillSource(skill.name);
   const { sync, pending } = useSyncNow(skill.name);

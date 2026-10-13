@@ -34,6 +34,7 @@ import { SERVER_VERSION } from '../version.ts';
 
 /** What the management API needs from the process that mounts it. */
 export interface ApiDeps {
+  /** The store every route reads and writes. */
   store: ConfigStore;
   /** The port the HTTP server is listening on, surfaced via GET /status. */
   port: number;
@@ -41,8 +42,9 @@ export interface ApiDeps {
 
 /**
  * Builds the body-less API view of a skill.
- * @param store Store supplying the usage stats.
- * @param skill Skill to render.
+ *
+ * @param store - Store supplying the usage stats.
+ * @param skill - Skill to render.
  * @returns The summary DTO.
  */
 function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
@@ -63,8 +65,9 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
 
 /**
  * Builds the full API view of a skill.
- * @param store Store supplying the usage stats.
- * @param skill Skill to render.
+ *
+ * @param store - Store supplying the usage stats.
+ * @param skill - Skill to render.
  * @returns The summary plus body and frontmatter.
  */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
@@ -73,7 +76,8 @@ function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
 
 /**
  * Reads the `path` query parameter of a supporting-file request, answering 400 when it is missing.
- * @param req Request whose query string carries the path.
+ *
+ * @param req - Request whose query string carries the path.
  * @returns The non-empty path, relative to the skill root.
  */
 function requirePathQuery(req: Request): string {
@@ -87,8 +91,9 @@ function requirePathQuery(req: Request): string {
 
 /**
  * Resolves the name of a skill being created or imported, answering 400 when the request yields none.
- * @param request Parsed request body carrying an optional name and title.
- * @param action Verb used in the error message.
+ *
+ * @param request - Parsed request body carrying an optional name and title.
+ * @param action - Verb used in the error message.
  * @returns A valid skill slug.
  */
 function requireSkillName(request: { name?: string; title?: string }, action: 'create' | 'import'): string {
@@ -102,7 +107,8 @@ function requireSkillName(request: { name?: string; title?: string }, action: 'c
 
 /**
  * Builds the management REST API mounted at /api.
- * @param deps Store and listening port.
+ *
+ * @param deps - Store and listening port.
  * @returns The router; errors thrown by its handlers reach the error middleware.
  */
 export function createApiRouter(deps: ApiDeps): Router {

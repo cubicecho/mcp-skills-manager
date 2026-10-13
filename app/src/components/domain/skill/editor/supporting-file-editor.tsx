@@ -8,16 +8,20 @@ import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
-/** Edit a supporting `.md` file's contents. */
+/** The editor for a supporting `.md` file's contents. */
 export function SupportingFileEditor({
   skillName,
   path,
   ref,
   onClose,
 }: {
+  /** The skill the file belongs to. */
   skillName: string;
+  /** The file's path relative to the skill root. */
   path: string;
+  /** Lets the pane holding the editor ask whether it has unsaved edits. */
   ref?: Ref<EditorHandle>;
+  /** Called when the reader leaves the editor for the preview. */
   onClose: () => void;
 }) {
   const toast = useToasts();

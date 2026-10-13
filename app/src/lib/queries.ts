@@ -27,7 +27,8 @@ export const queryKeys = {
 };
 
 /**
- * Cache a just-created skill and refresh the lists and counts that now include it.
+ * Caches a just-created skill and refreshes the lists and counts that now include it.
+ *
  * @param queryClient - The query client holding the cache.
  * @param skill - The skill the server returned.
  */
@@ -38,7 +39,8 @@ function cacheNewSkill(queryClient: QueryClient, skill: SkillDetail): void {
 }
 
 /**
- * Cache a skill whose supporting files changed and refresh the skill list, which shows file counts.
+ * Caches a skill whose supporting files changed and refreshes the skill list, which shows file counts.
+ *
  * @param queryClient - The query client holding the cache.
  * @param name - The slug the skill is cached under.
  * @param skill - The skill the server returned.
@@ -49,8 +51,9 @@ function cacheSkillAfterFileChange(queryClient: QueryClient, name: string, skill
 }
 
 /**
- * Cache a skill whose whole folder was replaced from (or cut loose from) its git source: every
+ * Caches a skill whose whole folder was replaced from (or cut loose from) its git source: every
  * cached file of it is stale, and the lists show its link.
+ *
  * @param queryClient - The query client holding the cache.
  * @param name - The slug the skill is cached under.
  * @param skill - The skill the server returned.
@@ -63,6 +66,7 @@ function cacheSkillAfterSourceChange(queryClient: QueryClient, name: string, ski
 
 /**
  * Polls the server status every 15 seconds.
+ *
  * @returns The status query.
  */
 export function useServerStatus() {
@@ -75,6 +79,7 @@ export function useServerStatus() {
 
 /**
  * Reads the token-free settings.
+ *
  * @returns The settings query.
  */
 export function useSettings() {
@@ -86,6 +91,7 @@ export function useSettings() {
 
 /**
  * Polls the skill list every 10 seconds.
+ *
  * @returns The skill-summaries query.
  */
 export function useSkills() {
@@ -98,7 +104,8 @@ export function useSkills() {
 
 /**
  * Reads one skill with its body.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The skill-detail query.
  */
 export function useSkill(name: string) {
@@ -108,7 +115,13 @@ export function useSkill(name: string) {
   });
 }
 
-/** Read one supporting file's content; disabled until a path is selected. */
+/**
+ * Reads one supporting file's content, uncached, so it is fetched afresh each time it is opened.
+ *
+ * @param name - Skill slug.
+ * @param filePath - File path relative to the skill root; null leaves the query disabled.
+ * @returns The file-content query.
+ */
 export function useSkillFileContent(name: string, filePath: string | null) {
   return useQuery({
     queryKey: [...queryKeys.skill(name), 'file', filePath],
@@ -122,6 +135,7 @@ export function useSkillFileContent(name: string, filePath: string | null) {
 
 /**
  * Polls the workspace list every 10 seconds.
+ *
  * @returns The workspaces query.
  */
 export function useWorkspaces() {
@@ -134,6 +148,7 @@ export function useWorkspaces() {
 
 /**
  * Patches the settings and refreshes the status.
+ *
  * @returns The mutation.
  */
 export function useUpdateSettings() {
@@ -149,6 +164,7 @@ export function useUpdateSettings() {
 
 /**
  * Asks the server to re-read its files, then marks every cached resource stale: a reload can change any of them.
+ *
  * @returns The mutation, resolving to the reloaded skill and workspace counts.
  */
 export function useReloadConfig() {
@@ -163,6 +179,7 @@ export function useReloadConfig() {
 
 /**
  * Creates a skill and caches its detail.
+ *
  * @returns The mutation.
  */
 export function useCreateSkill() {
@@ -175,6 +192,7 @@ export function useCreateSkill() {
 
 /**
  * Imports an uploaded skill and caches its detail.
+ *
  * @returns The mutation.
  */
 export function useImportSkill() {
@@ -187,6 +205,7 @@ export function useImportSkill() {
 
 /**
  * Imports a skill from a folder in a git repo and caches its detail.
+ *
  * @returns The mutation.
  */
 export function useImportGitSkill() {
@@ -199,7 +218,8 @@ export function useImportGitSkill() {
 
 /**
  * Links a skill to a git source, replacing its content from it.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation.
  */
 export function useLinkSkillSource(name: string) {
@@ -212,7 +232,8 @@ export function useLinkSkillSource(name: string) {
 
 /**
  * Drops a skill's git link, keeping its content.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation.
  */
 export function useUnlinkSkillSource(name: string) {
@@ -225,7 +246,8 @@ export function useUnlinkSkillSource(name: string) {
 
 /**
  * Refetches a linked skill from its git source.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation; it resolves with the skill and whether the source had moved on.
  */
 export function useSyncSkill(name: string) {
@@ -236,7 +258,12 @@ export function useSyncSkill(name: string) {
   });
 }
 
-/** Add/replace a supporting file on a skill; may promote a `file` skill to a `dir`. */
+/**
+ * Adds or replaces a supporting file on a skill, which may promote a `file` skill to a `dir`.
+ *
+ * @param name - Skill slug.
+ * @returns The mutation.
+ */
 export function useWriteSkillFile(name: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -247,7 +274,8 @@ export function useWriteSkillFile(name: string) {
 
 /**
  * Creates an empty folder inside a skill.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation.
  */
 export function useCreateSkillFolder(name: string) {
@@ -260,7 +288,8 @@ export function useCreateSkillFolder(name: string) {
 
 /**
  * Renames or moves a file or folder inside a skill.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation.
  */
 export function useMoveSkillPath(name: string) {
@@ -273,7 +302,8 @@ export function useMoveSkillPath(name: string) {
 
 /**
  * Deletes a file or folder inside a skill.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The mutation.
  */
 export function useDeleteSkillFile(name: string) {
@@ -286,7 +316,8 @@ export function useDeleteSkillFile(name: string) {
 
 /**
  * Patches a skill; a rename moves its cache entry to the new name.
- * @param name Current skill slug.
+ *
+ * @param name - Current skill slug.
  * @returns The mutation.
  */
 export function useUpdateSkill(name: string) {
@@ -303,6 +334,7 @@ export function useUpdateSkill(name: string) {
 
 /**
  * Deletes a skill and refreshes the lists that showed it.
+ *
  * @returns The mutation.
  */
 export function useDeleteSkill() {
@@ -319,6 +351,7 @@ export function useDeleteSkill() {
 
 /**
  * Creates a workspace.
+ *
  * @returns The mutation.
  */
 export function useCreateWorkspace() {
@@ -334,7 +367,8 @@ export function useCreateWorkspace() {
 
 /**
  * Patches a workspace.
- * @param slug Current workspace slug.
+ *
+ * @param slug - Current workspace slug.
  * @returns The mutation.
  */
 export function useUpdateWorkspace(slug: string) {
@@ -349,6 +383,7 @@ export function useUpdateWorkspace(slug: string) {
 
 /**
  * Deletes a workspace.
+ *
  * @returns The mutation.
  */
 export function useDeleteWorkspace() {

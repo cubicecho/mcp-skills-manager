@@ -16,10 +16,13 @@ import { useWriteSkillFile } from '@/lib/queries';
 import { pickedToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
 
+/** The look every button in the toolbar shares. */
 const TOOLBAR_BUTTON = { variant: 'ghost', size: 'icon-sm' } as const;
 
 /**
  * The buttons over a skill's file list: add or upload files, export, link to a git repo and rename.
+ *
+ * @remarks
  * A skill linked to a git source has a Sync button in place of the ones that change its content.
  */
 export function SkillToolbar({
@@ -28,6 +31,7 @@ export function SkillToolbar({
   onNewFolder,
   onRenamed,
 }: {
+  /** The skill the buttons act on. */
   skill: SkillDetail;
   /** Called to ask for a new file's path, at the skill root. */
   onNewFile: () => void;

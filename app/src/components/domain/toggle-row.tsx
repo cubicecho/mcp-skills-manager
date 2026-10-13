@@ -10,11 +10,15 @@ export function ToggleRow({
   disabled,
   onCheckedChange,
 }: {
+  /** What the setting is called; it names the switch. */
   title: ReactNode;
+  /** What the setting does; it describes the switch. */
   description: ReactNode;
+  /** Whether the setting is on. */
   checked: boolean;
   /** Set while the change is being saved, so a second one cannot start. */
   disabled?: boolean;
+  /** Called with the new state when the switch is flipped. */
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (

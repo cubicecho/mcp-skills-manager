@@ -12,22 +12,22 @@ import { createSkillServer } from './skill-server.ts';
 
 /** What the MCP endpoints need from the process that mounts them. */
 export interface McpRouterDeps {
+  /** The store the endpoints serve skills from. */
   store: ConfigStore;
   /** Holds the stateful sessions; pass one to be able to close them on shutdown. */
   sessions?: McpSessionManager;
 }
 
 /**
- * Streamable-HTTP MCP endpoints:
+ * Builds the Streamable-HTTP MCP endpoints: `/` serves every global skill, `/w/:slug` one enabled workspace's.
  *
- *  - `/`            → every skill
- *  - `/w/:slug`     → only the skills in that workspace
+ * @param deps - The store, and optionally the session manager that holds the stateful sessions.
+ * @returns The router to mount.
  *
- * Stateless by default (a fresh skill `Server` + transport per request, torn
- * down on response close). When `settings.httpLiveUpdates` is on, requests are
- * routed through {@link McpSessionManager} instead — persistent sessions that
- * can push `resources/list_changed` + `updated` over SSE. The mode is read fresh
- * per request, so toggling the setting takes effect without a restart.
+ * @remarks
+ * Stateless unless `settings.httpLiveUpdates` is on: a fresh skill server and transport per request, closed with
+ * the response. With it on, requests go through {@link McpSessionManager}, whose persistent sessions can push
+ * notifications over SSE. The setting is read on every request, so a change needs no restart.
  */
 export function createMcpRouter(deps: McpRouterDeps): Router {
   const { store } = deps;
@@ -49,9 +49,8 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     await transport.handleRequest(req, res, req.body);
   };
 
-  // Dispatch to the stateful session manager or the stateless path per the live
-  // setting. Only a stateful session is built with live updates, so a stateless
-  // server never advertises capabilities it can't honor.
+  // Dispatches per the live setting. Only a stateful session is built with live updates, so a
+  // stateless server never advertises capabilities it can't honor.
   const handle = async (req: Request, res: Response, workspaceSlug: string | undefined): Promise<void> => {
     const buildServer = (liveUpdates: boolean): Server =>
       createSkillServer(endpointDeps(store, { workspaceSlug, liveUpdates }));

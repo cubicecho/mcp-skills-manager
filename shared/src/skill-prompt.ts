@@ -24,6 +24,7 @@ export const promptArgumentSchema = z.object({
   /** A required argument must be given; an optional one left out becomes an empty string. */
   required: z.boolean().default(false),
 });
+/** One declared argument of a skill prompt. */
 export type PromptArgument = z.infer<typeof promptArgumentSchema>;
 
 /** Recognised frontmatter keys of a prompt file. */
@@ -32,4 +33,5 @@ export const promptFrontmatterSchema = z.object({
   description: z.string().optional(),
   arguments: z.array(promptArgumentSchema).default([]),
 });
+/** A prompt file's parsed frontmatter. */
 export type PromptFrontmatter = z.infer<typeof promptFrontmatterSchema>;

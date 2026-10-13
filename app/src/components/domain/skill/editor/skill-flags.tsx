@@ -5,10 +5,16 @@ import { Code } from '@/components/ui/code';
 
 /**
  * A skill's local settings: whether the root endpoint serves it and whether agents may change it.
+ *
+ * @remarks
  * They are this server's, not the content's, so they stay switchable on a skill linked to a git source.
- * @param props.skill - The skill the switches belong to.
  */
-export function SkillFlags({ skill }: { skill: SkillDetail }) {
+export function SkillFlags({
+  skill,
+}: {
+  /** The skill the switches belong to. */
+  skill: SkillDetail;
+}) {
   const flags = useSkillFlags(skill.name);
 
   return (

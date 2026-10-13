@@ -15,6 +15,7 @@ export const IDLE_IMPORT: ImportStatus = { ready: false, pending: false, dirty: 
 
 /**
  * Checks a skill id typed into a form.
+ *
  * @param field - The field's state.
  * @param field.value - The id as typed.
  * @returns The error to show, or `undefined` for a valid slug.

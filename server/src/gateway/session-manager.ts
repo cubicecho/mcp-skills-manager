@@ -14,28 +14,27 @@ interface Session {
 }
 
 /**
- * Manages long-lived MCP sessions for the **stateful** Streamable-HTTP transport,
- * so the server can push resource notifications (`list_changed` / `updated`) to a
- * connected client over SSE — the HTTP analog of stdio's live updates. Each
- * session owns a persistent `Server` + transport keyed by the `Mcp-Session-Id` the
- * transport mints on initialize. A session is reclaimed when the client closes its
- * standalone SSE stream (an ungraceful disconnect or `client.close()`, which aborts
- * the stream without a DELETE) or sends an explicit DELETE — either way the transport
- * closes, which unsubscribes the session's store `change` listener. (A session whose
- * client never opens the SSE stream and then vanishes lingers until server shutdown,
- * but that stream is the whole point of stateful mode, so real clients always hold it.
- * The stateless path in `routes.ts` stays the default; this only runs when
- * `settings.httpLiveUpdates` is on.)
+ * Holds the long-lived MCP sessions of the stateful Streamable-HTTP transport, which can push notifications over SSE.
+ *
+ * @remarks
+ * Each session owns a `Server` and a transport, keyed by the `Mcp-Session-Id` the transport mints on initialize.
+ * A session is reclaimed when its client closes the standalone SSE stream or sends a DELETE; one whose client
+ * never opened that stream and then vanished lingers until shutdown. It runs only when
+ * `settings.httpLiveUpdates` is on.
  */
 export class McpSessionManager {
+  /** Live sessions by `Mcp-Session-Id`. */
   private readonly sessions = new Map<string, Session>();
 
   /**
-   * Route one HTTP request through a persistent session:
-   * - a request bearing a known `Mcp-Session-Id` reuses that session's transport;
-   * - an initialize request without a session id opens a fresh one (its `Server`
-   *   built lazily via `buildServer`, then connected);
-   * - anything else has no session to attach to → 400 (unknown id → 404).
+   * Routes one HTTP request through a persistent session.
+   *
+   * @param req - The request; its `Mcp-Session-Id` header picks the session.
+   * @param res - The response; answered 404 for an unknown session id, 400 for a non-initialize request without one.
+   * @param buildServer - Builds the skill server of a new session; called only when one opens.
+   *
+   * @remarks
+   * A known session id reuses that session's transport. An initialize request without an id opens a new session.
    */
   async handle(req: Request, res: Response, buildServer: () => Server): Promise<void> {
     const header = req.headers['mcp-session-id'];
@@ -47,13 +46,8 @@ export class McpSessionManager {
         sendError(res, HttpStatus.NotFound, `Unknown MCP session "${id}"`);
         return;
       }
-      // The standalone GET request is the session's long-lived SSE push channel.
-      // When the client drops it — an explicit `client.close()` aborts the stream
-      // WITHOUT sending a DELETE, as does any ungraceful disconnect — Express fires
-      // `close` on that response. That is our only reliable "client is gone" signal,
-      // so we close the transport to reclaim the session (and unsubscribe its store
-      // `change` listener). POST/DELETE responses close immediately in JSON mode, so
-      // we must reap solely on the GET stream, never on those.
+      // The standalone GET is the session's SSE push channel, and its `close` is the only sign the client has
+      // gone, so reap there. Never on POST/DELETE: their JSON responses close at once.
       if (req.method === 'GET') {
         res.on('close', () => {
           void closeQuietly(existing.transport, 'MCP session');
@@ -82,11 +76,8 @@ export class McpSessionManager {
         this.sessions.set(newId, { server, transport });
       },
     });
-    // On disconnect / DELETE, drop the session from the map. We set this BEFORE
-    // connect() so the SDK chains it ahead of its own teardown — the skill
-    // server's own onclose hook (which unsubscribes the store change listener)
-    // then fires via that chain, so we must NOT call server.close() here (it
-    // would re-enter transport.close() from inside its own onclose).
+    // Set BEFORE connect() so the SDK chains it ahead of its own teardown, which fires the skill server's
+    // onclose. Calling server.close() here would re-enter transport.close() from inside its own onclose.
     transport.onclose = () => {
       const closedId = transport.sessionId;
       if (closedId) {
@@ -102,7 +93,7 @@ export class McpSessionManager {
     return this.sessions.size;
   }
 
-  /** Close every live session — call on server shutdown. */
+  /** Closes every live session; called on server shutdown. */
   async closeAll(): Promise<void> {
     const open = [...this.sessions.values()];
     this.sessions.clear();

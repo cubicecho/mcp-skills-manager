@@ -7,12 +7,16 @@ import { useUpdateSkill } from '@/lib/queries';
 import { reported } from '@/lib/reported';
 import { useToasts } from '@/lib/toast';
 
-/**
- * The button that renames a skill through a prompt dialog.
- * @param props.skill - The skill to rename.
- * @param props.onRenamed - Called with the new name once the rename has been saved.
- */
-export function RenameButton({ skill, onRenamed }: { skill: SkillDetail; onRenamed: (name: string) => void }) {
+/** The button that renames a skill through a prompt dialog. */
+export function RenameButton({
+  skill,
+  onRenamed,
+}: {
+  /** The skill to rename. */
+  skill: SkillDetail;
+  /** Called with the new name once the rename has been saved. */
+  onRenamed: (name: string) => void;
+}) {
   const toast = useToasts();
   const update = useUpdateSkill(skill.name);
   const [open, setOpen] = useState(false);

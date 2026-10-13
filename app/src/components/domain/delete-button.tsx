@@ -14,6 +14,7 @@ export function DeleteButton({
   title: string;
   /** What is lost, and what is kept. */
   description: string;
+  /** Called once the reader has confirmed the delete. */
   onConfirm: () => void;
 }) {
   return (

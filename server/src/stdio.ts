@@ -10,12 +10,12 @@ import { createSkillServer } from './gateway/skill-server.ts';
 import { closeOnSignal } from './shutdown.ts';
 
 /**
- * stdio MCP entry point. Serves every skill by default, or only a workspace's
- * skills with `--workspace <slug>`. Skills are read from DATA_DIR (default
- * ./data) and the store watches for on-disk edits so tools/list stays current
- * within a long-lived session.
+ * Runs the stdio MCP server: `mcp-skills-stdio --data-dir /path/to/data --workspace backend`.
  *
- *   mcp-skills-stdio --data-dir /path/to/data --workspace backend
+ * @remarks
+ * It serves the root endpoint's skills, or only a workspace's with `--workspace <slug>`; an unknown slug
+ * exits 1. Skills are read from `--data-dir`, else `DATA_DIR`, else `./data`. The store watches for
+ * on-disk edits, so tools/list stays current within a long-lived session.
  */
 async function main(): Promise<void> {
   const { values } = parseArgs({

@@ -3,7 +3,14 @@ import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { HttpError } from '../errors.ts';
 
-/** Renders every thrown error as the JSON envelope { error, detail? }. */
+/**
+ * Renders every thrown error as the JSON envelope { error, detail? }.
+ *
+ * @param err - What a handler threw: a ZodError answers 400, an HttpError its own status, anything else 500.
+ * @param _req - Unused.
+ * @param res - The response to end.
+ * @param _next - Unused; Express tells an error middleware by its four parameters.
+ */
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof ZodError) {
     res.status(HttpStatus.BadRequest).json({

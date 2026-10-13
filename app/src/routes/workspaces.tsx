@@ -18,6 +18,7 @@ import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteWorkspace, useServerStatus, useWorkspaces } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 
+/** The `/workspaces` route. */
 export const Route = createFileRoute('/workspaces')({
   component: WorkspacesPage,
 });
@@ -39,6 +40,7 @@ function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
   );
 }
 
+/** Every workspace in a table, with its endpoint URL, and the dialog that creates or edits one. */
 function WorkspacesPage() {
   const toast = useToasts();
   const workspaces = useWorkspaces();

@@ -34,23 +34,31 @@ export interface SyncTarget {
 }
 
 /**
- * Fetches skills from git and swaps them into the skills dir. It moves folders only: loading the
- * result into the catalogue is the store's.
+ * Fetches skills from git and swaps them into the skills dir.
+ *
+ * @remarks
+ * It moves folders only: loading the result into the catalogue is the store's.
  */
 export class SkillSync {
+  /** The live skills dir a fetched folder is moved into. */
   private readonly skillsDir: string;
   /**
-   * Staging area for skills fetched from git. Kept OUTSIDE the watched dirs (a staged SKILL.md
-   * under skills/ would load as a skill) but on the same filesystem, so moving a fetched
-   * folder into place is a single rename.
+   * Staging area for skills fetched from git.
+   *
+   * @remarks
+   * It is kept OUTSIDE the watched dirs (a staged SKILL.md under skills/ would load as a skill) but on the same
+   * filesystem, so moving a fetched folder into place is a single rename.
    */
   private readonly syncDir: string;
+  /** Fetches a source's folder into a directory and reports the commit it came from. */
   private readonly fetchSource: SkillSourceFetcher;
   /** Names of skills with a sync or link in flight; a second one is refused rather than interleaved. */
   private readonly syncing = new Set<string>();
 
   /**
-   * @param dirs - The skills dir, and the staging dir beside it.
+   * Creates a sync over one skills dir.
+   *
+   * @param dirs - The skills dir, and the staging dir fetched folders wait in.
    * @param fetchSource - Fetches a linked skill's folder from its git source.
    */
   constructor(dirs: { skillsDir: string; syncDir: string }, fetchSource: SkillSourceFetcher) {
@@ -59,7 +67,14 @@ export class SkillSync {
     this.fetchSource = fetchSource;
   }
 
-  /** Run a sync for `name`, refusing a second one while the first is still in flight. */
+  /**
+   * Runs a sync for one skill, refusing a second one while the first is still in flight.
+   *
+   * @typeParam T - What the sync resolves to.
+   * @param name - The skill being synced.
+   * @param run - The sync itself.
+   * @returns What `run` resolved to. Throws HttpError 409 when the skill is already syncing.
+   */
   async exclusiveSync<T>(name: string, run: () => Promise<T>): Promise<T> {
     if (this.syncing.has(name)) {
       throw new HttpError(HttpStatus.Conflict, `Skill "${name}" is already syncing`);
@@ -72,7 +87,14 @@ export class SkillSync {
     }
   }
 
-  /** Fetch a source into the staging area, hand it to `use`, and clean the staging area up afterwards. */
+  /**
+   * Fetches a source into the staging area, hands it to `use`, and removes the staged folder afterwards.
+   *
+   * @typeParam T - What `use` resolves to.
+   * @param source - The repo, ref and folder to fetch.
+   * @param use - What to do with the staged folder; it is removed whether or not this fails.
+   * @returns What `use` resolved to. Throws HttpError 400 when the fetched folder has no SKILL.md at its root.
+   */
   async withStagedSource<T>(source: GitSource, use: (staged: StagedSource) => Promise<T>): Promise<T> {
     await mkdir(this.syncDir, { recursive: true });
     const work = await mkdtemp(path.join(this.syncDir, 'sync-'));
@@ -89,7 +111,13 @@ export class SkillSync {
     }
   }
 
-  /** The name a freshly imported source gets: its declared `name`, else its folder's (or repo's) name. */
+  /**
+   * Names a freshly imported source: its declared `name`, else its folder's name, or its repo's when it has no folder.
+   *
+   * @param source - Where the folder was fetched from.
+   * @param staged - The fetched folder, whose SKILL.md is read for the declared name.
+   * @returns The name, a valid slug. Throws HttpError 400 when neither the declared name nor the derived one is.
+   */
   async sourceSkillName(source: GitSource, staged: StagedSource): Promise<string> {
     const { frontmatter } = parseMarkdown(await readFile(path.join(staged.dir, SKILL_FILE), 'utf8'));
     const declared = slugSchema.safeParse(frontmatter.name);
@@ -108,11 +136,15 @@ export class SkillSync {
   }
 
   /**
-   * Move a staged source folder into place as the skill `name`. Upstream's SKILL.md is rewritten so
-   * the local identity and local-only settings win and the link (with the fetched commit) is recorded.
+   * Moves a staged source folder into place as the target skill.
+   *
    * @param staged - The fetched folder.
    * @param target - The skill it becomes.
    * @returns The folder the skill now occupies, relative to the skills dir.
+   *
+   * @remarks
+   * Upstream's SKILL.md is rewritten first, so the local name and local-only settings win and the link, with the
+   * fetched commit, is recorded. A folder already in place is put back when the move fails.
    */
   async installStaged(staged: StagedSource, target: SyncTarget): Promise<string> {
     const { name, source, replaces } = target;

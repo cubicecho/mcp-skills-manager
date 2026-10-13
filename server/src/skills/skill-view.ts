@@ -2,10 +2,14 @@ import type { Skill, SkillFile } from '@mcp-skills/shared';
 import { byName } from './skill-name.ts';
 
 /**
- * Derives the MCP tool name a skill is served under. Tool names are conventionally `[A-Za-z0-9_-]`, but a skill
- * name may contain dots, so every other character becomes `_`.
- * @param name Skill slug.
+ * Derives the MCP tool name a skill is served under.
+ *
+ * @param name - Skill slug.
  * @returns The sanitized tool name; distinct slugs can collide (`a.b` and `a_b`), which {@link skillToolNames} settles.
+ *
+ * @remarks
+ * Tool names are conventionally `[A-Za-z0-9_-]`, but a skill name may contain dots, so every other character
+ * becomes `_`.
  */
 export function skillToolName(name: string): string {
   return name.replace(/[^A-Za-z0-9_-]/g, '_');
@@ -18,11 +22,14 @@ const TOOL_NUMBER_SEPARATOR = '__';
 const FIRST_TOOL_NUMBER = 2;
 
 /**
- * Names the tool each skill of one endpoint is served under, so that no two skills share one. A skill whose
- * name needs no sanitizing always keeps it; of the others that sanitize to one name, the first in sorted order
- * takes it when it is free and each later one is numbered, as `<tool>__2`, `<tool>__3`.
+ * Names the tool each skill of one endpoint is served under, so that no two skills share one.
+ *
  * @param skills - Every skill the endpoint serves.
  * @returns Tool name by skill name, in sorted skill order.
+ *
+ * @remarks
+ * A skill whose name needs no sanitizing always keeps it. Of the others that sanitize to one name, the first in
+ * sorted order takes it when it is free and each later one is numbered, as `<tool>__2`, `<tool>__3`.
  */
 export function skillToolNames(skills: ReadonlyArray<Pick<Skill, 'name'>>): Map<string, string> {
   const names = [...skills].sort(byName).map((skill) => skill.name);
@@ -44,7 +51,8 @@ export function skillToolNames(skills: ReadonlyArray<Pick<Skill, 'name'>>): Map<
 
 /**
  * Lists the regular files bundled with a skill, leaving its sub-directories out.
- * @param skill Skill whose supporting entries to filter.
+ *
+ * @param skill - Skill whose supporting entries to filter.
  * @returns The file entries, in the skill's own order.
  */
 export function bundledFiles(skill: Skill): SkillFile[] {

@@ -6,16 +6,21 @@ import type { BindableForm } from '@/lib/form-binding';
 
 /** The three source fields as typed, before validation. */
 export interface GitSourceDraft {
+  /** The repo's clone URL. */
   repo: string;
+  /** The branch or tag; blank follows the default branch. */
   ref: string;
+  /** The folder that holds the `SKILL.md`; blank is the repo root. */
   path: string;
 }
 
+/** The source fields before anything is typed. */
 export const EMPTY_GIT_SOURCE: GitSourceDraft = { repo: '', ref: '', path: '' };
 
 /**
- * Validate what was typed into the source fields.
- * @param draft - The fields as typed; an empty ref or folder is left out.
+ * Validates what was typed into the source fields.
+ *
+ * @param draft - The fields as typed; a blank ref or folder is left out.
  * @returns The source to send when the draft is valid, and one message per field that is not.
  */
 export function readGitSourceDraft(draft: GitSourceDraft): {
@@ -41,7 +46,8 @@ export function readGitSourceDraft(draft: GitSourceDraft): {
 }
 
 /**
- * Build the validator for one source field.
+ * Builds the validator for one source field.
+ *
  * @param key - The field to validate.
  * @returns A validator giving that field's message, or nothing when what was typed in it is allowed.
  */
@@ -50,11 +56,23 @@ function validateSourceField(key: keyof GitSourceDraft) {
     readGitSourceDraft({ ...EMPTY_GIT_SOURCE, [key]: value }).errors[key];
 }
 
+/** Validates the branch-or-tag field. */
 const validateRef = validateSourceField('ref');
+/** Validates the folder field. */
 const validatePath = validateSourceField('path');
+/** Validates the repo field once something is typed in it. */
 const validateFilledRepo = validateSourceField('repo');
 
-/** An empty repo is not yet wrong: the form's submit stays disabled until there is one. */
+/**
+ * Validates the repo field.
+ *
+ * @param field - The field's state.
+ * @param field.value - The URL as typed.
+ * @returns The error to show, or `undefined` for an allowed URL or an empty field.
+ *
+ * @remarks
+ * An empty repo is not yet wrong: the form's submit stays disabled until there is one.
+ */
 function validateRepo({ value }: { value: string }): string | undefined {
   return value === '' ? undefined : validateFilledRepo({ value });
 }
@@ -67,15 +85,17 @@ type GitSourceForm = BindableForm & {
 
 /**
  * The fields that say where a skill is fetched from: a repo, and optionally a ref and a folder.
+ *
+ * @remarks
  * Pasting a forge's folder URL (`…/tree/<ref>/<folder>`) into the repo field fills all three.
- * @param props.form - The form holding the fields, with the {@link GitSourceDraft} under `source`.
- * @param props.autoFocus - Focus the repo field when the fields mount.
  */
 export function GitSourceFields<TForm extends GitSourceForm>({
   form,
   autoFocus = false,
 }: {
+  /** The form holding the fields, with the {@link GitSourceDraft} under `source`. */
   form: TForm;
+  /** Focuses the repo field when the fields mount. */
   autoFocus?: boolean;
 }) {
   // Narrowed to what the fields read, so their names are checked against the draft alone.

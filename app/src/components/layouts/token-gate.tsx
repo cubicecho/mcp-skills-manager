@@ -11,9 +11,10 @@ import type { SlotNode } from '@/lib/utils';
 const TOKEN_FORM_ID = 'token-gate-form';
 
 /**
- * Renders the app normally; when any API call has come back 401 it swaps
- * in a token-entry screen. Submitting stores the token in localStorage and
- * refetches everything.
+ * Shows the app, or a token-entry screen once any API call has come back 401.
+ *
+ * @remarks
+ * Submitting stores the token in localStorage and refetches everything.
  */
 export function TokenGate({
   contentSlot,

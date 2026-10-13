@@ -2,23 +2,26 @@ import type { SkillToolMode } from '@mcp-skills/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Name of the meta-tool that returns the skill catalogue. A skill could in
- * theory be named `list_skills` too; the meta-tool wins (that skill stays
- * reachable as a resource and is omitted from the tool list to avoid a dupe).
+ * Name of the meta-tool that returns the skill catalogue.
+ *
+ * @remarks
+ * A skill named `list_skills` loses to it: the skill is left out of the tool list and stays reachable as a resource.
  */
 export const INDEX_TOOL_NAME = 'list_skills';
 
 /**
- * Name of the loader tool served in `loader` mode: a single `load_skill(name)`
- * tool that returns any skill's body, instead of one tool per skill. Keeps the
- * advertised tool count fixed regardless of how many skills exist.
+ * Name of the single `load_skill(name)` tool that `loader` mode serves in place of one tool per skill.
+ *
+ * @remarks
+ * It keeps the advertised tool count fixed however many skills exist.
  */
 export const LOAD_TOOL_NAME = 'load_skill';
 
 /**
- * Name of the search meta-tool: full-text lookup over the catalogue (name,
- * description, tags, and body) so an agent can find relevant skills by intent
- * without loading every body. Returns the same catalogue lines as `list_skills`.
+ * Name of the search meta-tool, which matches a query against each skill's name, description, tags and body.
+ *
+ * @remarks
+ * It answers with the same catalogue lines as `list_skills`, so an agent finds a skill without loading every body.
  */
 export const SEARCH_TOOL_NAME = 'search_skills';
 
@@ -34,7 +37,8 @@ const HOW_TO_LOAD: Record<SkillToolMode, string> = {
 };
 
 /**
- * Build the definition of the catalogue tool.
+ * Builds the definition of the catalogue tool.
+ *
  * @param mode - How skills are advertised; it decides which loading hint the description gives.
  * @returns The `list_skills` tool definition.
  */

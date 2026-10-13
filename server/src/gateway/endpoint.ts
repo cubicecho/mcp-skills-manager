@@ -11,7 +11,8 @@ export interface EndpointOptions {
 }
 
 /**
- * Build the skill-server dependencies for one endpoint, backed by the store.
+ * Builds the skill-server dependencies for one endpoint, backed by the store.
+ *
  * @param store - The config store the endpoint reads skills from and authors into.
  * @param options - The workspace to scope to, if any, and whether the transport can push.
  * @returns The dependencies to pass to `createSkillServer`.

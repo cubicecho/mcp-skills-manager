@@ -7,12 +7,15 @@ import { sendError } from './errors.ts';
 
 /** The effective bearer-auth state for one request. */
 export interface AuthConfig {
+  /** Whether requests must carry the token. */
   enabled: boolean;
+  /** The token to match; null when none is configured. */
   token: string | null;
 }
 
 /** Bearer-auth state plus where its token comes from: the environment, settings.json, or nowhere. */
 export interface ResolvedAuth extends AuthConfig {
+  /** Where `token` was read from; `none` when there is no token. */
   tokenSource: 'env' | 'settings' | 'none';
 }
 
@@ -20,9 +23,14 @@ export interface ResolvedAuth extends AuthConfig {
 const TRUTHY_ENV = new Set(['1', 'true', 'yes', 'on']);
 
 /**
- * `SECURE_LOCAL_NET=true` disables bearer auth entirely for both /api and /mcp
- * — an escape hatch for running on a trusted local network without minting or
- * passing tokens. Overrides `authEnabled` in settings.json.
+ * Tells whether `SECURE_LOCAL_NET` turns bearer auth off for both /api and /mcp.
+ *
+ * @param [env] - Environment to read SECURE_LOCAL_NET from.
+ * @returns True when it is `1`, `true`, `yes` or `on`, in any case and ignoring surrounding spaces.
+ *
+ * @remarks
+ * It is an escape hatch for a trusted local network, where no token is minted or passed. It overrides
+ * `authEnabled` in settings.json.
  */
 export function authDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   const value = env[EnvVar.SecureLocalNet];
@@ -31,8 +39,9 @@ export function authDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean
 
 /**
  * Tells whether bearer auth is actually enforced: on in settings and not overridden by SECURE_LOCAL_NET.
- * @param settings Settings carrying the `authEnabled` flag.
- * @param env Environment to read SECURE_LOCAL_NET from.
+ *
+ * @param settings - Settings carrying the `authEnabled` flag.
+ * @param [env] - Environment to read SECURE_LOCAL_NET from.
  * @returns True when requests must carry the token.
  */
 export function isAuthEffective(
@@ -43,11 +52,15 @@ export function isAuthEffective(
 }
 
 /**
- * Work out the auth state in force. This is the one place that decides which token wins, so the
- * middleware, the token generator and the startup log cannot disagree.
+ * Works out the auth state in force.
+ *
  * @param settings - Settings carrying `authEnabled` and the stored token.
- * @param env - Environment to read MCP_SKILLS_TOKEN and SECURE_LOCAL_NET from.
- * @returns Whether auth is enforced, and the token to match with its source. An empty MCP_SKILLS_TOKEN counts as unset.
+ * @param [env] - Environment to read MCP_SKILLS_TOKEN and SECURE_LOCAL_NET from.
+ * @returns Whether auth is enforced, and the token to match with its source: MCP_SKILLS_TOKEN beats settings.json.
+ *
+ * @remarks
+ * This is the one place that decides which token wins, so the middleware, the token generator and the
+ * startup log cannot disagree. An empty MCP_SKILLS_TOKEN counts as unset.
  */
 export function resolveAuth(
   settings: Pick<SettingsFile, 'authEnabled' | 'authToken'>,
@@ -64,7 +77,13 @@ export function resolveAuth(
   return { enabled, token: null, tokenSource: 'none' };
 }
 
-/** Constant-time comparison that does not leak token length (compares sha256 digests). */
+/**
+ * Compares two tokens in constant time, without leaking their length: it compares their sha256 digests.
+ *
+ * @param a - One token.
+ * @param b - The other.
+ * @returns True when the tokens are the same string.
+ */
 export function tokensEqual(a: string, b: string): boolean {
   const digestA = createHash('sha256').update(a).digest();
   const digestB = createHash('sha256').update(b).digest();
@@ -72,8 +91,13 @@ export function tokensEqual(a: string, b: string): boolean {
 }
 
 /**
- * Bearer-token middleware for /api and /mcp. Skipped entirely when auth is
- * disabled; otherwise rejects with a 401 JSON envelope.
+ * Builds the bearer-token middleware for /api and /mcp.
+ *
+ * @param getAuth - Reads the auth state in force; called on every request, so a settings change applies at once.
+ * @returns A handler that answers 401 unless the `Authorization: Bearer` header carries the token.
+ *
+ * @remarks
+ * With auth off every request passes; with auth on and no token configured, every request is refused.
  */
 export function createAuthMiddleware(getAuth: () => AuthConfig): RequestHandler {
   return (req, res, next) => {

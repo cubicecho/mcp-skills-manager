@@ -14,6 +14,7 @@ import { mcpOrigin } from '@/lib/mcp';
 import { useServerStatus, useSkills } from '@/lib/queries';
 import { collectTags, filterAndSort, NO_FILTERS } from '@/lib/skill-list';
 
+/** The `/` route: the skills page. */
 export const Route = createFileRoute('/')({
   component: SkillsPage,
 });

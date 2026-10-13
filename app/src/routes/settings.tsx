@@ -11,10 +11,12 @@ import { useReloadConfig, useServerStatus, useSettings, useUpdateSettings } from
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { useToasts } from '@/lib/toast';
 
+/** The `/settings` route. */
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 });
 
+/** Toggles for how the MCP endpoints behave: tool exposure, agent authoring and HTTP live updates. */
 function McpOptionsCard() {
   const toast = useToasts();
   const { data: settings, isPending } = useSettings();
@@ -99,6 +101,7 @@ function McpOptionsCard() {
   );
 }
 
+/** Server status, the MCP options, a reload-from-disk button and the stdio command line. */
 function SettingsPage() {
   const toast = useToasts();
   const { data, isPending } = useServerStatus();

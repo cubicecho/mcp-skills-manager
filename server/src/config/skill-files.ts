@@ -5,7 +5,8 @@ import { HttpStatus } from '@mcp-skills/shared';
 import { HttpError } from '../errors.ts';
 
 /**
- * Normalize an OS-native path (which may use `\` on Windows) to POSIX separators.
+ * Normalizes an OS-native path (which may use `\` on Windows) to POSIX separators.
+ *
  * @param p - The path to normalize.
  * @returns The same path with `/` separators.
  */
@@ -14,7 +15,8 @@ export function toPosix(p: string): string {
 }
 
 /**
- * Guess whether a file is binary: it holds a NUL byte or is not decodable as UTF-8.
+ * Guesses whether a file is binary: it holds a NUL byte or is not decodable as UTF-8.
+ *
  * @param buffer - The file's contents.
  * @returns True when the contents should be treated as binary.
  */
@@ -31,8 +33,9 @@ export function isBinary(buffer: Buffer): boolean {
 }
 
 /**
- * Resolve a caller-supplied path within a skill's directory, reading a leading slash as the skill root
+ * Resolves a caller-supplied path within a skill's directory, reading a leading slash as the skill root
  * and rejecting `..` traversal.
+ *
  * @param relPath - The caller-supplied path, relative to the skill's directory.
  * @returns The safe POSIX-style relative path.
  * @throws HttpError 400 when the path is empty or leaves the skill's directory.
@@ -55,7 +58,8 @@ export function safeRelPath(relPath: string): string {
 }
 
 /**
- * Remove now-empty directories, walking up from `dir`.
+ * Removes now-empty directories, walking up from `dir` until one still holds something.
+ *
  * @param dir - Absolute path of the first directory to check.
  * @param stopAt - Absolute path of the ancestor to stop below; it is never removed.
  */
@@ -81,7 +85,8 @@ export interface WalkedEntry {
 }
 
 /**
- * Walk a directory tree depth-first, yielding each directory before its contents.
+ * Walks a directory tree depth-first, yielding each directory before its contents.
+ *
  * @param dir - Absolute path of the directory to walk.
  * @returns Every entry under `dir`, in `readdir` order.
  */

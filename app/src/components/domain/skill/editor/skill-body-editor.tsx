@@ -12,14 +12,17 @@ import { skillMarkdownPath } from '@/lib/skill';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
-/** Edit the skill's own Markdown: its frontmatter description plus its body. */
+/** The editor for the skill's own Markdown: its description, tags and body, with its local settings between. */
 export function SkillBodyEditor({
   skill,
   ref,
   onClose,
 }: {
+  /** The skill as last loaded: what the editor starts from, and what unsaved edits are measured against. */
   skill: SkillDetail;
+  /** Lets the pane holding the editor ask whether it has unsaved edits. */
   ref?: Ref<EditorHandle>;
+  /** Called when the reader leaves the editor for the preview. */
   onClose: () => void;
 }) {
   const toast = useToasts();

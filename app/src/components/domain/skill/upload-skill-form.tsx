@@ -14,10 +14,13 @@ import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } fro
 import { useToasts } from '@/lib/toast';
 import { IDLE_IMPORT, type ImportStatus, validateSkillId } from './import-status';
 
+/** The form's id, which the dialog's submit button names. */
 export const UPLOAD_SKILL_FORM_ID = 'upload-skill-form';
 
 /**
- * Upload a skill from an `.md` file, a picked folder, or a `.zip` archive.
+ * The form that uploads a skill from an `.md` file, a picked folder, or a `.zip` archive.
+ *
+ * @remarks
  * The client normalizes all three (unzipping in-browser) and posts one payload.
  * Rendered as a tab inside {@link NewSkillDialog}, which owns the dialog and the footer's
  * submit button (`form={UPLOAD_SKILL_FORM_ID}`); this reports its state through `onStatusChange`.
@@ -26,7 +29,9 @@ export function UploadSkillForm({
   onStatusChange,
   onImported,
 }: {
+  /** Called with the form's state whenever it changes, and with `IDLE_IMPORT` when the form unmounts. */
   onStatusChange: (status: ImportStatus) => void;
+  /** Called once the skill has been imported, before the app goes to it. */
   onImported: () => void;
 }) {
   const toast = useToasts();

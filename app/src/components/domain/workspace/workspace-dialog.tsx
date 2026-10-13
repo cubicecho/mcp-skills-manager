@@ -15,23 +15,33 @@ const WORKSPACE_FORM_ID = 'workspace-form';
 /** Sentinel select value meaning "no override — inherit the global setting". */
 const INHERIT = 'inherit';
 
+/** The tool-exposure choices: inherit, then every skill-tool mode. */
 const TOOL_MODE_OPTIONS: SelectEntry[] = [
   { value: INHERIT, label: 'Inherit global setting' },
   ...SKILL_TOOL_MODES.map((mode) => ({ value: mode, label: SKILL_TOOL_MODE_LABELS[mode] })),
 ];
 
+/** What a workspace dialog is given. */
 interface Props {
   open: boolean;
+  /** Called with the state the dialog asks for; `false` on cancel and once the workspace is saved. */
   onOpenChange: (open: boolean) => void;
   /** Provided when editing an existing workspace; omitted when creating. */
   workspace?: WorkspaceStatus;
 }
 
+/**
+ * Checks that a workspace name was typed.
+ *
+ * @param field - The field's state.
+ * @param field.value - The name as typed.
+ * @returns The error to show, or `undefined` when the name is not blank.
+ */
 export function requireWorkspaceName({ value }: { value: string }): string | undefined {
   return value.trim() ? undefined : 'Give the workspace a name.';
 }
 
-/** Create or edit a workspace: name, description, enabled flag, and the member skill set. */
+/** The dialog that creates or edits a workspace: name, description, enabled flag, tool exposure and member skills. */
 export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
   const toast = useToasts();
   const isEdit = Boolean(workspace);

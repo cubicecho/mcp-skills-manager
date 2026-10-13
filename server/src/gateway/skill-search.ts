@@ -1,7 +1,8 @@
 import type { Skill } from '@mcp-skills/shared';
 
 /**
- * Tell whether a skill carries at least one of the wanted tags.
+ * Tells whether a skill carries at least one of the wanted tags.
+ *
  * @param skill - The skill to test.
  * @param wantTags - Lower-cased tags; none means every skill matches.
  * @returns True when the skill passes the tag filter.
@@ -15,7 +16,8 @@ function matchesTags(skill: Skill, wantTags: string[]): boolean {
 }
 
 /**
- * Tell whether every search term appears in a skill's name, description, tags or body.
+ * Tells whether every search term appears in a skill's name, description, tags or body.
+ *
  * @param skill - The skill to test.
  * @param terms - Lower-cased search terms; none means every skill matches.
  * @returns True when the skill passes the text query.
@@ -29,11 +31,15 @@ function matchesTerms(skill: Skill, terms: string[]): boolean {
 }
 
 /**
- * Rank skills against a free-text query and/or a tag filter. `query` is matched
- * case-insensitively against the name, description, tags, and body (each search
- * term must appear somewhere); `tags` narrows to skills carrying at least one of
- * the requested tags. With neither, every skill matches (mirrors `list_skills`).
- * Matches keep the caller's order — the metadata each carries lets the agent rank.
+ * Filters skills by a free-text query and a tag filter.
+ *
+ * @param skills - The skills to search.
+ * @param query - Whitespace-separated terms, each of which must appear in the name, description, tags or body.
+ * @param tags - Keeps only the skills carrying at least one of these; empty keeps them all.
+ * @returns The matches, in the caller's order; every skill when there is neither a term nor a tag.
+ *
+ * @remarks
+ * Matching ignores case. Nothing is ranked: the metadata each match carries lets the agent do that.
  */
 export function searchSkills(skills: Skill[], query: string, tags: string[]): Skill[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);

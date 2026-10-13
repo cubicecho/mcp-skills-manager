@@ -16,6 +16,7 @@ import { slugSchema } from './slug.ts';
  * - `dir`:  a `skills/<name>/SKILL.md` directory (can hold supporting files)
  */
 export const skillFormatSchema = z.enum(['file', 'dir']);
+/** A skill's on-disk layout: `file` or `dir`. */
 export type SkillFormat = z.infer<typeof skillFormatSchema>;
 
 /** A file or folder path relative to a skill's root, e.g. "scripts/run.py"; at most 255 characters. */
@@ -23,6 +24,7 @@ export const skillRelPathSchema = z.string().min(1).max(LENGTH_LIMITS.skillRelPa
 
 /** How file content travels as a string: `utf8` for text, `base64` for binary. */
 export const fileEncodingSchema = z.enum(['utf8', 'base64']);
+/** A file content string's encoding: `utf8` or `base64`. */
 export type FileEncoding = z.infer<typeof fileEncodingSchema>;
 
 /**
@@ -69,11 +71,17 @@ export const skillFrontmatterSchema = z
     source: z.unknown().optional(),
   })
   .passthrough();
+/** A skill's parsed frontmatter, unknown keys included. */
 export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
 
 /**
- * Interpret a frontmatter `readonly` value. YAML 1.2 reads a bare `yes`/`on` as
- * a string, so those spellings count as true too — a protection flag should not
+ * Interprets a frontmatter `readonly` value.
+ *
+ * @param input - The raw frontmatter value.
+ * @returns True for `true`, or for the strings `true`, `yes` and `on` in any case, surrounding spaces ignored.
+ *
+ * @remarks
+ * YAML 1.2 reads a bare `yes`/`on` as a string, so those spellings count too: a protection flag should not
  * silently fail open on a hand edit.
  */
 export function isReadOnlyFlag(input: unknown): boolean {
@@ -84,9 +92,10 @@ export function isReadOnlyFlag(input: unknown): boolean {
 }
 
 /**
- * Normalize a frontmatter `tags` value (comma-separated string or array) into a
- * clean list: trimmed, empties dropped, de-duplicated case-insensitively while
- * preserving the first occurrence's casing.
+ * Normalizes a frontmatter `tags` value into a clean list.
+ *
+ * @param input - A comma-separated string or an array; anything else counts as no tags.
+ * @returns The tags trimmed, empties dropped, de-duplicated whatever their case, the first spelling kept.
  */
 export function normalizeTags(input: unknown): string[] {
   const raw = Array.isArray(input) ? input : typeof input === 'string' ? input.split(',') : [];
@@ -116,6 +125,7 @@ export const skillFileSchema = z.object({
   /** Byte size on disk (0 for directories). */
   size: z.number().int().nonnegative(),
 });
+/** One file or sub-directory in a `dir` skill's folder. */
 export type SkillFile = z.infer<typeof skillFileSchema>;
 
 /** The canonical in-memory representation of a loaded skill. */
@@ -144,4 +154,5 @@ export const skillSchema = z.object({
   /** The git folder the skill is linked to (frontmatter `source`); absent for an ordinary, locally edited skill. */
   source: skillSourceSchema.optional(),
 });
+/** A loaded skill. */
 export type Skill = z.infer<typeof skillSchema>;

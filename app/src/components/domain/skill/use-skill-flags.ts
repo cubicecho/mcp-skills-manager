@@ -3,6 +3,7 @@ import { useToasts } from '@/lib/toast';
 
 /**
  * Switches a skill's two local flags, saying what changed once the server has it.
+ *
  * @param skillName - The skill the flags belong to.
  * @returns The two setters, and whether a change is still being saved.
  */

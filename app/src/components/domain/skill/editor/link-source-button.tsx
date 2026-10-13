@@ -13,11 +13,13 @@ import { useToasts } from '@/lib/toast';
 
 const LINK_SOURCE_FORM_ID = 'link-source-form';
 
-/**
- * The button that links an existing skill to a folder in a git repo, replacing its content from it.
- * @param props.skill - The skill to link.
- */
-export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
+/** The button that links an existing skill to a folder in a git repo, replacing its content from it. */
+export function LinkSourceButton({
+  skill,
+}: {
+  /** The skill to link. */
+  skill: SkillDetail;
+}) {
   const toast = useToasts();
   const link = useLinkSkillSource(skill.name);
   const [open, setOpen] = useState(false);

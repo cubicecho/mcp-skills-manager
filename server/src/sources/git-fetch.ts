@@ -15,14 +15,19 @@ export type SkillSourceFetcher = (source: GitSource, destDir: string) => Promise
 
 /** Options for {@link fetchGitFolder}. */
 export interface GitFetchOptions {
-  /** Also allow `file://` repos. Off by default so a request can never read a repo off the server's disk. */
+  /**
+   * Also allows `file://` repos, which would let a request read a repo off the server's disk.
+   *
+   * @defaultValue `false`
+   */
   allowLocal?: boolean;
 }
 
 /**
  * Runs one git command without a shell, never prompting for credentials.
- * @param args Arguments after `git`.
- * @param options Whether local repos are allowed.
+ *
+ * @param args - Arguments after `git`.
+ * @param options - Whether local repos are allowed.
  * @returns The command's trimmed stdout.
  * @throws The raw `execFile` error when git exits non-zero, times out or is missing.
  */
@@ -45,10 +50,11 @@ async function git(args: string[], options: GitFetchOptions): Promise<string> {
 
 /**
  * Turns a failed git command into the error the API answers with.
- * @param err Whatever `execFile` rejected with.
- * @param status HTTP status to answer with when git itself ran and failed.
- * @param message Error message for that case.
- * @returns The error to throw.
+ *
+ * @param err - Whatever `execFile` rejected with.
+ * @param status - HTTP status to answer with when git itself ran and failed.
+ * @param message - Error message for that case.
+ * @returns The error to throw; a 500 saying git is not installed when the binary was not found.
  */
 function gitError(err: unknown, status: number, message: string): HttpError {
   const failure = err as { code?: unknown; stderr?: unknown };
@@ -64,13 +70,16 @@ function gitError(err: unknown, status: number, message: string): HttpError {
 }
 
 /**
- * Copies a checked-out folder, keeping only regular files and directories: symlinks
- * (which could point anywhere on the server) and git's own metadata are left behind.
- * @param from Absolute path of the folder to copy.
- * @param to Absolute path of the existing folder to copy into.
- * @param allowance How many more files may be copied.
+ * Copies a checked-out folder, keeping only regular files and directories.
+ *
+ * @param from - Absolute path of the folder to copy.
+ * @param to - Absolute path of the existing folder to copy into.
+ * @param allowance - How many more files may be copied.
  * @returns The allowance left once this folder is copied.
  * @throws HttpError 400 when the folder holds more files than the allowance.
+ *
+ * @remarks
+ * Symlinks, which could point anywhere on the server, and git's own metadata are left behind.
  */
 async function copyTree(from: string, to: string, allowance: number): Promise<number> {
   let remaining = allowance;
@@ -95,13 +104,16 @@ async function copyTree(from: string, to: string, allowance: number): Promise<nu
 }
 
 /**
- * Fetches one folder of a git repo with the git CLI: a shallow, blob-less clone
- * that only checks out (and so only downloads) that folder.
- * @param source Repo, plus optional ref and folder.
- * @param destDir Existing empty directory the folder's files are copied into.
- * @param options Whether local repos are allowed.
+ * Fetches one folder of a git repo with the git CLI.
+ *
+ * @param source - Repo, plus optional ref and folder; without a folder the repo's root is fetched.
+ * @param destDir - Existing empty directory the folder's files are copied into.
+ * @param [options] - Whether local repos are allowed.
  * @returns The commit the files came from.
  * @throws HttpError 502 when the repo or ref cannot be fetched, 400 when the folder is not in it.
+ *
+ * @remarks
+ * The clone is shallow and blob-less, and only checks out, and so only downloads, that folder.
  */
 export async function fetchGitFolder(
   source: GitSource,

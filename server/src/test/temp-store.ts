@@ -6,15 +6,21 @@ import { ConfigStore } from '../config/store.ts';
 
 /** The store a test is running against, and the data directory it reads and writes. */
 export interface TempStore {
+  /** Absolute path of the test's own temp data directory. */
   dir: string;
+  /** A store over `dir`, already initialised. */
   store: ConfigStore;
 }
 
 /**
  * Gives each test in the enclosing `describe` a fresh store over its own temp data directory, and
- * removes both afterwards. Call it in the `describe` body; read `dir` and `store` inside the tests.
- * @param options - Passed to the store, e.g. a fake `fetchSource`.
+ * closes the store and removes the directory afterwards.
+ *
+ * @param [options] - Passed to the store, e.g. a fake `fetchSource`.
  * @returns The current test's store and directory, replaced before each test.
+ *
+ * @remarks
+ * Call it in the `describe` body; read `dir` and `store` inside the tests.
  */
 export function useTempStore(options?: ConstructorParameters<typeof ConfigStore>[1]): TempStore {
   // Filled in before each test; nothing reads it earlier.

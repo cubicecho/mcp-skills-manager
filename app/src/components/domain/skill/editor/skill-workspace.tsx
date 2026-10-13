@@ -12,14 +12,11 @@ import { SidebarLayout } from '@/components/split-layout';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 
 /**
- * One skill: its files in a list, and the selected one beside it. A file opens as a preview, and its
- * Edit button swaps the preview for the editor; only the skill's Markdown and `.md` files have one.
- * @param props.skill - The skill on screen.
- * @param props.selected - The selected file's path relative to the skill root; absent, the skill's own Markdown.
- * @param props.startEditing - Open the selected file in the editor rather than as a preview, once.
- * @param props.onSelect - Called with the file to open, and whether to open it in the editor.
- * @param props.onEditStarted - Called once `startEditing` has been acted on, so the caller can drop it.
- * @param props.onRenamed - Called with the skill's new name once a rename has been saved.
+ * One skill: its files in a list, and the selected one beside it.
+ *
+ * @remarks
+ * A file opens as a preview, and its Edit button swaps the preview for the editor; only the skill's Markdown
+ * and `.md` files have one.
  */
 export function SkillWorkspace({
   skill,
@@ -29,11 +26,17 @@ export function SkillWorkspace({
   onEditStarted,
   onRenamed,
 }: {
+  /** The skill on screen. */
   skill: SkillDetail;
+  /** The selected file's path relative to the skill root; absent, the skill's own Markdown. */
   selected: string | undefined;
+  /** Opens the selected file in the editor rather than as a preview, once. */
   startEditing: boolean;
+  /** Called with the file to open (undefined for the skill's own Markdown), and whether to open it in the editor. */
   onSelect: (path: string | undefined, options?: { edit?: boolean }) => void;
+  /** Called once `startEditing` has been acted on, so the caller can drop it. */
   onEditStarted: () => void;
+  /** Called with the skill's new name once a rename has been saved. */
   onRenamed: (name: string) => void;
 }) {
   const exists = selected !== undefined && skill.files.some((f) => f.type === 'file' && f.path === selected);
@@ -75,9 +78,13 @@ function FilePane({
   startEditing,
   onEditStarted,
 }: {
+  /** The skill the file belongs to. */
   skill: SkillDetail;
+  /** The file's path relative to the skill root, or `SKILL_MD_KEY` for the skill's own Markdown. */
   path: string;
+  /** Starts in the editor rather than the preview, when the file can be edited here. */
   startEditing: boolean;
+  /** Called once `startEditing` has been seen, so the caller can drop it. */
   onEditStarted: () => void;
 }) {
   // A skill linked to a git source is read here, never edited: its content is the repo's.

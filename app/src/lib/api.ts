@@ -24,9 +24,18 @@ import { getToken, requireAuth } from './auth';
 
 /** Non-2xx responses throw this; carries the HTTP status and the server's { error, detail? } envelope. */
 export class ApiRequestError extends Error {
+  /** HTTP status of the response. */
   readonly status: number;
+  /** The envelope's `detail`, when the server sent one. */
   readonly detail?: string;
 
+  /**
+   * Builds the error for one failed response.
+   *
+   * @param status - HTTP status of the response.
+   * @param message - The envelope's `error`, or the status text.
+   * @param [detail] - The envelope's `detail`.
+   */
   constructor(status: number, message: string, detail?: string) {
     super(message);
     this.name = 'ApiRequestError';
@@ -49,7 +58,8 @@ interface RequestOptions {
 }
 
 /**
- * Build the REST path of one skill.
+ * Builds the REST path of one skill.
+ *
  * @param name - Skill slug; URL-encoded here.
  * @returns The path, e.g. `/api/skills/my-skill`, to append sub-resources to.
  */
@@ -58,9 +68,10 @@ function skillUrl(name: string): string {
 }
 
 /**
- * Fetch with the stored bearer token attached, sending the user to the token prompt on a 401.
+ * Fetches with the stored bearer token attached, raising the needs-auth flag on a 401.
+ *
  * @param path - Request path.
- * @param init - Fetch options; its headers are sent after the Authorization header.
+ * @param [init] - Fetch options; its headers are merged over the Authorization header.
  * @returns The response, whatever its status.
  */
 async function authorizedFetch(path: string, init: AuthorizedInit = {}): Promise<Response> {
@@ -76,6 +87,14 @@ async function authorizedFetch(path: string, init: AuthorizedInit = {}): Promise
   return response;
 }
 
+/**
+ * Makes one JSON API call.
+ *
+ * @typeParam T - The shape of the response body; not checked at run time.
+ * @param path - Request path.
+ * @param [options] - Method and JSON body.
+ * @returns The parsed body, or undefined when it is empty. Throws `ApiRequestError` on a non-2xx response.
+ */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const hasBody = options.body !== undefined;
   const response = await authorizedFetch(path, {
@@ -107,6 +126,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 /**
  * GET /api/status.
+ *
  * @returns Version, uptime, counts and auth state.
  */
 export function getStatus(): Promise<ServerStatus> {
@@ -115,6 +135,7 @@ export function getStatus(): Promise<ServerStatus> {
 
 /**
  * GET /api/settings.
+ *
  * @returns The settings without the auth token.
  */
 export function getSettings(): Promise<SettingsView> {
@@ -123,7 +144,8 @@ export function getSettings(): Promise<SettingsView> {
 
 /**
  * PATCH /api/settings.
- * @param body Settings to change.
+ *
+ * @param body - Settings to change.
  * @returns The updated settings.
  */
 export function updateSettings(body: UpdateSettingsRequest): Promise<SettingsView> {
@@ -132,6 +154,7 @@ export function updateSettings(body: UpdateSettingsRequest): Promise<SettingsVie
 
 /**
  * GET /api/skills.
+ *
  * @returns Every skill, without bodies.
  */
 export function listSkills(): Promise<SkillSummary[]> {
@@ -140,7 +163,8 @@ export function listSkills(): Promise<SkillSummary[]> {
 
 /**
  * GET /api/skills/:name.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The skill with its body.
  */
 export function getSkill(name: string): Promise<SkillDetail> {
@@ -149,7 +173,8 @@ export function getSkill(name: string): Promise<SkillDetail> {
 
 /**
  * POST /api/skills.
- * @param body Skill to create.
+ *
+ * @param body - Skill to create.
  * @returns The created skill.
  */
 export function createSkill(body: CreateSkillRequest): Promise<SkillDetail> {
@@ -158,7 +183,8 @@ export function createSkill(body: CreateSkillRequest): Promise<SkillDetail> {
 
 /**
  * POST /api/skills/import.
- * @param body Uploaded files, normalized by skill-upload.
+ *
+ * @param body - Uploaded files, normalized by skill-upload.
  * @returns The created skill.
  */
 export function importSkill(body: ImportSkillRequest): Promise<SkillDetail> {
@@ -167,7 +193,8 @@ export function importSkill(body: ImportSkillRequest): Promise<SkillDetail> {
 
 /**
  * POST /api/skills/import-git.
- * @param body Repo, ref and folder to fetch, plus an optional local skill id.
+ *
+ * @param body - Repo, ref and folder to fetch, plus an optional local skill id.
  * @returns The created skill, linked to its source.
  */
 export function importGitSkill(body: ImportGitSkillRequest): Promise<SkillDetail> {
@@ -176,8 +203,9 @@ export function importGitSkill(body: ImportGitSkillRequest): Promise<SkillDetail
 
 /**
  * PUT /api/skills/:name/source: links a skill to a git source and replaces its content from it.
- * @param name Skill slug.
- * @param body Repo, ref and folder to fetch.
+ *
+ * @param name - Skill slug.
+ * @param body - Repo, ref and folder to fetch.
  * @returns The skill as synced.
  */
 export function linkSkillSource(name: string, body: GitSource): Promise<SkillDetail> {
@@ -186,7 +214,8 @@ export function linkSkillSource(name: string, body: GitSource): Promise<SkillDet
 
 /**
  * DELETE /api/skills/:name/source: drops the link, keeping the content.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The skill, editable again.
  */
 export function unlinkSkillSource(name: string): Promise<SkillDetail> {
@@ -195,7 +224,8 @@ export function unlinkSkillSource(name: string): Promise<SkillDetail> {
 
 /**
  * POST /api/skills/:name/sync: refetches a linked skill from its git source.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  * @returns The skill as synced, and whether the source had moved on.
  */
 export function syncSkill(name: string): Promise<SyncSkillResponse> {
@@ -204,8 +234,9 @@ export function syncSkill(name: string): Promise<SyncSkillResponse> {
 
 /**
  * PUT /api/skills/:name/files.
- * @param name Skill slug.
- * @param body File path and content.
+ *
+ * @param name - Skill slug.
+ * @param body - File path and content.
  * @returns The skill with its updated file list.
  */
 export function writeSkillFile(name: string, body: WriteSkillFileRequest): Promise<SkillDetail> {
@@ -214,8 +245,9 @@ export function writeSkillFile(name: string, body: WriteSkillFileRequest): Promi
 
 /**
  * GET /api/skills/:name/files/content.
- * @param name Skill slug.
- * @param filePath File path relative to the skill root.
+ *
+ * @param name - Skill slug.
+ * @param filePath - File path relative to the skill root.
  * @returns The file content, base64 when binary.
  */
 export function readSkillFile(name: string, filePath: string): Promise<SkillFileRead> {
@@ -224,8 +256,9 @@ export function readSkillFile(name: string, filePath: string): Promise<SkillFile
 
 /**
  * POST /api/skills/:name/folders.
- * @param name Skill slug.
- * @param body Folder path.
+ *
+ * @param name - Skill slug.
+ * @param body - Folder path.
  * @returns The skill with its updated file list.
  */
 export function createSkillFolder(name: string, body: CreateSkillFolderRequest): Promise<SkillDetail> {
@@ -234,8 +267,9 @@ export function createSkillFolder(name: string, body: CreateSkillFolderRequest):
 
 /**
  * POST /api/skills/:name/files/move.
- * @param name Skill slug.
- * @param body Source and destination paths.
+ *
+ * @param name - Skill slug.
+ * @param body - Source and destination paths.
  * @returns The skill with its updated file list.
  */
 export function moveSkillPath(name: string, body: MoveSkillPathRequest): Promise<SkillDetail> {
@@ -244,8 +278,9 @@ export function moveSkillPath(name: string, body: MoveSkillPathRequest): Promise
 
 /**
  * DELETE /api/skills/:name/files.
- * @param name Skill slug.
- * @param filePath File or folder path relative to the skill root.
+ *
+ * @param name - Skill slug.
+ * @param filePath - File or folder path relative to the skill root.
  * @returns The skill with its updated file list.
  */
 export function deleteSkillFile(name: string, filePath: string): Promise<SkillDetail> {
@@ -254,7 +289,12 @@ export function deleteSkillFile(name: string, filePath: string): Promise<SkillDe
   });
 }
 
-/** Fetch a skill's .zip export (with auth) as a Blob, for the caller to trigger a download. */
+/**
+ * GET /api/skills/:name/export: fetches a skill's .zip export with the bearer token attached.
+ *
+ * @param name - Skill slug.
+ * @returns The archive, for the caller to offer as a download. Throws `ApiRequestError` on a non-2xx response.
+ */
 export async function exportSkill(name: string): Promise<Blob> {
   const response = await authorizedFetch(`${skillUrl(name)}/export`);
   if (!response.ok) {
@@ -265,8 +305,9 @@ export async function exportSkill(name: string): Promise<Blob> {
 
 /**
  * PATCH /api/skills/:name.
- * @param name Current skill slug.
- * @param body Fields to change.
+ *
+ * @param name - Current skill slug.
+ * @param body - Fields to change.
  * @returns The updated skill.
  */
 export function updateSkill(name: string, body: UpdateSkillRequest): Promise<SkillDetail> {
@@ -275,7 +316,8 @@ export function updateSkill(name: string, body: UpdateSkillRequest): Promise<Ski
 
 /**
  * DELETE /api/skills/:name.
- * @param name Skill slug.
+ *
+ * @param name - Skill slug.
  */
 export function deleteSkill(name: string): Promise<void> {
   return request(skillUrl(name), { method: 'DELETE' });
@@ -283,6 +325,7 @@ export function deleteSkill(name: string): Promise<void> {
 
 /**
  * GET /api/workspaces.
+ *
  * @returns Every workspace.
  */
 export function listWorkspaces(): Promise<WorkspaceStatus[]> {
@@ -291,7 +334,8 @@ export function listWorkspaces(): Promise<WorkspaceStatus[]> {
 
 /**
  * GET /api/workspaces/:slug.
- * @param slug Workspace slug.
+ *
+ * @param slug - Workspace slug.
  * @returns The workspace.
  */
 export function getWorkspace(slug: string): Promise<WorkspaceStatus> {
@@ -300,7 +344,8 @@ export function getWorkspace(slug: string): Promise<WorkspaceStatus> {
 
 /**
  * POST /api/workspaces.
- * @param body Workspace to create.
+ *
+ * @param body - Workspace to create.
  * @returns The created workspace.
  */
 export function createWorkspace(body: CreateWorkspaceRequest): Promise<WorkspaceStatus> {
@@ -309,8 +354,9 @@ export function createWorkspace(body: CreateWorkspaceRequest): Promise<Workspace
 
 /**
  * PATCH /api/workspaces/:slug.
- * @param slug Current workspace slug.
- * @param body Fields to change.
+ *
+ * @param slug - Current workspace slug.
+ * @param body - Fields to change.
  * @returns The updated workspace.
  */
 export function updateWorkspace(slug: string, body: UpdateWorkspaceRequest): Promise<WorkspaceStatus> {
@@ -319,7 +365,8 @@ export function updateWorkspace(slug: string, body: UpdateWorkspaceRequest): Pro
 
 /**
  * DELETE /api/workspaces/:slug.
- * @param slug Workspace slug.
+ *
+ * @param slug - Workspace slug.
  */
 export function deleteWorkspace(slug: string): Promise<void> {
   return request(`/api/workspaces/${encodeURIComponent(slug)}`, { method: 'DELETE' });
@@ -327,6 +374,7 @@ export function deleteWorkspace(slug: string): Promise<void> {
 
 /**
  * POST /api/reload: re-reads DATA_DIR from disk.
+ *
  * @returns The counts after the reload.
  */
 export function reloadConfig(): Promise<{ reloaded: boolean; skillCount: number; workspaceCount: number }> {

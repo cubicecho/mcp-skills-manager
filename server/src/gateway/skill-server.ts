@@ -47,12 +47,14 @@ import { renderIndex, renderSkill, skillTitle } from './skill-render.ts';
 import { searchSkills } from './skill-search.ts';
 
 /**
- * Server capabilities. `liveUpdates` toggles the sub-capabilities that only
- * make sense on a long-lived transport (stdio): `listChanged` (the served skill
- * set changed on disk) for resources and prompts, and `subscribe` (per-resource
- * change notifications). The stateless HTTP path leaves them off — it cannot
- * push and re-lists fresh on every request anyway. `servesPrompts` is off when
- * the endpoint cannot read skill files, since a prompt is one.
+ * Builds the capabilities the server advertises.
+ *
+ * @param liveUpdates - Whether the transport is long-lived, and so can push `listChanged` and take `subscribe`.
+ * @param servesPrompts - Whether the endpoint can read skill files; a prompt is one, so none are served without.
+ * @returns The options object the `Server` constructor takes.
+ *
+ * @remarks
+ * The stateless HTTP path leaves live updates off: it cannot push, and re-lists fresh on every request anyway.
  */
 function skillCapabilities(liveUpdates: boolean, servesPrompts: boolean) {
   return {
@@ -67,7 +69,8 @@ function skillCapabilities(liveUpdates: boolean, servesPrompts: boolean) {
 }
 
 /**
- * Wrap text as a `tools/call` result.
+ * Wraps text as a `tools/call` result.
+ *
  * @param text - The text to hand back to the agent.
  * @returns A tool result holding one text block.
  */
@@ -79,9 +82,11 @@ function textResult(text: string) {
 const COMPLETION_LIMIT = 100;
 
 /**
- * Prefix-match `candidates` (case-insensitively) against a partial `value` and
- * shape them into a `completion/complete` result: the first `COMPLETION_LIMIT`
- * matches, the true `total`, and `hasMore` when the total exceeds what we return.
+ * Shapes the candidates a partial value is a prefix of into a `completion/complete` result.
+ *
+ * @param candidates - Every value the argument could take.
+ * @param value - What the user has typed so far; compared ignoring case.
+ * @returns The first `COMPLETION_LIMIT` matches, the true `total`, and `hasMore` when there are more than returned.
  */
 function completeFrom(candidates: string[], value: string) {
   const prefix = value.toLowerCase();
@@ -90,53 +95,60 @@ function completeFrom(candidates: string[], value: string) {
   return { completion: { values, total: matches.length, hasMore: matches.length > values.length } };
 }
 
+/** What a skill server needs from the endpoint that builds it. */
 export interface SkillServerDeps {
-  /** Resolved fresh per request so config edits take effect without a restart. */
+  /** Returns the served skills; called fresh per request, so config edits take effect without a restart. */
   getSkills: () => Skill[];
-  /** Endpoint label used in the MCP server info (e.g. "all skills" or a workspace slug). */
+  /** Endpoint label used in the MCP server info (e.g. `all` or a workspace slug). */
   label: string;
   /**
-   * When set, this endpoint also exposes skill-authoring tools (create/update/…),
-   * gated at call time on the store's `authoringEnabled` and `disabledAuthoringTools`
-   * settings. Omit for a strictly read-only server.
+   * Exposes the skill-authoring tools on this endpoint too; left out, the server is strictly read-only.
+   *
+   * @remarks
+   * Which of them are served is decided at call time, from the store's `authoringEnabled` and
+   * `disabledAuthoringTools` settings.
    */
   authoring?: AuthoringDeps;
   /**
-   * How skills are advertised as tools, resolved fresh per request so a
-   * settings change takes effect without a restart. Omit to default to
-   * `per-skill` (one tool per skill).
+   * Returns how skills are advertised as tools; left out, each skill gets its own tool.
+   *
+   * @remarks
+   * It is called fresh per request, so a settings change takes effect without a restart.
    */
   getSkillToolMode?: () => SkillToolMode;
   /**
-   * Read a bundled supporting file's contents, so `dir`-skill files can be
-   * exposed as `skill://<name>/<path>` resources independent of whether the
-   * authoring tools are enabled, and so a skill's `prompts/*.md` files can be
-   * served as MCP prompts. Omit to expose neither file resources nor prompts.
+   * Reads a bundled supporting file's contents; left out, the server exposes neither file resources nor prompts.
+   *
+   * @remarks
+   * With it, a skill's files are `skill://<name>/<path>` resources whether or not the authoring tools are enabled,
+   * and its `prompts/*.md` files are served as MCP prompts.
    */
   readSupportingFile?: (skillName: string, relPath: string) => Promise<SkillFileRead>;
   /**
-   * Called with a skill's name whenever its body is loaded over MCP (a per-skill
-   * tool or `load_skill`), for usage analytics. Best-effort — must not throw.
+   * Called with a skill's name whenever its body is loaded through a tool (its own or `load_skill`), for usage
+   * analytics; it must not throw.
    */
   onSkillLoaded?: (skillName: string) => void;
   /**
-   * Register a listener fired whenever the served skill set changes on disk, and
-   * return an unsubscribe fn (called when the server closes). When present, the
-   * server advertises `listChanged` for resources and prompts plus resource
-   * `subscribe`, and pushes notifications. Only wire this on a long-lived transport (stdio) — the
-   * stateless HTTP path cannot push and must omit it.
+   * Registers a listener fired whenever the served skill set changes on disk, and returns its unsubscribe function.
+   *
+   * @remarks
+   * When present, the server advertises `listChanged` for resources and prompts plus resource `subscribe`, and
+   * pushes notifications. Wire it only on a long-lived transport: the stateless HTTP path cannot push.
    */
   onSkillsChanged?: (listener: () => void) => () => void;
 }
 
 /**
- * Build an MCP Server that serves a set of skills. Each skill is exposed BOTH
- * as a tool (calling it returns the skill's Markdown so an agent can load it on
- * demand) and as a resource (`skill://<name>`), so clients using either
- * mechanism can reach every skill. A skill's `prompts/*.md` files are served as
- * MCP prompts.
+ * Builds an MCP server that serves a set of skills.
+ *
  * @param deps - The endpoint's skill source, label and optional capabilities.
  * @returns The configured server, not yet connected to a transport.
+ *
+ * @remarks
+ * Each skill is reachable both through a tool (its own, or `load_skill` in loader mode) and as a
+ * `skill://<name>` resource, so a client using either mechanism reaches every skill. A skill's `prompts/*.md`
+ * files are served as MCP prompts when the endpoint can read files.
  */
 export function createSkillServer(deps: SkillServerDeps): Server {
   const liveUpdates = Boolean(deps.onSkillsChanged);
@@ -159,7 +171,8 @@ export function createSkillServer(deps: SkillServerDeps): Server {
 }
 
 /**
- * Find a skill by its exact name.
+ * Finds a skill by its exact name.
+ *
  * @param skills - The skills this endpoint serves.
  * @param name - The skill name (slug) to look for.
  * @returns The matching skill, or `undefined` when none is served under that name.
@@ -175,7 +188,9 @@ const searchArgsSchema = z.strictObject({ query: z.string().default(''), tags: z
 const loadArgsSchema = z.strictObject({ name: z.string() });
 
 /**
- * Check a meta-tool's arguments, so a wrong-typed one is refused rather than read as absent.
+ * Checks a meta-tool's arguments, so a wrong-typed one is refused rather than read as absent.
+ *
+ * @typeParam T - The parsed arguments.
  * @param toolName - The tool being called, named in the error.
  * @param schema - What the tool takes.
  * @param args - What the caller sent.
@@ -192,7 +207,8 @@ function parseToolArgs<T>(toolName: string, schema: z.ZodType<T>, args: unknown)
 }
 
 /**
- * Register `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
+ * Registers `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param deps - The endpoint's skill source and optional authoring access.
  */
@@ -272,9 +288,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const { name: wanted } = parseToolArgs(LOAD_TOOL_NAME, loadArgsSchema, req.params.arguments);
-      // Resolve by the skill's real name only — the exact field `list_skills`
-      // advertises. A sanitized-tool-name fallback would be ambiguous (distinct
-      // slugs like `commit.messages` and `commit_messages` collide).
+      // Resolved by the skill's real name only, the field `list_skills` advertises: a sanitized tool name
+      // would be ambiguous (`commit.messages` and `commit_messages` collide).
       const skill = findByName(deps.getSkills(), wanted);
       if (!skill) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
@@ -301,7 +316,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 }
 
 /**
- * Register `resources/list`, `resources/read` and `resources/templates/list` for skills and their bundled files.
+ * Registers `resources/list`, `resources/read` and `resources/templates/list` for skills and their bundled files.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param deps - The endpoint's skill source and optional file reader.
  */
@@ -412,7 +428,7 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
 type ReadPrompt = { prompt: ReturnType<typeof parsePrompt> } | { unreadable: string };
 
 /**
- * Register `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
+ * Registers `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
  *
  * @param server - The MCP server to register the handlers on.
  * @param getSkills - Returns the skills this endpoint serves, so a prompt is only as visible as its skill.
@@ -487,8 +503,9 @@ function registerPromptHandlers(
 }
 
 /**
- * Register argument autocompletion for the resource templates: skill names for `{name}`, and a
- * skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
+ * Registers argument autocompletion for the resource templates: skill names for `{name}`, and for `{+path}`
+ * the bundled-file paths of the skill already chosen as `name`.
+ *
  * @param server - The MCP server to register the handler on.
  * @param deps - The endpoint's skill source.
  */
@@ -520,7 +537,8 @@ function registerCompletionHandler(server: Server, deps: SkillServerDeps): void 
 }
 
 /**
- * Send a notification without waiting on it; a client that has gone only costs a warning.
+ * Sends a notification without waiting on it; a client that has gone only costs a warning.
+ *
  * @param method - The notification's method, for the log line.
  * @param sent - The send in flight.
  */
@@ -531,11 +549,14 @@ function notifyQuietly(method: string, sent: Promise<void>): void {
 }
 
 /**
- * Register resource subscriptions and push notifications when the served skill set changes on
- * disk. Only for a long-lived transport (stdio).
+ * Registers resource subscriptions, and pushes notifications when the served skill set changes on disk.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param onSkillsChanged - Registers a change listener and returns its unsubscribe function.
  * @param servesPrompts - Whether the server advertises prompts, and so may announce that their list changed.
+ *
+ * @remarks
+ * It is only for a long-lived transport, and unsubscribes from the changes when the server closes.
  */
 function registerLiveUpdates(
   server: Server,
@@ -553,9 +574,8 @@ function registerLiveUpdates(
     return {};
   });
 
-  // A disk change may add/remove/edit any skill, so tell clients the list moved
-  // and nudge every subscribed URI to re-read. We over-notify rather than diff —
-  // the client simply re-reads and the content is authoritative either way.
+  // A disk change may touch any skill, so say the list moved and nudge every subscribed URI. Over-notifying
+  // beats diffing: the client re-reads, and the content is authoritative either way.
   const unsubscribe = onSkillsChanged(() => {
     notifyQuietly('resources/list_changed', server.sendResourceListChanged());
     if (servesPrompts) {

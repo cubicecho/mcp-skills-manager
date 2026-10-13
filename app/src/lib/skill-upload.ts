@@ -4,7 +4,7 @@ import { unzipSync } from 'fflate';
 import type { PickedFile } from '@/components/ui/file-picker-base';
 
 /**
- * Client-side normalization of a skill upload. An `.md` file, a picked folder,
+ * A skill upload as normalized on the client. An `.md` file, a picked folder,
  * or a `.zip` archive are all reduced to a `format` plus a flat list of files
  * (base64-encoded) that the POST /api/skills/import endpoint understands.
  */
@@ -12,6 +12,7 @@ export interface NormalizedUpload {
   format: SkillFormat;
   /** Slug derived from the file / folder / archive name; user-editable before import. */
   defaultName: string;
+  /** The files to import, base64-encoded; empty when `error` is set. */
   files: SkillFileContent[];
   /** Relative paths, for preview. */
   paths: string[];
@@ -19,11 +20,18 @@ export interface NormalizedUpload {
   error?: string;
 }
 
+/** One uploaded file before encoding: its path and raw bytes. */
 interface RawFile {
   path: string;
   bytes: Uint8Array;
 }
 
+/**
+ * Encodes bytes as base64, in chunks so a large file does not overflow the call stack.
+ *
+ * @param bytes - The bytes to encode.
+ * @returns The base64 string.
+ */
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const CHUNK = 0x8000;
@@ -33,11 +41,22 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * Turns a raw file into an import payload entry.
+ *
+ * @param file - The file to encode.
+ * @returns The entry, its content base64-encoded.
+ */
 function toContent(file: RawFile): SkillFileContent {
   return { path: file.path, content: bytesToBase64(file.bytes), encoding: 'base64' };
 }
 
-/** Drop a single shared top-level directory so `myskill/SKILL.md` becomes `SKILL.md`. Returns the stripped name too. */
+/**
+ * Drops a top-level directory every file shares, so `myskill/SKILL.md` becomes `SKILL.md`.
+ *
+ * @param files - The uploaded files.
+ * @returns The directory's name and the files without it, or a null `root` and the files as given when none is shared.
+ */
 function stripCommonRoot(files: RawFile[]): { root: string | null; files: RawFile[] } {
   const tops = new Set(files.map((f) => (f.path.includes('/') ? f.path.slice(0, f.path.indexOf('/')) : '')));
   if (tops.size === 1 && tops.has('') === false) {
@@ -48,9 +67,11 @@ function stripCommonRoot(files: RawFile[]): { root: string | null; files: RawFil
 }
 
 /**
- * Ensure a directory skill has a `SKILL.md` at its root. If it does not but
- * exactly one root-level `.md` file exists, that file is treated as the SKILL.md.
- * Returns null when the archive/folder is too ambiguous to import.
+ * Ensures a directory skill has a `SKILL.md` at its root, renaming the only root-level `.md` file to it when
+ * there is exactly one.
+ *
+ * @param files - The skill's files, relative to its root.
+ * @returns The files with a `SKILL.md` among them, or null when none can be told to be it.
  */
 function ensureSkillMd(files: RawFile[]): RawFile[] | null {
   if (files.some((f) => f.path === 'SKILL.md')) {
@@ -64,20 +85,44 @@ function ensureSkillMd(files: RawFile[]): RawFile[] | null {
   return null;
 }
 
+/**
+ * Removes an extension from a file name, whatever the name's case.
+ *
+ * @param fileName - The name to shorten.
+ * @param ext - The lower-case extension to remove, dot included.
+ * @returns The name without the extension, or unchanged when it does not end in it.
+ */
 function stripExtension(fileName: string, ext: string): string {
   return fileName.toLowerCase().endsWith(ext) ? fileName.slice(0, -ext.length) : fileName;
 }
 
-/** A file picked with `read="bytes"`: its folder-relative path when a folder was picked, else its name. */
+/**
+ * Reduces a file picked with `read="bytes"` to its path and bytes.
+ *
+ * @param file - The picked file.
+ * @returns Its path (inside the picked folder, or its name outside one) and bytes, empty when none were read.
+ */
 function toRawFile(file: PickedFile): RawFile {
   return { path: file.path, bytes: file.bytes ?? new Uint8Array() };
 }
 
-/** Turn a picked file (`read="bytes"`) into an import payload entry, at its folder-relative path. */
+/**
+ * Turns a file picked with `read="bytes"` into an import payload entry.
+ *
+ * @param file - The picked file.
+ * @returns The entry at the file's own path, base64-encoded.
+ */
 export function pickedToSkillFileContent(file: PickedFile): SkillFileContent {
   return toContent(toRawFile(file));
 }
 
+/**
+ * Normalizes a set of files into a directory skill.
+ *
+ * @param rawFiles - The files of a folder or archive; entries with an empty path or a trailing `/` are dropped.
+ * @param fallbackName - Slugified into the default name when the files share no top-level directory.
+ * @returns The upload, with `error` set and no files when no `SKILL.md` can be found.
+ */
 function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): NormalizedUpload {
   const nonEmpty = rawFiles.filter((f) => f.path && f.path.endsWith('/') === false);
   const { root, files: stripped } = stripCommonRoot(nonEmpty);
@@ -100,7 +145,12 @@ function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): Normaliz
   };
 }
 
-/** Normalize a single picked file: `.md` → a file skill, `.zip` → a directory skill. */
+/**
+ * Normalizes a single picked file: `.md` or `.markdown` into a file skill, `.zip` into a directory skill.
+ *
+ * @param file - The picked file, read as bytes.
+ * @returns The upload, with `error` set for an empty archive or any other kind of file.
+ */
 export function normalizeUploadFile(file: PickedFile): NormalizedUpload {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.zip')) {
@@ -130,7 +180,12 @@ export function normalizeUploadFile(file: PickedFile): NormalizedUpload {
   };
 }
 
-/** Normalize a picked folder into a directory skill. */
+/**
+ * Normalizes a picked folder into a directory skill.
+ *
+ * @param files - Every file of the folder, read as bytes.
+ * @returns The upload, named after the folder.
+ */
 export function normalizeUploadFolder(files: PickedFile[]): NormalizedUpload {
   return normalizeDirectory(files.map(toRawFile), '');
 }

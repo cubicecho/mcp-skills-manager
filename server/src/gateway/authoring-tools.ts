@@ -8,29 +8,23 @@ import { resolveSkillName } from '../skills/skill-name.ts';
 import { bundledFiles, skillToolName, skillToolNames } from '../skills/skill-view.ts';
 
 /**
- * MCP tools that let an agent author and maintain skills over the same endpoint
- * it reads them from — the self-improvement surface. Every tool delegates to the
- * existing ConfigStore mutators, so validation, atomic writes, frontmatter
- * serialization and path-traversal defenses are shared with the REST layer.
+ * MCP tools that let an agent author and maintain skills over the endpoint it reads them from.
  *
- * When these tools are served from a workspace endpoint (`workspaceSlug` set), a
- * newly created skill is scoped to that workspace: written with `global: false`
- * (hidden from the root `/mcp` aggregate) and appended to the workspace's member
- * list. Authored from the root endpoint, skills are global as usual. A workspace
- * endpoint reaches only the skills it serves: a tool aimed at any other skill is
- * refused, while the root endpoint reaches every skill.
- *
- * A skill a human has marked read-only (frontmatter `readonly: true`) is off
- * limits: every tool that would change, rename or delete it — or anything in its
- * folder — refuses. The flag itself is deliberately not settable from here, so an
- * agent cannot lift the protection; it is toggled over the REST API / web UI.
+ * @remarks
+ * Every tool delegates to the ConfigStore mutators, so validation and atomic writes are shared with the REST
+ * layer. A workspace endpoint scopes a new skill to its workspace by default and reaches only the skills it
+ * serves, while the root endpoint reaches them all. A read-only or git-linked skill is refused by every tool
+ * that would change it, and no tool here can lift either.
  */
 
+/** JSON Schema of a string argument. */
 const JSON_STRING = { type: 'string' } as const;
+/** JSON Schema of a list-of-strings argument. */
 const JSON_STRING_ARRAY = { type: 'array', items: { type: 'string' } } as const;
 
 /** One authoring tool: its advertised MCP definition plus the handler that runs it. */
 export interface AuthoringTool {
+  /** What `tools/list` advertises. */
   definition: {
     name: AuthoringToolName;
     description: string;
@@ -41,28 +35,37 @@ export interface AuthoringTool {
       additionalProperties: false;
     };
   };
+  /** Runs the tool on a call's raw arguments and resolves to the text it answers with. */
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
-/** One row of the authoring table: a tool's definition, its arguments, the skill it addresses, and what it does. */
+/**
+ * One row of the authoring table: a tool's definition, its arguments, the skill it addresses, and what it does.
+ *
+ * @typeParam T - The tool's parsed arguments.
+ */
 interface ToolSpec<T> {
+  /** What `tools/list` advertises. */
   definition: AuthoringTool['definition'];
   /** Schema the call's arguments are parsed with. */
   args: z.ZodType<T>;
   /** The existing skill a call addresses, and whether it only reads it; left out by a tool that addresses none. */
   target?: { skill: (input: T) => string; access: 'read' | 'write' };
+  /** Does the work, once the arguments are parsed and the addressed skill is cleared. */
   run: (input: T) => Promise<string>;
 }
 
 /** What the authoring tools need from the endpoint that exposes them. */
 export interface AuthoringDeps {
+  /** The store every tool reads and writes through. */
   store: ConfigStore;
   /** Set when serving a workspace endpoint — new skills are scoped to this workspace. */
   workspaceSlug?: string;
 }
 
 /**
- * Join a validation error's issue messages into one line an agent can read.
+ * Joins a validation error's issue messages into one line an agent can read.
+ *
  * @param error - The zod error to summarize.
  * @returns The issue messages, separated by `; `.
  */
@@ -71,9 +74,14 @@ function issueSummary(error: z.ZodError): string {
 }
 
 /**
- * Run a store mutation, normalizing its HttpError/validation failures into plain
- * Errors with a clean message. The skill-server dispatch turns a thrown Error
- * into an `isError` tool result the authoring agent can read and act on.
+ * Runs a store mutation, turning its HttpError and validation failures into plain Errors with a clean message.
+ *
+ * @typeParam T - What the mutation resolves to.
+ * @param fn - The mutation to run.
+ * @returns What the mutation resolved to.
+ *
+ * @remarks
+ * The skill-server dispatch turns a thrown Error into an `isError` tool result the authoring agent can read.
  */
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -89,7 +97,14 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Parse a tool's arguments with its zod schema, surfacing failures as a readable Error. */
+/**
+ * Parses a tool's arguments with its zod schema.
+ *
+ * @typeParam T - The parsed arguments.
+ * @param schema - What the tool takes.
+ * @param args - What the caller sent.
+ * @returns The parsed arguments. Throws an Error listing the issues when they do not fit.
+ */
 function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
   const result = schema.safeParse(args);
   if (!result.success) {
@@ -99,11 +114,12 @@ function parseArgs<T>(schema: z.ZodType<T>, args: Record<string, unknown>): T {
 }
 
 /**
- * How to load a skill after authoring it, plus where it is visible (root aggregate and/or a workspace).
+ * Says where a just-authored skill is visible (the root aggregate, a workspace or both) and how to load it.
+ *
  * @param skill - The skill just authored.
  * @param workspaceSlug - The workspace whose endpoint authored it, if any.
  * @param toolName - The tool the endpoint serves the skill under.
- * @returns The sentence pair that ends the tool's answer.
+ * @returns Two sentences: where the skill is visible, then how to load it.
  */
 function whereVisible(skill: Skill, workspaceSlug: string | undefined, toolName: string): string {
   const load = `Load it by calling the tool named "${toolName}".`;
@@ -116,7 +132,12 @@ function whereVisible(skill: Skill, workspaceSlug: string | undefined, toolName:
   return `It is ${parts.join(' and ')}. ${load}`;
 }
 
-/** Short human/agent-readable summary of a skill's current supporting files. */
+/**
+ * Summarizes a skill's supporting files in one sentence.
+ *
+ * @param skill - The skill as it now stands.
+ * @returns The sentence, which lists the files or says there are none; folders are not listed.
+ */
 function fileSummary(skill: Skill): string {
   const files = bundledFiles(skill);
   if (files.length === 0) {
@@ -164,13 +185,19 @@ const moveArgs = z.object({
   to: skillRelPathSchema,
 });
 
-/** Build the authoring tool set for an endpoint (root or a single workspace). */
+/**
+ * Builds the authoring tool set for an endpoint, root or a single workspace.
+ *
+ * @param deps - The store, and the workspace the endpoint serves when it is not the root.
+ * @returns Every authoring tool; the skill server leaves out the ones the settings disable.
+ */
 export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const { store, workspaceSlug } = deps;
   const scope = workspaceSlug ? ` (scoped to workspace "${workspaceSlug}")` : '';
 
   /**
    * Lists what this endpoint serves: the workspace's skills, or every global skill on the root endpoint.
+   *
    * @returns The served skills, read fresh.
    */
   const servedSkills = (): Skill[] => {
@@ -183,6 +210,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
 
   /**
    * Names the tool this endpoint serves a skill under, which is numbered when another skill holds the bare name.
+   *
    * @param skill - The skill just authored; one the endpoint does not serve gets its bare tool name.
    * @returns The tool name.
    */
@@ -190,9 +218,12 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
     skillToolNames(servedSkills()).get(skill.name) ?? skillToolName(skill.name);
 
   /**
-   * Refuse, on a workspace endpoint, a skill that workspace does not serve: the endpoint authors its own set only.
-   * The root endpoint reaches every skill, and an unknown name falls through to the store's 404.
+   * Refuses, on a workspace endpoint, a skill that workspace does not serve: the endpoint authors its own set only.
+   *
    * @param name - Slug the tool call addresses.
+   *
+   * @remarks
+   * The root endpoint reaches every skill, and an unknown name falls through to the store's 404.
    */
   const requireServed = (name: string): void => {
     if (workspaceSlug === undefined || store.getSkill(name) === undefined) {
@@ -207,7 +238,11 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   };
 
   /**
-   * Refuse to touch a skill a human has marked read-only, or one whose content is owned by a git source.
+   * Refuses a skill this endpoint does not serve, one whose content a git source owns, or one marked read-only.
+   *
+   * @param name - Slug the tool call addresses.
+   *
+   * @remarks
    * An unknown name falls through to the store's 404.
    */
   const requireWritable = (name: string): void => {
@@ -227,7 +262,10 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   };
 
   /**
-   * Swap passages of a skill's Markdown body, leaving its frontmatter as it is.
+   * Swaps passages of a skill's Markdown body, leaving its frontmatter as it is.
+   *
+   * @param name - Slug of the skill.
+   * @param replacements - The passages to swap, in order.
    * @returns How many passages were swapped.
    */
   const editBody = async (name: string, replacements: Replacement[]): Promise<number> => {
@@ -238,7 +276,11 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   };
 
   /**
-   * Swap passages of one of a skill's supporting files, keeping the CRLF line endings of a file that has them.
+   * Swaps passages of one of a skill's supporting files, keeping the CRLF line endings of a file that has them.
+   *
+   * @param name - Slug of the skill.
+   * @param relPath - The file's path, relative to the skill directory; a binary file is refused.
+   * @param replacements - The passages to swap, in order.
    * @returns How many passages were swapped.
    */
   const editSupportingFile = async (name: string, relPath: string, replacements: Replacement[]): Promise<number> => {
@@ -256,10 +298,15 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   };
 
   /**
-   * Turns one row of the table into a served tool: its arguments are parsed, then the skill it addresses is
-   * checked for this endpoint's reach, and for being writable when the tool changes it, before the row runs.
+   * Turns one row of the table into a served tool.
+   *
+   * @typeParam T - The tool's parsed arguments.
    * @param spec - The row.
    * @returns The tool, as the skill server dispatches it.
+   *
+   * @remarks
+   * A call's arguments are parsed, then the skill it addresses is checked for this endpoint's reach, and for
+   * being writable when the tool changes it, before the row runs.
    */
   const tool = <T>(spec: ToolSpec<T>): AuthoringTool => ({
     definition: spec.definition,

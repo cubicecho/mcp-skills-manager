@@ -7,10 +7,11 @@ const PRIVATE_FILE_MODE = 0o600;
 const DEFAULT_FILE_MODE = 0o644;
 
 /**
- * Atomically write raw bytes: a temp file in the same dir, chmod, then rename over the target.
+ * Writes raw bytes atomically: a temp file in the same dir, chmod, then rename over the target.
+ *
  * @param file - Absolute path of the file to write.
  * @param content - The bytes to write.
- * @param mode - Permission bits for the file (octal).
+ * @param [mode] - Permission bits for the file (octal).
  */
 export async function writeBufferAtomic(file: string, content: Buffer, mode = DEFAULT_FILE_MODE): Promise<void> {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -20,17 +21,19 @@ export async function writeBufferAtomic(file: string, content: Buffer, mode = DE
 }
 
 /**
- * Atomically write UTF-8 text.
+ * Writes UTF-8 text atomically.
+ *
  * @param file - Absolute path of the file to write.
  * @param content - The text to write.
- * @param mode - Permission bits for the file (octal).
+ * @param [mode] - Permission bits for the file (octal).
  */
 export async function writeTextAtomic(file: string, content: string, mode = DEFAULT_FILE_MODE): Promise<void> {
   await writeBufferAtomic(file, Buffer.from(content, 'utf8'), mode);
 }
 
 /**
- * Atomically write a value as pretty-printed JSON, readable by the owner only.
+ * Writes a value atomically as pretty-printed JSON, readable and writable by the owner only.
+ *
  * @param file - Absolute path of the file to write.
  * @param value - The value to serialize.
  */
@@ -39,7 +42,8 @@ export async function writeJsonAtomic(file: string, value: unknown): Promise<voi
 }
 
 /**
- * Read a file as JSON.
+ * Reads a file as JSON.
+ *
  * @param file - Absolute path of the file to read.
  * @returns The parsed value, unvalidated.
  * @throws When the file cannot be read or is not JSON.
@@ -49,7 +53,9 @@ export async function readJsonFile(file: string): Promise<unknown> {
 }
 
 /**
- * Read a JSON config file and validate it, naming the file in whatever goes wrong.
+ * Reads a JSON config file and validates it, naming the file when it is not JSON or fails validation.
+ *
+ * @typeParam T - The validated shape.
  * @param file - Absolute path of the file to read.
  * @param parse - Validates the parsed value, throwing when it is not the expected shape.
  * @returns The validated value.

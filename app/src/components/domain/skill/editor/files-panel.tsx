@@ -26,12 +26,10 @@ type FileEntry = SkillFile & { main?: boolean };
 
 /**
  * The skill's file list and its toolbar: the skill's own Markdown (first, un-renamable) plus every
- * supporting file and folder, with create / upload / rename / delete / export actions. A skill linked
- * to a git source is listed without the actions that change its content, and with a Sync button.
- * @param props.skill - The skill whose files are listed.
- * @param props.selected - The open file's path, or `SKILL_MD_KEY` for the skill's own Markdown.
- * @param props.onSelect - Called with the file to open; `edit` asks for it in the editor, as a new file is.
- * @param props.onRenamed - Called with the skill's new name once a rename has been saved.
+ * supporting file and folder, with create / upload / rename / delete / export actions.
+ *
+ * @remarks
+ * A skill linked to a git source is listed without the actions that change its content, and with a Sync button.
  */
 export function FilesPanel({
   skill,
@@ -39,9 +37,13 @@ export function FilesPanel({
   onSelect,
   onRenamed,
 }: {
+  /** The skill whose files are listed. */
   skill: SkillDetail;
+  /** The open file's path, or `SKILL_MD_KEY` for the skill's own Markdown. */
   selected: string;
+  /** Called with the file to open; `edit` asks for it in the editor, as a new file is. */
   onSelect: (path: string, options?: { edit?: boolean }) => void;
+  /** Called with the skill's new name once a rename has been saved. */
   onRenamed: (name: string) => void;
 }) {
   const toast = useToasts();
@@ -58,7 +60,8 @@ export function FilesPanel({
   const main: FileEntry = { path: mainLabel, type: 'file', size: 0, main: true };
 
   /**
-   * Move a dragged file or folder into a folder, under the name it has.
+   * Moves a dragged file or folder into a folder, under the name it has.
+   *
    * @param from - The dragged path.
    * @param into - The folder it was dropped on; empty for the skill root.
    */
@@ -162,7 +165,6 @@ export function FilesPanel({
 /**
  * A file's or folder's actions, behind one button at the end of its row: new file and new folder
  * inside a folder, then rename and delete.
- * @param props.node - The row's file or folder.
  */
 function FileActions({
   node,
@@ -171,10 +173,15 @@ function FileActions({
   onRename,
   onDelete,
 }: {
+  /** The row's file or folder. */
   node: TreeNode<FileEntry>;
+  /** Called with the row's folder, to ask for a new file in it. */
   onNewFile: (base: string) => void;
+  /** Called with the row's folder, to ask for a new folder in it. */
   onNewFolder: (base: string) => void;
+  /** Called with the row's file or folder when Rename is chosen. */
   onRename: (node: TreeNode<FileEntry>) => void;
+  /** Called with the row's file or folder when Delete is chosen; the caller asks before deleting. */
   onDelete: (node: TreeNode<FileEntry>) => void;
 }) {
   // Every row opens a dialog, which takes the focus the menu would otherwise hand back to its button.

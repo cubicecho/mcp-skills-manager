@@ -7,15 +7,18 @@ import type { useSkillFileContent } from '@/lib/queries';
 
 /**
  * What a file view shows instead of the file's text: a skeleton while it loads, the error with a retry,
- * or a notice that the file is binary. Renders nothing once text content is available.
- * @param file - The file-content query the view is reading.
- * @param describeBinary - Builds the binary notice from the file's formatted size, e.g. `1.2 KB`.
+ * or a notice that the file is binary.
+ *
+ * @remarks
+ * Renders nothing once text content is available.
  */
 export function FileLoadState({
   file,
   describeBinary,
 }: {
+  /** The file-content query the view is reading. */
   file: ReturnType<typeof useSkillFileContent>;
+  /** Builds the binary notice from the file's formatted size, e.g. `1.2 KB`. */
   describeBinary: (formattedSize: string) => string;
 }) {
   const { data, isPending, error, refetch } = file;

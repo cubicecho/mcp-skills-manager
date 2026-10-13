@@ -20,6 +20,7 @@ export const Route = createFileRoute('/skills/$name')({
   component: SkillPage,
 });
 
+/** The editor for the skill named in the URL, or a skeleton or an error while it cannot be shown. */
 function SkillPage() {
   const { name } = Route.useParams();
   const { file, edit } = Route.useSearch();

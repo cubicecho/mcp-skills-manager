@@ -10,10 +10,12 @@ export const SKILL_STATUS = {
   scoped: { label: 'Workspace-scoped', hint: 'Hidden from the root /mcp endpoint', icon: Layers },
 } as const satisfies Record<string, { label: string; hint: string; icon: LucideIcon }>;
 
+/** The key of one status fact in `SKILL_STATUS`. */
 export type SkillStatusKey = keyof typeof SKILL_STATUS;
 
 /**
  * Lists the status facts that hold for a skill.
+ *
  * @param skill - The skill to describe.
  * @returns The facts' keys, in the order of `SKILL_STATUS`.
  */

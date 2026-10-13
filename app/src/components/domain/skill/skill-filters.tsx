@@ -6,6 +6,7 @@ import { ANY_TAG_OPTION, optionToTag, tagToOption } from '@/lib/tag-option';
 
 /**
  * Lists a label table as select options, in the table's order.
+ *
  * @param labels - Label by option value.
  * @returns One option per entry.
  */
@@ -23,6 +24,7 @@ export function SkillFilters({
   tags,
   onChange,
 }: {
+  /** The filters as they stand. */
   filters: SkillListFilters;
   /** Every tag a skill carries; the tag select is left out when there are none. */
   tags: string[];

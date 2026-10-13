@@ -22,12 +22,17 @@ export function EditorFrame({
   dirty,
   contentSlot,
 }: {
+  /** The file's path, shown as the heading. */
   path: string;
+  /** Called when Save is pressed. */
   onSave: () => void;
   /** Called when the reader leaves the editor for the preview; the caller asks about unsaved edits. */
   onClose: () => void;
+  /** A save is in flight: Save is disabled and reads "Saving…". */
   saving: boolean;
+  /** The editor holds unsaved edits; Save is disabled without them. */
   dirty: boolean;
+  /** The editor's fields. */
   contentSlot: SlotNode;
 }) {
   return (

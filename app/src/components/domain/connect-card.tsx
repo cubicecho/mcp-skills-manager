@@ -10,8 +10,11 @@ export function ConnectCard({
   label,
   description,
 }: {
+  /** The endpoint's URL, shown and copied. */
   endpoint: string;
+  /** What the endpoint serves, named in the card's title. */
   label: string;
+  /** The short explanation under the title. */
   description: string;
 }) {
   const toast = useToasts();

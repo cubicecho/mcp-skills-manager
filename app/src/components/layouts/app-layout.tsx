@@ -26,12 +26,24 @@ const OTHER_PLACES = [
 /** The places the phone bar links to; on a wide screen the sidebar lists the skills themselves instead. */
 const NAV_ITEMS = [{ to: '/', label: 'Skills', icon: BookMarked }, ...OTHER_PLACES] as const;
 
+/** A path the phone bar links to. */
 type NavTo = (typeof NAV_ITEMS)[number]['to'];
 
+/** A sidebar row that is a router link. */
 const SidebarLink = createLink(SidebarNavItem);
+/** A phone-bar item that is a router link. */
 const BarLink = createLink(BarNavItem);
 
-/** Skills owns the skill route too, so its button stays lit while a skill is open. */
+/**
+ * Tells whether a place's nav item is lit for the current path.
+ *
+ * @param to - The place the item links to.
+ * @param pathname - The current location's path.
+ * @returns True when the path belongs to the place.
+ *
+ * @remarks
+ * Skills owns the skill route too, so its button stays lit while a skill is open.
+ */
 function isActive(to: NavTo, pathname: string): boolean {
   return to === '/' ? pathname === '/' || pathname.startsWith('/skills/') : pathname.startsWith(to);
 }
@@ -42,8 +54,13 @@ function lock() {
   requireAuth();
 }
 
-/** `compact` keeps the name for screen readers only: the phone bar has no room for it beside the nav. */
-function Brand({ compact = false }: { compact?: boolean }) {
+/** The app's mark and name. */
+function Brand({
+  compact = false,
+}: {
+  /** Keeps the name for screen readers only: the phone bar has no room for it beside the nav. */
+  compact?: boolean;
+}) {
   return (
     <span className="flex items-center gap-2 px-2 font-semibold">
       <BookMarked className="size-5" aria-hidden />
@@ -52,7 +69,15 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** The one fact the rail adds about a skill: it follows a git repo, agents cannot change it, or the root endpoint does not serve it. */
+/**
+ * Picks the one fact the rail adds about a skill.
+ *
+ * @param skill - The skill the row is for.
+ * @returns The first status that holds for the skill, as a label and an icon; undefined when none does.
+ *
+ * @remarks
+ * The fact is that it follows a git repo, that agents cannot change it, or that the root endpoint does not serve it.
+ */
 function skillStatus(skill: SkillSummary): SidebarNavItemStatus | undefined {
   const [first] = skillStatuses(skill);
   if (first === undefined) {

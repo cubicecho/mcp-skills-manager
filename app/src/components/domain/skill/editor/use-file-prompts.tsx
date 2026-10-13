@@ -9,7 +9,8 @@ import { useToasts } from '@/lib/toast';
 import type { TreeEntry } from '@/lib/tree';
 
 /**
- * Describe where a new file or folder will be created.
+ * Describes where a new file or folder will be created.
+ *
  * @param base - The folder it is created under, relative to the skill root; empty for the root itself.
  * @returns The description shown in the path prompt.
  */
@@ -25,8 +26,9 @@ function pathHint(base: string): ReactNode {
 }
 
 /**
- * The path questions a skill's file list asks — new file, new folder, rename — and what each does
+ * Holds the path questions a skill's file list asks — new file, new folder, rename — and what each does
  * with its answer.
+ *
  * @param skillName - The skill whose files are changed.
  * @param onSelect - Called with a file just created, to open it; `edit` asks for it in the editor.
  * @returns The question now open (`null` for none), `close` to dismiss it, and one opener per question.

@@ -22,6 +22,7 @@ const CREATE_SKILL_FORM_ID = 'create-skill-form';
 
 /** The dialog's tabs, with the label each shows. */
 const TAB_LABELS = { create: 'Create skill', upload: 'Upload', git: 'From Git' } as const;
+/** One of the dialog's tabs. */
 type Tab = keyof typeof TAB_LABELS;
 
 /** What the create form starts with. */
@@ -31,7 +32,13 @@ const CREATE_DEFAULTS: { title: string; description: string; format: SkillFormat
   format: 'file',
 };
 
-/** A title must slugify to a usable skill id. */
+/**
+ * Checks that a title slugifies to a usable skill id.
+ *
+ * @param field - The field's state.
+ * @param field.value - The title as typed.
+ * @returns The error to show, or `undefined` when the title yields an id.
+ */
 export function validateSkillTitle({ value }: { value: string }): string | undefined {
   return slugify(value) ? undefined : 'Enter a title with at least one letter or digit.';
 }
@@ -40,7 +47,14 @@ export function validateSkillTitle({ value }: { value: string }): string | undef
  * New-skill dialog with three tabs: author one from scratch (title + description, then open the
  * editor), upload an existing file/folder/`.zip`, or link one to a folder in a git repo.
  */
-export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function NewSkillDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  /** Called with the state the dialog asks for; `false` on cancel and once a skill has been made. */
+  onOpenChange: (open: boolean) => void;
+}) {
   const toast = useToasts();
   const navigate = useNavigate();
   const create = useCreateSkill();

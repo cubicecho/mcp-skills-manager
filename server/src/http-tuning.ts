@@ -3,9 +3,10 @@ import { DEFAULT_KEEP_ALIVE_TIMEOUT_MS, EnvVar } from './core/defaults.ts';
 
 /**
  * Keeps idle client connections open longer than Node's 5 s, so a tool call after a pause reuses one.
- * @param server The listening HTTP server; its `keepAliveTimeout` is set in place.
- * @param env Source of `HTTP_KEEP_ALIVE_TIMEOUT_MS`; `0` never closes an idle connection.
- * @returns The timeout applied, in ms. The default when the value is unset or not a whole number of ms.
+ *
+ * @param server - The listening HTTP server; its `keepAliveTimeout` is set in place.
+ * @param [env] - Source of `HTTP_KEEP_ALIVE_TIMEOUT_MS`; `0` never closes an idle connection.
+ * @returns The timeout applied, in ms: `DEFAULT_KEEP_ALIVE_TIMEOUT_MS` when the value is unset or no whole number.
  */
 export function tuneKeepAlive(server: Server, env: NodeJS.ProcessEnv = process.env): number {
   const parsed = Number(env[EnvVar.KeepAliveTimeoutMs]?.trim() || Number.NaN);
@@ -18,9 +19,10 @@ export function tuneKeepAlive(server: Server, env: NodeJS.ProcessEnv = process.e
 const MAX_PORT = 65_535;
 
 /**
- * Pick the port to listen on: `PORT` when it names one, else the port in settings.
- * @param settingsPort The `port` from settings.json.
- * @param env Source of `PORT`; `0` asks the OS for any free port.
+ * Picks the port to listen on: `PORT` when it names one, else the port in settings.
+ *
+ * @param settingsPort - The `port` from settings.json.
+ * @param [env] - Source of `PORT`; `0` asks the OS for any free port.
  * @returns `PORT` when it is a whole number from 0 to 65535, else `settingsPort` (unset, empty or not a port).
  */
 export function resolvePort(settingsPort: number, env: NodeJS.ProcessEnv = process.env): number {

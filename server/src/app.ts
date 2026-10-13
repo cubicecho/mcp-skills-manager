@@ -11,16 +11,26 @@ import type { McpSessionManager } from './gateway/session-manager.ts';
 
 /** What the HTTP app needs to be built. */
 export interface AppDeps {
+  /** The store the API and MCP routes read and write. */
   store: ConfigStore;
   /** The port the server will listen on; reported via GET /api/status. */
   port: number;
   /** Holds the stateful MCP sessions, so the caller can close them on shutdown. */
   sessions?: McpSessionManager;
-  /** Override for tests; defaults to <repo>/app/dist. */
+  /**
+   * Directory holding the built web UI, served only when it exists; tests override it.
+   *
+   * @defaultValue `<repo>/app/dist`
+   */
   appDistDir?: string;
 }
 
-/** Build the Express app (separate from listen() so tests can drive it with supertest). */
+/**
+ * Builds the Express app: /api and /mcp behind bearer auth, then the built web UI with an SPA fallback.
+ *
+ * @param deps - The store, the listening port, and optionally the session manager and web UI directory.
+ * @returns The app, not yet listening, so tests can drive it with supertest.
+ */
 export function buildApp(deps: AppDeps): express.Express {
   const { store, port } = deps;
   const app = express();

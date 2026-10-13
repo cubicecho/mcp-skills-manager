@@ -11,10 +11,13 @@ import { LENGTH_LIMITS } from './defaults.ts';
 const SCP_LIKE_REPO = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:\S+$/;
 
 /**
- * Tells whether a repo URL is one the server will clone: https or SSH only, and
- * no credentials in an https URL — the URL is written into SKILL.md and served to agents.
- * @param repo Repo URL to test.
- * @returns True when the URL is acceptable.
+ * Tells whether a repo URL is one the server will clone.
+ *
+ * @param repo - Repo URL to test.
+ * @returns True for an scp-like or `ssh://` URL without a password, or an `https://` URL without credentials.
+ *
+ * @remarks
+ * Credentials are refused because the URL is written into SKILL.md and served to agents.
  */
 function isAllowedRepo(repo: string): boolean {
   if (SCP_LIKE_REPO.test(repo)) {
@@ -34,8 +37,9 @@ function isAllowedRepo(repo: string): boolean {
 
 /**
  * Tells whether a folder path stays inside the repo.
- * @param folder Folder path to test.
- * @returns True for a relative path with no `..` segment or backslash.
+ *
+ * @param folder - Folder path to test.
+ * @returns True when the path has no `..` segment and no backslash.
  */
 function isRepoRelative(folder: string): boolean {
   const hasBackslash = folder.includes('\\');
@@ -70,6 +74,7 @@ export const gitSourceSchema = z.object({
     .pipe(z.string().min(1))
     .optional(),
 });
+/** A repo, plus an optional ref and folder, to fetch a skill from. */
 export type GitSource = z.infer<typeof gitSourceSchema>;
 
 /** A skill's stored link: the source plus what the last sync fetched. */
@@ -79,6 +84,7 @@ export const skillSourceSchema = gitSourceSchema.extend({
   /** ISO 8601 time of the last sync. */
   syncedAt: z.string().optional(),
 });
+/** A skill's git link as stored in its frontmatter. */
 export type SkillSource = z.infer<typeof skillSourceSchema>;
 
 /** Path segments that separate the repo from the ref in a forge's folder URL. */
@@ -86,11 +92,13 @@ const TREE_MARKERS = ['tree', 'blob'];
 
 /**
  * Splits a pasted forge folder URL into the parts of a source, so
- * `https://github.com/<owner>/<repo>/tree/<ref>/<folder>` (or GitLab's `/-/tree/`)
- * fills repo, ref and folder at once. The first segment after `tree/` is taken as
- * the ref, so a ref containing `/` needs correcting by hand.
- * @param input Whatever was pasted into the repo field.
- * @returns The parts found; anything that is not a folder URL comes back as the repo alone.
+ * `https://github.com/<owner>/<repo>/tree/<ref>/<folder>` (or GitLab's `/-/tree/`) fills repo, ref and folder at once.
+ *
+ * @param input - Whatever was pasted into the repo field.
+ * @returns The parts found; anything that is not an https folder URL comes back as the repo alone.
+ *
+ * @remarks
+ * The first segment after `tree/` or `blob/` is taken as the ref, so a ref containing `/` needs correcting by hand.
  */
 export function parseGitSourceUrl(input: string): { repo: string; ref?: string; path?: string } {
   const trimmed = input.trim();

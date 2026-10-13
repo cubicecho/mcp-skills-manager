@@ -43,19 +43,27 @@ import { UsageTracker } from './usage-tracker.ts';
 
 /** A point-in-time copy of everything the store holds; the payload of its `change` event. */
 export interface ConfigState {
+  /** Settings as stored, auth token included. */
   settings: SettingsFile;
+  /** Every skill, sorted by name. */
   skills: Skill[];
+  /** Every workspace, sorted by display name. */
   workspaces: WorkspaceConfig[];
 }
 
 /** Collaborators a store can be built with; the defaults are what production uses. */
 export interface ConfigStoreOptions {
-  /** Fetches a linked skill's folder from its git source. */
+  /**
+   * Fetches a linked skill's folder from its git source.
+   *
+   * @defaultValue `fetchGitFolder`
+   */
   fetchSource?: SkillSourceFetcher;
 }
 
 /**
- * Refuse a path that names the skill's own document, which is not a supporting file.
+ * Refuses a path that names the skill's own document, which is not a supporting file.
+ *
  * @param rel - Safe path relative to the skill's folder.
  * @param message - What to tell the caller.
  * @throws HttpError 400 when the path is SKILL.md.
@@ -67,7 +75,8 @@ function requireNotSkillFile(rel: string, message: string): void {
 }
 
 /**
- * Stat a path that may not be there.
+ * Stats a path that may not be there.
+ *
  * @param full - Absolute path.
  * @returns Its stats, or undefined when it cannot be read (missing, or not permitted).
  */
@@ -80,11 +89,14 @@ async function statOrUndefined(full: string): Promise<Stats | undefined> {
 }
 
 /**
- * Make an uploaded skill document declare the name it is being saved under. A document that
- * declares another name would load as that skill, shadowing it or hiding the upload.
+ * Makes an uploaded skill document declare the name it is being saved under.
+ *
  * @param content - The uploaded SKILL.md or flat `.md`.
  * @param name - The name the upload was given.
  * @returns The content untouched when it declares no name or this one; else a copy declaring `name`.
+ *
+ * @remarks
+ * A document that declares another name would load as that skill, shadowing it or hiding the upload.
  */
 function declaringName(content: Buffer, name: string): Buffer {
   const { frontmatter, body } = parseMarkdown(content.toString('utf8'));
@@ -95,38 +107,52 @@ function declaringName(content: Buffer, name: string): Buffer {
 }
 
 /**
- * Owns the flat, hand-editable state under DATA_DIR:
- *  - config/settings.json and config/workspaces/<slug>.json (JSON)
- *  - skills/<name>.md or skills/<name>/SKILL.md (Markdown + YAML frontmatter)
- * All writes are atomic (tmp file + rename). Emits a typed 'change' event when
- * anything changes on disk (debounced chokidar watcher over both trees).
+ * Owns the flat, hand-editable state under DATA_DIR and keeps a copy of it in memory.
+ *
+ * @remarks
+ * The state is config/settings.json, config/workspaces/<slug>.json, and skills/<name>.md or
+ * skills/<name>/SKILL.md (Markdown with YAML frontmatter). File writes are atomic: a temp file, then a rename.
+ * Once watching, it emits `change` with the new state after a debounced reload of either tree.
  */
 export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
+  /** Root of everything the store reads and writes. */
   readonly dataDir: string;
+  /** `<dataDir>/config`, holding settings.json and the workspaces dir. */
   readonly configDir: string;
+  /** `<configDir>/workspaces`, one `<slug>.json` per workspace. */
   readonly workspacesDir: string;
+  /** `<dataDir>/skills`, holding every skill's file or folder. */
   readonly skillsDir: string;
   /** Absolute path to settings.json. */
   private readonly settingsFile: string;
 
+  /** Settings in force; the schema defaults until the first load. */
   private settings: SettingsFile = settingsFileSchema.parse({});
+  /** The catalogue, keyed by canonical skill name. */
   private skills = new Map<string, Skill>();
+  /** Workspaces keyed by slug. */
   private workspaces = new Map<string, WorkspaceConfig>();
+  /** The file watcher; null until `startWatching` and again after `close`. */
   private watcher: FSWatcher | null = null;
+  /** The reload waiting on a burst of watch events to end; null when none is waiting. */
   private watchDebounce: NodeJS.Timeout | null = null;
   /** Usage stats, authoritative in memory once loaded; flushed to usage.json (unwatched) after each record. */
   private readonly usage: UsageTracker;
-  /** Absolute path to usage.json — kept at the dataDir root, OUTSIDE the watched dirs, so writes don't trigger reloads. */
+  /** Absolute path to usage.json, at the dataDir root and outside the watched dirs so a write triggers no reload. */
   readonly usageFile: string;
   /** Fetches linked skills from git and swaps them in; it stages under `.sync`, outside the watched dirs. */
   private readonly sync: SkillSync;
 
+  /**
+   * Sets up the paths and collaborators; nothing is read from disk until `init`.
+   *
+   * @param dataDir - Root directory holding `config/`, `skills/`, usage.json and the `.sync` staging area.
+   * @param [options] - Collaborators to swap in, such as a fake `fetchSource` in tests.
+   */
   constructor(dataDir: string, options: ConfigStoreOptions = {}) {
     super();
-    // Each live stateful-HTTP MCP session subscribes a `change` listener (removed
-    // on disconnect), and that count tracks concurrent clients — legitimately
-    // unbounded. Disable the default 10-listener leak warning; our sessions
-    // reliably unsubscribe, so the count is not a leak signal here.
+    // Each live stateful-HTTP MCP session holds a `change` listener until it disconnects, so the count
+    // tracks concurrent clients and is no leak signal: turn the 10-listener warning off.
     this.setMaxListeners(0);
     this.dataDir = dataDir;
     this.configDir = path.join(dataDir, 'config');
@@ -141,7 +167,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     );
   }
 
-  /** Create directories, seed defaults on first run and load everything. */
+  /** Creates the directories, loads everything, then seeds the defaults when the store is empty. */
   async init(): Promise<void> {
     await mkdir(this.workspacesDir, { recursive: true });
     await mkdir(this.skillsDir, { recursive: true });
@@ -153,11 +179,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * On a fresh install — no skills and no workspaces on disk — write a starter
-   * skill and a workspace that references it, so the server, web UI, and MCP
-   * endpoints all have working content to show immediately. Once anything
-   * exists (even if the user later deletes it all), this never runs again for
-   * that state, so it won't fight a deliberately emptied setup mid-session.
+   * Writes a starter skill and a workspace listing it when no skill and no workspace is loaded.
+   *
+   * @remarks
+   * A fresh install then has working content on the web UI and the MCP endpoints. It runs only from
+   * `init`, so a setup emptied mid-session stays empty until the server next starts.
    */
   private async seedDefaults(): Promise<void> {
     if (this.skills.size > 0 || this.workspaces.size > 0) {
@@ -168,13 +194,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     await this.saveWorkspace(workspaceConfigSchema.parse(STARTER_WORKSPACE));
   }
 
-  /** Re-read all state from disk and return the new snapshot. */
+  /**
+   * Re-reads settings, skills and workspaces from disk.
+   *
+   * @returns The new snapshot.
+   */
   async reload(): Promise<ConfigState> {
     await this.loadAll();
     return this.snapshot();
   }
 
-  /** Start watching config + skills dirs; emits 'change' (debounced) after reloading. */
+  /** Watches the config and skills dirs: a burst of changes reloads the store, then emits `change`. */
   startWatching(): void {
     if (this.watcher) {
       return;
@@ -195,7 +225,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Stops the watcher and flushes pending usage counts; call on shutdown. */
+  /** Drops a pending reload, flushes pending usage counts and stops the watcher; call on shutdown. */
   async close(): Promise<void> {
     if (this.watchDebounce) {
       clearTimeout(this.watchDebounce);
@@ -211,6 +241,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Captures the current settings, skills and workspaces.
+   *
    * @returns The state, with skills and workspaces sorted by name.
    */
   snapshot(): ConfigState {
@@ -223,13 +254,19 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Reads the settings as stored, auth token included.
+   *
    * @returns The in-memory settings.json contents.
    */
   getSettings(): SettingsFile {
     return this.settings;
   }
 
-  /** Merge a partial settings update, persist settings.json, and apply it in memory. */
+  /**
+   * Merges a partial update into the settings, writes settings.json and applies it in memory.
+   *
+   * @param patch - The keys to change; the merged result is validated before anything is written.
+   * @returns The settings now in force.
+   */
   async updateSettings(patch: Partial<SettingsFile>): Promise<SettingsFile> {
     const next = settingsFileSchema.parse({ ...this.settings, ...patch });
     await writeJsonAtomic(this.settingsFile, next);
@@ -239,57 +276,93 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Lists every skill, global or not.
+   *
    * @returns The skills sorted by name.
    */
   getSkills(): Skill[] {
     return [...this.skills.values()].sort(byName);
   }
 
-  /** Skills served on the root `/mcp` aggregate — every skill except those flagged `global: false`. */
+  /**
+   * Lists the skills served on the root `/mcp` aggregate.
+   *
+   * @returns Every skill except those flagged `global: false`, sorted by name.
+   */
   getGlobalSkills(): Skill[] {
     return this.getSkills().filter((skill) => skill.global);
   }
 
-  /** Whether agents may author skills over MCP (settings.authoringEnabled). */
+  /**
+   * Reads `settings.authoringEnabled`.
+   *
+   * @returns True when agents may author skills over MCP.
+   */
   isAuthoringEnabled(): boolean {
     return this.settings.authoringEnabled;
   }
 
-  /** The authoring tools left out of every MCP endpoint, by name (settings.disabledAuthoringTools). */
+  /**
+   * Reads `settings.disabledAuthoringTools`.
+   *
+   * @returns Names of the authoring tools left out of every MCP endpoint.
+   */
   getDisabledAuthoringTools(): string[] {
     return this.settings.disabledAuthoringTools;
   }
 
-  /** How skills are exposed as MCP tools — one tool per skill vs. a single loader tool (settings.skillToolMode). */
+  /**
+   * Reads `settings.skillToolMode`.
+   *
+   * @returns How skills are exposed as MCP tools: one tool per skill, or a single loader tool.
+   */
   getSkillToolMode(): SettingsFile['skillToolMode'] {
     return this.settings.skillToolMode;
   }
 
-  /** Whether the HTTP `/mcp` endpoints run stateful so they can push live resource updates (settings.httpLiveUpdates). */
+  /**
+   * Reads `settings.httpLiveUpdates`.
+   *
+   * @returns True when the HTTP `/mcp` endpoints run stateful so they can push live updates.
+   */
   isHttpLiveUpdates(): boolean {
     return this.settings.httpLiveUpdates;
   }
 
-  /** The effective skill-tool mode for a workspace endpoint: its override if set, else the global default. */
+  /**
+   * Resolves the skill-tool mode a workspace endpoint uses.
+   *
+   * @param workspace - The workspace being served.
+   * @returns Its own override when it has one, else `settings.skillToolMode`.
+   */
   getSkillToolModeForWorkspace(workspace: WorkspaceConfig): SettingsFile['skillToolMode'] {
     return workspace.skillToolMode ?? this.settings.skillToolMode;
   }
 
-  /** The token-free subset of settings exposed over the management API. */
+  /**
+   * Builds the settings as the management API exposes them.
+   *
+   * @returns The subset `settingsViewSchema` picks, which leaves the auth token out.
+   */
   getSettingsView(): SettingsView {
     return settingsViewSchema.parse(this.settings);
   }
 
   /**
    * Looks a skill up by its canonical name.
-   * @param name Skill slug.
+   *
+   * @param name - Skill slug.
    * @returns The skill, or undefined when there is none.
    */
   getSkill(name: string): Skill | undefined {
     return this.skills.get(name);
   }
 
-  /** The skills belonging to a workspace, in the workspace's declared order, skipping any that no longer exist. */
+  /**
+   * Lists the skills a workspace serves.
+   *
+   * @param workspace - The workspace whose member list is resolved.
+   * @returns Its skills in the declared order, without repeats or members that no longer exist.
+   */
   getSkillsForWorkspace(workspace: WorkspaceConfig): Skill[] {
     const seen = new Set<string>();
     const result: Skill[] = [];
@@ -306,31 +379,54 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return result;
   }
 
-  /** Usage stats for a skill (zeros if it has never been loaded). */
+  /**
+   * Reads a skill's usage stats.
+   *
+   * @param name - Skill slug.
+   * @returns The stats; zeros when the skill has never been loaded.
+   */
   getUsage(name: string): SkillUsage {
     return this.usage.get(name);
   }
 
   /**
-   * Record that a skill's body was loaded over MCP: bump its count and stamp `lastUsedAt`.
-   * The write to usage.json is debounced and best-effort — never blocks or fails a load.
+   * Records one load of a skill's body over MCP: bumps its count and stamps `lastUsedAt`.
+   *
+   * @param name - Skill slug.
+   *
+   * @remarks
+   * The write to usage.json is delayed and best-effort, so it never blocks or fails a load.
    */
   recordSkillUse(name: string): void {
     this.usage.record(name);
   }
 
   /**
-   * Create a new skill. `file` format writes skills/<name>.md; `dir` format
-   * writes skills/<name>/SKILL.md. Rejects if the name is already taken.
+   * Creates a skill and writes its document.
+   *
+   * @param input - The skill to write.
+   * @returns The new skill, as loaded back from disk. Throws 409 when the name is taken.
    */
   async createSkill(input: {
+    /** Skill slug; it must be free. */
     name: string;
+    /** One-line summary, written to frontmatter. */
     description: string;
+    /** Markdown under the frontmatter. */
     body: string;
+    /**
+     * Layout on disk: `file` writes skills/<name>.md, `dir` writes skills/<name>/SKILL.md.
+     *
+     * @defaultValue `'file'`
+     */
     format?: Skill['format'];
-    /** When false, write `global: false` frontmatter so the skill is hidden from the root aggregate. */
+    /**
+     * False writes `global: false` frontmatter, which hides the skill from the root aggregate.
+     *
+     * @defaultValue `true`
+     */
     global?: boolean;
-    /** Tags/categories to write to frontmatter (normalized on write). */
+    /** Tags written to frontmatter, normalized first; an empty list writes no key. */
     tags?: string[];
   }): Promise<Skill> {
     const name = slugSchema.parse(input.name);
@@ -353,7 +449,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(relPath, format);
   }
 
-  /** Update an existing skill's description, body, global visibility and/or read-only flag in place, preserving unknown frontmatter and format. */
+  /**
+   * Updates a skill's description, body, tags, root visibility and read-only flag in place.
+   *
+   * @param name - Skill slug.
+   * @param patch - The fields to change; an omitted one is kept, and an empty `tags` list clears the key.
+   * @returns The updated skill.
+   *
+   * @remarks
+   * Unknown frontmatter keys and the skill's layout are preserved.
+   */
   async updateSkill(name: string, patch: Omit<UpdateSkillRequest, 'name'>): Promise<Skill> {
     const existing = this.requireSkill(name);
     // Tags: undefined → keep existing; a list → replace (empty clears the key).
@@ -374,7 +479,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(existing.path, existing.format);
   }
 
-  /** Rename a skill, moving its file or directory. Rejects if the target name is taken. */
+  /**
+   * Renames a skill, moving its file or folder and rewriting the name in its frontmatter.
+   *
+   * @param name - Current skill slug.
+   * @param nextName - The new slug; it must be free.
+   * @returns The renamed skill, or the skill untouched when the name is unchanged.
+   *
+   * @remarks
+   * Usage stats and workspace memberships follow the skill to its new name.
+   */
   async renameSkill(name: string, nextName: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const target = slugSchema.parse(nextName);
@@ -404,7 +518,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return reloaded;
   }
 
-  /** Point every workspace that listed `from` at `to`, preserving position (used when a skill is renamed). */
+  /**
+   * Points every workspace that lists `from` at `to`, keeping its position in the member list.
+   *
+   * @param from - The skill's old name.
+   * @param to - The skill's new name.
+   */
   private async retargetWorkspaceSkill(from: string, to: string): Promise<void> {
     for (const workspace of this.workspacesListing(from)) {
       await this.saveWorkspace({ ...workspace, skills: workspace.skills.map((s) => (s === from ? to : s)) });
@@ -413,7 +532,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Deletes a skill, its supporting files, its usage stats and its workspace memberships.
-   * @param name Skill slug.
+   *
+   * @param name - Skill slug.
    */
   async deleteSkill(name: string): Promise<void> {
     const existing = this.requireSkill(name);
@@ -431,10 +551,15 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Create a skill from an uploaded .md / directory / zip. Files are written
-   * verbatim (frontmatter preserved), except that a skill document declaring
-   * another `name` has it rewritten to the chosen one. A `dir` import must include
-   * a SKILL.md; a `file` import is a single Markdown file written as `<name>.md`.
+   * Creates a skill from an uploaded `.md`, directory or zip, already unpacked into files.
+   *
+   * @param input - The name to save under, the layout, and the files with paths relative to the skill's root.
+   * @returns The new skill.
+   *
+   * @remarks
+   * Files are written verbatim, except that a skill document declaring another `name` has it rewritten
+   * to the chosen one. A `dir` import must include a SKILL.md at its root; a `file` import is exactly
+   * one file, written as `<name>.md`.
    */
   async importSkill(input: {
     name: string;
@@ -475,11 +600,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Create a skill linked to a folder in a git repo, fetching it right away.
-   * @param input The source, plus an optional local name and root visibility. The name defaults to
-   *   the upstream frontmatter `name`, else the source folder's (or repo's) name.
+   * Creates a skill linked to a folder in a git repo, fetching it right away.
+   *
+   * @param input - The source, plus an optional local name and root visibility.
    * @returns The new, linked skill.
    * @throws HttpError 409 when the name is taken, 400 when the folder has no SKILL.md or yields no name.
+   *
+   * @remarks
+   * A skill given no name takes the upstream frontmatter `name`, else the source folder's (or repo's) name.
    */
   async importSkillFromSource(input: { name?: string; source: GitSource; global?: boolean }): Promise<Skill> {
     return this.sync.withStagedSource(input.source, async (staged) => {
@@ -492,11 +620,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Link an existing skill to a folder in a git repo and replace its content with that folder.
-   * The skill keeps its name, root visibility and read-only flag; a `file` skill becomes a `dir`.
-   * @param name Skill slug.
-   * @param source Where to fetch the skill from.
+   * Links an existing skill to a folder in a git repo and replaces its content with that folder.
+   *
+   * @param name - Skill slug.
+   * @param source - Where to fetch the skill from.
    * @returns The skill as synced from the source.
+   *
+   * @remarks
+   * The skill keeps its name, root visibility and read-only flag; a `file` skill becomes a `dir`.
    */
   async linkSkillSource(name: string, source: GitSource): Promise<Skill> {
     this.requireSkill(name);
@@ -504,8 +635,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Replace a linked skill's folder with the newest copy from its source.
-   * @param name Skill slug.
+   * Replaces a linked skill's folder with the newest copy from its source.
+   *
+   * @param name - Skill slug.
    * @returns The synced skill, and whether the source had moved since the last sync.
    * @throws HttpError 400 when the skill is not linked, 409 when it is already syncing.
    */
@@ -520,8 +652,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Drop a skill's git link, leaving its content as last synced and editable again.
-   * @param name Skill slug.
+   * Drops a skill's git link, leaving its content as last synced and editable again.
+   *
+   * @param name - Skill slug.
    * @returns The now unlinked skill.
    */
   async unlinkSkillSource(name: string): Promise<Skill> {
@@ -531,7 +664,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(existing.path, existing.format);
   }
 
-  /** Fetch `source` and swap it in for the skill called `name`, carrying over its local-only settings. */
+  /**
+   * Fetches `source` and swaps it in for the skill called `name`, carrying over its local-only settings.
+   *
+   * @param name - Skill slug.
+   * @param source - Where to fetch the skill from.
+   * @returns The skill as loaded from the fetched folder.
+   */
   private async replaceFromSource(name: string, source: GitSource): Promise<Skill> {
     return this.sync.withStagedSource(source, (staged) => {
       // Looked up after the fetch, so a rename or delete that landed meanwhile is seen.
@@ -546,15 +685,28 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Move a staged source folder into place and load the skill it now holds. */
+  /**
+   * Moves a staged source folder into place and loads the skill it now holds.
+   *
+   * @param staged - The fetched folder.
+   * @param target - The skill it becomes.
+   * @returns The loaded skill.
+   */
   private async installStaged(staged: StagedSource, target: SyncTarget): Promise<Skill> {
     const folder = await this.sync.installStaged(staged, target);
     return this.reloadSkill(dirSkillPath(folder), 'dir');
   }
 
   /**
-   * Add or overwrite a supporting file under a skill's directory. A `file`-format
-   * skill is first promoted to a `dir` (its `.md` becomes `<name>/SKILL.md`).
+   * Adds or overwrites a supporting file under a skill's folder.
+   *
+   * @param name - Skill slug.
+   * @param relPath - Where to write, relative to the skill's folder; SKILL.md is refused.
+   * @param content - The file's bytes.
+   * @returns The skill with its file list refreshed.
+   *
+   * @remarks
+   * A `file`-format skill is first promoted to a `dir`: its `.md` becomes `<folder>/SKILL.md`.
    */
   async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
     const existing = this.requireSkill(name);
@@ -567,7 +719,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
-  /** Read one supporting file, returning UTF-8 text or, for binary files, base64 bytes. */
+  /**
+   * Reads one supporting file of a `dir` skill.
+   *
+   * @param name - Skill slug.
+   * @param relPath - The file's path, relative to the skill's folder.
+   * @returns The content as UTF-8 text, or as base64 when the file is binary, with its size in bytes.
+   */
   async readSupportingFile(name: string, relPath: string): Promise<SkillFileRead> {
     const existing = this.requireSkill(name);
     const rel = this.requireDirRelPath(existing, relPath);
@@ -590,7 +748,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     };
   }
 
-  /** Create an empty sub-directory under a skill (promoting a `file` skill to a `dir` first). */
+  /**
+   * Creates an empty sub-directory under a skill, promoting a `file` skill to a `dir` first.
+   *
+   * @param name - Skill slug.
+   * @param relPath - The folder's path, relative to the skill's folder; nothing may exist there yet.
+   * @returns The skill with its file list refreshed.
+   */
   async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const rel = safeRelPath(relPath);
@@ -604,7 +768,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
-  /** Rename or move a supporting file or folder within a skill's directory. */
+  /**
+   * Renames or moves a supporting file or folder within a `dir` skill's folder.
+   *
+   * @param name - Skill slug.
+   * @param fromPath - The existing path, relative to the skill's folder.
+   * @param toPath - The new path; nothing may exist there yet.
+   * @returns The skill with its file list refreshed, or the skill untouched when both paths are the same.
+   *
+   * @remarks
+   * Directories the move leaves empty are removed.
+   */
   async moveSupportingPath(name: string, fromPath: string, toPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const from = this.requireDirRelPath(existing, fromPath);
@@ -631,7 +805,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
-  /** Delete one supporting file or folder (folders recursively), pruning directories it leaves empty. */
+  /**
+   * Deletes one supporting file or folder of a `dir` skill, then removes the directories that leaves empty.
+   *
+   * @param name - Skill slug.
+   * @param relPath - Path relative to the skill's folder; a folder goes with its contents, a missing path is no error.
+   * @returns The skill with its file list refreshed.
+   */
   async deleteSupportingFile(name: string, relPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const rel = this.requireDirRelPath(existing, relPath);
@@ -642,7 +822,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.reloadSkill(this.dirSkillRelPath(existing), 'dir');
   }
 
-  /** Zip a skill for download: a `dir` skill nested under `<name>/`, a `file` skill as a lone `<name>.md`. */
+  /**
+   * Zips a skill for download.
+   *
+   * @param name - Skill slug.
+   * @returns The archive: a `dir` skill's files nested under `<name>/`, a `file` skill as a lone `<name>.md`.
+   */
   async exportSkillZip(name: string): Promise<Buffer> {
     const existing = this.requireSkill(name);
     const entries: Record<string, Uint8Array> = {};
@@ -659,7 +844,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return Buffer.from(zipSync(entries));
   }
 
-  /** Require a `dir`-format skill and return the safe relative path, rejecting the reserved SKILL.md. */
+  /**
+   * Requires a `dir`-format skill and makes a caller's path within it safe.
+   *
+   * @param skill - The skill the path belongs to.
+   * @param relPath - Caller-supplied path, relative to the skill's folder.
+   * @returns The safe relative path. Throws 400 for a `file` skill, an unsafe path or SKILL.md.
+   */
   private requireDirRelPath(skill: Skill, relPath: string): string {
     if (skill.format !== 'dir') {
       throw new HttpError(HttpStatus.BadRequest, `Skill "${skill.name}" has no supporting files`);
@@ -670,7 +861,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Look a skill up by name, failing when there is none.
+   * Looks a skill up by name, failing when there is none.
+   *
    * @param name - Skill slug.
    * @returns The skill.
    * @throws HttpError 404 when no skill has that name.
@@ -684,11 +876,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Refuse a name that is taken, in the catalogue or as a folder or flat file on disk. A skill's
-   * folder need not match its name, so the catalogue alone cannot say a folder is free.
+   * Refuses a name that is taken, in the catalogue or as a folder or flat file on disk.
+   *
    * @param name - The slug about to be claimed.
-   * @param claimant - The skill claiming it, whose own folder and file are not a conflict.
+   * @param [claimant] - The skill claiming it, whose own folder and file are not a conflict.
    * @throws HttpError 409 when the name or the storage it would use is taken.
+   *
+   * @remarks
+   * A skill's folder need not match its name, so the catalogue alone cannot say a folder is free.
    */
   private requireFreeName(name: string, claimant?: Skill): void {
     const ownStorage = claimant ? [skillFolder(claimant), claimant.path] : [];
@@ -701,7 +896,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Make sure a skill has a folder to hold supporting files, promoting a `file` skill first.
+   * Makes sure a skill has a folder to hold supporting files, promoting a `file` skill first.
+   *
    * @param skill - The skill about to receive a supporting file or folder.
    */
   private async ensureDirSkill(skill: Skill): Promise<void> {
@@ -710,7 +906,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
   }
 
-  /** Move a `file` skill's `.md` to `<folder>/SKILL.md`, converting it to a `dir` skill in place. */
+  /**
+   * Moves a `file` skill's `.md` to `<folder>/SKILL.md`, which makes it a `dir` skill on disk.
+   *
+   * @param skill - A `file`-format skill; refused with 409 when its folder already holds a SKILL.md.
+   */
   private async promoteToDir(skill: Skill): Promise<void> {
     const fileFull = path.join(this.skillsDir, skill.path);
     const raw = await readFile(fileFull, 'utf8');
@@ -728,6 +928,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Lists every workspace, enabled or not.
+   *
    * @returns The workspaces sorted by display name.
    */
   getWorkspaces(): WorkspaceConfig[] {
@@ -736,7 +937,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Looks a workspace up by slug.
-   * @param slug Workspace slug.
+   *
+   * @param slug - Workspace slug.
    * @returns The workspace, or undefined when there is none.
    */
   getWorkspace(slug: string): WorkspaceConfig | undefined {
@@ -744,7 +946,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Look a workspace up by slug, failing when there is none.
+   * Looks a workspace up by slug, failing when there is none.
+   *
    * @param slug - Workspace slug.
    * @returns The workspace.
    * @throws HttpError 404 when no workspace has that slug.
@@ -758,7 +961,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Find the workspaces a skill belongs to.
+   * Finds the workspaces a skill belongs to.
+   *
    * @param name - Skill slug.
    * @returns Every workspace whose member list names the skill, sorted by display name.
    */
@@ -768,7 +972,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Creates or replaces a workspace and writes its config file.
-   * @param config Workspace to store, keyed by its slug.
+   *
+   * @param config - Workspace to store, keyed by its slug.
    * @returns The stored workspace, with members that no longer exist dropped.
    */
   async saveWorkspace(config: WorkspaceConfig): Promise<WorkspaceConfig> {
@@ -782,14 +987,21 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
 
   /**
    * Removes a workspace and its config file; a no-op for an unknown slug.
-   * @param slug Workspace slug.
+   *
+   * @param slug - Workspace slug.
    */
   async deleteWorkspace(slug: string): Promise<void> {
     this.workspaces.delete(slug);
     await rm(this.workspaceFile(slug), { force: true });
   }
 
-  /** Append a skill to a workspace's member list (idempotent). Used when an agent authors a skill via a workspace endpoint. */
+  /**
+   * Appends a skill to a workspace's member list; a no-op when it is already listed.
+   *
+   * @param slug - Workspace slug.
+   * @param name - Skill slug; a name no skill has is dropped again on save.
+   * @returns The workspace as stored.
+   */
   async addSkillToWorkspace(slug: string, name: string): Promise<WorkspaceConfig> {
     const workspace = this.requireWorkspace(slug);
     if (workspace.skills.includes(name)) {
@@ -798,10 +1010,23 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.saveWorkspace({ ...workspace, skills: [...workspace.skills, name] });
   }
 
+  /**
+   * Builds the path of a workspace's config file.
+   *
+   * @param slug - Workspace slug.
+   * @returns Absolute path of `<slug>.json` in the workspaces dir.
+   */
   private workspaceFile(slug: string): string {
     return path.join(this.workspacesDir, `${slug}.json`);
   }
 
+  /**
+   * Reads a skill from disk and puts it in the catalogue under its canonical name.
+   *
+   * @param relPath - The skill document's path, relative to the skills dir.
+   * @param format - The skill's layout.
+   * @returns The loaded skill.
+   */
   private async reloadSkill(relPath: string, format: Skill['format']): Promise<Skill> {
     const skill = await this.readSkill(relPath, format);
     this.skills.set(skill.name, skill);
@@ -809,20 +1034,24 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * A skill's on-disk root folder (absolute). For a `dir` skill this is the directory holding its
-   * SKILL.md; for a `file` skill it is the directory it would occupy once promoted (skillsDir/<stem>).
-   * Derived from the stored `path`, so it stays correct when a skill's identity (frontmatter `name`)
-   * differs from its folder name.
+   * Resolves a skill's root folder on disk.
+   *
+   * @param skill - The skill to locate.
+   * @returns Absolute path: the folder holding SKILL.md for a `dir` skill, `<skillsDir>/<stem>` for a `file` skill.
+   *
+   * @remarks
+   * A `file` skill gets the folder it would occupy once promoted. The path comes from the stored `path`,
+   * so it stays correct when a skill's frontmatter `name` differs from its folder name.
    */
   private skillRoot(skill: Skill): string {
     return path.join(this.skillsDir, skillFolder(skill));
   }
 
   /**
-   * Tell whether an entry of the skills dir is a skill, and where it loads from.
+   * Tells whether an entry of the skills dir is a skill, and where it loads from.
+   *
    * @param entry - A direct child of the skills dir.
-   * @returns The skill document's path relative to the skills dir and its layout; undefined for
-   *   anything else, such as a folder without a SKILL.md.
+   * @returns The skill document's path relative to the skills dir and its layout; undefined when it is no skill.
    */
   private skillEntryLocation(entry: Dirent): { relPath: string; format: Skill['format'] } | undefined {
     if (entry.isDirectory()) {
@@ -832,17 +1061,31 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return isMarkdownFile(entry) ? { relPath: entry.name, format: 'file' } : undefined;
   }
 
-  /** The `<folder>/SKILL.md` relative path a `dir` skill loads from — using its real on-disk folder, not its name. */
+  /**
+   * Builds the path a `dir` skill loads from, using its real on-disk folder rather than its name.
+   *
+   * @param skill - The skill to locate.
+   * @returns `<folder>/SKILL.md`, relative to the skills dir.
+   */
   private dirSkillRelPath(skill: Skill): string {
     return dirSkillPath(skillFolder(skill));
   }
 
+  /** Replaces the in-memory settings, skills and workspaces with what is on disk. */
   private async loadAll(): Promise<void> {
     this.settings = await this.loadSettings();
     this.skills = await this.loadSkills();
     this.workspaces = await this.loadWorkspaces();
   }
 
+  /**
+   * Reads settings.json, using the schema defaults when the file is missing.
+   *
+   * @returns The settings, holding a newly generated auth token when auth is enforced and no token is configured.
+   *
+   * @remarks
+   * A generated token is logged. The file is written when a token was generated or the file was missing.
+   */
   private async loadSettings(): Promise<SettingsFile> {
     const file = this.settingsFile;
     const isOnDisk = existsSync(file);
@@ -865,6 +1108,15 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return settings;
   }
 
+  /**
+   * Loads every skill in the skills dir.
+   *
+   * @returns The catalogue, keyed by canonical name.
+   *
+   * @remarks
+   * An invalid skill is logged and skipped, so one broken file cannot fail the load. Of two skills that
+   * resolve to one name, the first in sorted order is kept.
+   */
   private async loadSkills(): Promise<Map<string, Skill>> {
     const skills = new Map<string, Skill>();
     if (!existsSync(this.skillsDir)) {
@@ -895,6 +1147,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return skills;
   }
 
+  /**
+   * Reads and validates one skill document.
+   *
+   * @param relPath - The document's path, relative to the skills dir.
+   * @param format - The skill's layout.
+   * @returns The skill, with its supporting files listed when it is a `dir` skill.
+   *
+   * @remarks
+   * The name is the frontmatter `name` when that is a valid slug, else the on-disk basename. It throws
+   * when neither is a slug.
+   */
   private async readSkill(relPath: string, format: Skill['format']): Promise<Skill> {
     const fullPath = path.join(this.skillsDir, relPath);
     const raw = await readFile(fullPath, 'utf8');
@@ -902,9 +1165,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const stats = await stat(fullPath);
     // The on-disk basename: the directory for a `dir` skill, the filename stem for a `file` skill.
     const basename = skillFolder({ path: relPath, format });
-    // Canonical identity is the frontmatter `name` when it is a valid slug (Agent Skills spec:
-    // the folder is a storage detail, the declared name is the skill's identity). Fall back to the
-    // on-disk basename so hand-written flat files without a `name` still load.
+    // The declared name is the identity and the folder a storage detail (Agent Skills spec); the
+    // on-disk basename is the fallback, so a hand-written flat file without a `name` still loads.
     const declared = typeof frontmatter.name === 'string' ? frontmatter.name : undefined;
     const name = declared && slugSchema.safeParse(declared).success ? declared : basename;
     if (!slugSchema.safeParse(name).success) {
@@ -929,7 +1191,12 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     });
   }
 
-  /** Every entry under a skill's folder (relative to skillsDir) except its SKILL.md — files and sub-dirs, paths relative to that folder. */
+  /**
+   * Lists everything under a skill's folder except its SKILL.md.
+   *
+   * @param folderRel - The skill's folder, relative to the skills dir.
+   * @returns Files and sub-directories with paths relative to that folder, sorted by path; a directory's size is 0.
+   */
   private async listSupportingFiles(folderRel: string): Promise<SkillFile[]> {
     const dir = path.join(this.skillsDir, folderRel);
     const out: SkillFile[] = [];
@@ -945,6 +1212,15 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return out.sort((a, b) => a.path.localeCompare(b.path));
   }
 
+  /**
+   * Loads every `*.json` workspace config in the workspaces dir.
+   *
+   * @returns The workspaces, keyed by slug.
+   *
+   * @remarks
+   * An invalid file is logged and skipped. A config whose slug differs from its file name is kept, with a
+   * warning.
+   */
   private async loadWorkspaces(): Promise<Map<string, WorkspaceConfig>> {
     const workspaces = new Map<string, WorkspaceConfig>();
     if (!existsSync(this.workspacesDir)) {

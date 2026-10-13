@@ -3,17 +3,14 @@ import { DEFAULT_PORT } from './defaults.ts';
 
 /**
  * How skills are advertised as MCP tools.
- * - `per-skill` (default): one no-arg tool per skill. Maximally discoverable —
- *   each skill self-advertises through `tools/list` — but every skill's name +
- *   description loads into the client's context upfront, so a large catalogue
- *   bloats the tool list.
- * - `loader`: a single `load_skill(name)` tool. The tool footprint stays fixed
- *   (`list_skills` + `load_skill`) no matter how many skills exist — leaner
- *   context, at the cost of the model consulting `list_skills` to discover
- *   names before loading. Skills remain reachable as resources (`skill://<name>`)
- *   under both modes.
+ *
+ * @remarks
+ * `per-skill` serves one no-arg tool per skill, so every skill's name and description loads into the client's
+ * context up front. `loader` serves a fixed pair, `list_skills` and `load_skill(name)`, and the model looks a name
+ * up before loading it. Skills stay reachable as resources (`skill://<name>`) in both modes.
  */
 export const skillToolModeSchema = z.enum(['per-skill', 'loader']);
+/** One of the two ways skills are advertised as MCP tools. */
 export type SkillToolMode = z.infer<typeof skillToolModeSchema>;
 
 /**
@@ -32,6 +29,7 @@ export const authoringToolNameSchema = z.enum([
   'move_skill_file',
   'delete_skill_file',
 ]);
+/** The name of one skill-authoring tool. */
 export type AuthoringToolName = z.infer<typeof authoringToolNameSchema>;
 
 /**
@@ -42,16 +40,17 @@ export const settingsFileSchema = z
   .object({
     /** HTTP port. Env PORT wins over this. */
     port: z.number().int().positive().default(DEFAULT_PORT),
-    /** Bearer token for the management API and MCP endpoints. Env MCP_SKILLS_TOKEN wins.
-     *  Generated on first run when auth is enabled and no token exists. */
+    /**
+     * Bearer token for the management API and MCP endpoints. Env MCP_SKILLS_TOKEN wins.
+     * Generated on first run when auth is enabled and no token exists.
+     */
     authToken: z.string().nullable().default(null),
     /** Disable to allow unauthenticated access (trusted networks only). */
     authEnabled: z.boolean().default(true),
     /**
-     * Whether agents may author/update skills over MCP (the create_skill,
-     * update_skill, write_skill_file, … tools). Enabled by default; set to
-     * false to make every MCP endpoint read-only. Writes are always still
-     * behind the same bearer auth as the rest of `/mcp`.
+     * Whether agents may author and update skills over MCP (the create_skill, update_skill,
+     * write_skill_file, … tools); false makes every MCP endpoint read-only. Writes stay behind the same bearer
+     * auth as the rest of `/mcp`.
      */
     authoringEnabled: z.boolean().default(true),
     /**
@@ -63,18 +62,16 @@ export const settingsFileSchema = z
     /** Default for how skills are advertised as MCP tools; a workspace may override it. See skillToolModeSchema. */
     skillToolMode: skillToolModeSchema.default('per-skill'),
     /**
-     * Serve the HTTP `/mcp` endpoints in **stateful** mode so the server can push
-     * live resource updates (`notifications/resources/list_changed` and
-     * `resources/updated`) to connected clients over SSE — the HTTP analog of the
-     * stdio live-updates already on by default there. Off by default: stateful
-     * mode keeps a session (and its `Mcp-Session-Id`) alive per client, so only
-     * enable it when a client actually subscribes instead of re-polling. When off,
-     * `/mcp` stays stateless (a fresh server per request, no push).
+     * Serves the HTTP `/mcp` endpoints in stateful mode, so the server can push resource updates
+     * (`notifications/resources/list_changed`, `resources/updated`) to connected clients over SSE. Stateful mode
+     * keeps a session and its `Mcp-Session-Id` alive per client, so it pays off only when a client subscribes
+     * instead of re-polling. When false, `/mcp` is stateless: a fresh server per request and no push.
      */
     httpLiveUpdates: z.boolean().default(false),
   })
   .passthrough();
 
+/** The parsed contents of settings.json, defaults filled in. */
 export type SettingsFile = z.infer<typeof settingsFileSchema>;
 
 /**
@@ -90,6 +87,7 @@ export const settingsViewSchema = settingsFileSchema
     httpLiveUpdates: true,
   })
   .strip();
+/** The settings GET /api/settings returns: no bearer token. */
 export type SettingsView = z.infer<typeof settingsViewSchema>;
 
 /**
@@ -105,4 +103,5 @@ export const updateSettingsRequestSchema = z
     httpLiveUpdates: z.boolean().optional(),
   })
   .strict();
+/** What PATCH /api/settings accepts. */
 export type UpdateSettingsRequest = z.infer<typeof updateSettingsRequestSchema>;

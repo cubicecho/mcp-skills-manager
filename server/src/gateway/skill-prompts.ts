@@ -10,6 +10,7 @@ import { bundledFiles } from '../skills/skill-view.ts';
  * each is called, and how a body is filled in — so the server only adds I/O.
  */
 
+/** Extension a prompt file must have. */
 const PROMPT_EXTENSION = '.md';
 
 /** Joins a skill name to a prompt name when the bare prompt name is already taken. */
@@ -22,6 +23,7 @@ const PLACEHOLDER_RE = /\{\{\s*([A-Za-z0-9][A-Za-z0-9_-]*)\s*\}\}/g;
 export interface SkillPromptRef {
   /** The name the prompt is served under. */
   name: string;
+  /** The skill the prompt file belongs to. */
   skillName: string;
   /** The prompt file's path, relative to the skill directory. */
   path: string;
@@ -29,17 +31,19 @@ export interface SkillPromptRef {
 
 /** A prompt file's contents, split into what it declares and what it says. */
 export interface ParsedPrompt {
+  /** What the frontmatter says the prompt is for; absent when it says nothing. */
   description?: string;
+  /** The arguments the frontmatter declares. */
   arguments: PromptArgument[];
+  /** The prompt text, trimmed, with its placeholders not yet filled. */
   body: string;
 }
 
 /**
- * Read the prompt name out of a skill file's path.
+ * Reads the prompt name out of a skill file's path.
  *
  * @param filePath - A path relative to the skill directory.
- * @returns The file name without `.md` when the file sits directly in `prompts/` and that name
- *   is a valid prompt name, else `undefined`.
+ * @returns The file name without `.md`; `undefined` unless the file sits directly in `prompts/` under a valid name.
  */
 export function promptFileName(filePath: string): string | undefined {
   const dirPrefix = `${SKILL_PROMPTS_DIR}/`;
@@ -53,10 +57,10 @@ export function promptFileName(filePath: string): string | undefined {
 }
 
 /**
- * List the prompts a set of skills serves, each under a unique name.
+ * Lists the prompts a set of skills serves, each under a unique name.
  *
  * @param skills - The skills an endpoint serves.
- * @returns One entry per prompt file, in skill-name order.
+ * @returns One entry per prompt served, in skill-name order.
  *
  * @remarks
  * A prompt is served under its bare file name. When two skills have a prompt of the same name,
@@ -83,11 +87,13 @@ export function listPromptRefs(skills: Skill[]): SkillPromptRef[] {
 }
 
 /**
- * Split a prompt file into its declared metadata and its body.
+ * Splits a prompt file into its declared metadata and its body.
  *
  * @param raw - The file's full text.
- * @returns The description and arguments from the frontmatter, and the trimmed body. Frontmatter
- *   that does not fit the prompt schema is read as declaring nothing.
+ * @returns The description and arguments from the frontmatter, and the trimmed body.
+ *
+ * @remarks
+ * Frontmatter that does not fit the prompt schema is read as declaring nothing.
  */
 export function parsePrompt(raw: string): ParsedPrompt {
   const { frontmatter, body } = parseMarkdown(raw);
@@ -97,7 +103,7 @@ export function parsePrompt(raw: string): ParsedPrompt {
 }
 
 /**
- * Name the required arguments a caller left out.
+ * Names the required arguments a caller left out.
  *
  * @param declared - The arguments the prompt declares.
  * @param given - The argument values the caller sent.
@@ -108,13 +114,16 @@ export function missingArguments(declared: PromptArgument[], given: Record<strin
 }
 
 /**
- * Substitute a prompt body's `{{name}}` placeholders.
+ * Substitutes a prompt body's `{{name}}` placeholders.
  *
  * @param body - The prompt body.
  * @param declared - The arguments the prompt declares.
  * @param given - The argument values the caller sent.
- * @returns The body with each declared argument's placeholder replaced by its value, or by an
- *   empty string when it was left out. A placeholder naming no declared argument is kept as written.
+ * @returns The filled body, trimmed.
+ *
+ * @remarks
+ * A declared argument's placeholder becomes its value, or an empty string when it was left out. A placeholder
+ * naming no declared argument is kept as written.
  */
 export function fillPrompt(body: string, declared: PromptArgument[], given: Record<string, string>): string {
   const declaredNames = new Set(declared.map((arg) => arg.name));

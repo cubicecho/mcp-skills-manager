@@ -9,25 +9,36 @@ import { useToasts } from '@/lib/toast';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from './git-source-fields';
 import { IDLE_IMPORT, type ImportStatus, validateSkillId } from './import-status';
 
+/** The form's id, which the dialog's submit button names. */
 export const GIT_SKILL_FORM_ID = 'git-skill-form';
 
-/** A blank id is allowed (the repo names the skill); anything else must be a slug. */
+/**
+ * Checks an optional skill id typed into a form.
+ *
+ * @param field - The field's state.
+ * @param field.value - The id as typed.
+ * @returns The error to show, or `undefined` for a valid slug or a blank id, which lets the repo name the skill.
+ */
 function validateOptionalSkillId({ value }: { value: string }): string | undefined {
   const trimmed = value.trim();
   return trimmed === '' ? undefined : validateSkillId({ value: trimmed });
 }
 
 /**
- * Create a skill linked to a folder in a git repo: the server fetches the folder and the skill is
- * kept in step with it by syncing. Rendered as a tab inside {@link NewSkillDialog}, which owns the
- * dialog and the footer's submit button (`form={GIT_SKILL_FORM_ID}`); this reports its state through
- * `onStatusChange`, as {@link UploadSkillForm} does.
+ * The form that creates a skill linked to a folder in a git repo.
+ *
+ * @remarks
+ * The server fetches the folder, and syncing keeps the skill in step with it. Rendered as a tab inside
+ * {@link NewSkillDialog}, which owns the dialog and the footer's submit button (`form={GIT_SKILL_FORM_ID}`);
+ * this reports its state through `onStatusChange`, as {@link UploadSkillForm} does.
  */
 export function GitSkillForm({
   onStatusChange,
   onImported,
 }: {
+  /** Called with the form's state whenever it changes, and with `IDLE_IMPORT` when the form unmounts. */
   onStatusChange: (status: ImportStatus) => void;
+  /** Called once the skill has been created, before the app goes to it. */
   onImported: () => void;
 }) {
   const toast = useToasts();

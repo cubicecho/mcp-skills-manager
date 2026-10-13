@@ -26,7 +26,7 @@ function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   );
 }
 
-/** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its workspaces (scoped). */
+/** The switch for whether a skill is served on the root /mcp endpoint (global) or only on its workspaces (scoped). */
 function GlobalToggle({ skill }: { skill: SkillSummary }) {
   const flags = useSkillFlags(skill.name);
   return (
@@ -45,7 +45,12 @@ function GlobalToggle({ skill }: { skill: SkillSummary }) {
 }
 
 /** One row per skill: its name, status marks and tags, how it is used, and its global switch and actions. */
-export function SkillsTable({ skills }: { skills: SkillSummary[] }) {
+export function SkillsTable({
+  skills,
+}: {
+  /** The skills to list, in the order given. */
+  skills: SkillSummary[];
+}) {
   return (
     <Table>
       <TableCaption className="sr-only">Skills</TableCaption>

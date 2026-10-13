@@ -35,4 +35,5 @@ export const workspaceConfigSchema = z
   })
   .passthrough();
 
+/** One workspace's parsed config, defaults filled in. */
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;

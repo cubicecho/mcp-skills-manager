@@ -7,6 +7,12 @@ import { McpSessionManager } from './gateway/session-manager.ts';
 import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 import { closeOnSignal } from './shutdown.ts';
 
+/**
+ * Starts the HTTP server: loads and watches the store, listens, and closes everything on SIGTERM or SIGINT.
+ *
+ * @remarks
+ * The data dir is `DATA_DIR`, else `./data`. A port already in use ends the process with exit code 1.
+ */
 async function main(): Promise<void> {
   const dataDir = path.resolve(process.env[EnvVar.DataDir] ?? './data');
   const store = new ConfigStore(dataDir);
