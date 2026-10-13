@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { A_SOURCE, aSkill } from '@/test/fixtures';
-import { SKILL_MD_KEY } from './file-tree';
+import { SKILL_MD_KEY } from './skill-file-key';
 import { SkillWorkspace } from './skill-workspace';
 
 const onSelect = vi.fn();

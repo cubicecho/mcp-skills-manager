@@ -1,4 +1,3 @@
-import { slugSchema } from '@mcp-skills/shared';
 import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -13,25 +12,9 @@ import { formatCount, joinStats } from '@/lib/format';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
+import { IDLE_IMPORT, type ImportStatus, validateSkillId } from './import-status';
 
 export const UPLOAD_SKILL_FORM_ID = 'upload-skill-form';
-
-/** What the surrounding dialog needs to draw (and guard) the import button it owns. */
-export interface UploadStatus {
-  /** A valid upload with a valid id is staged. */
-  ready: boolean;
-  /** The import request is in flight. */
-  pending: boolean;
-  /** Something has been picked, so closing would lose it. */
-  dirty: boolean;
-}
-
-/** A skill id must be a slug. */
-export function validateSkillId({ value }: { value: string }): string | undefined {
-  return slugSchema.safeParse(value).success
-    ? undefined
-    : 'Must be a lowercase slug (letters, digits, dots, dashes, underscores).';
-}
 
 /**
  * Upload a skill from an `.md` file, a picked folder, or a `.zip` archive.
@@ -43,7 +26,7 @@ export function UploadSkillForm({
   onStatusChange,
   onImported,
 }: {
-  onStatusChange: (status: UploadStatus) => void;
+  onStatusChange: (status: ImportStatus) => void;
   onImported: () => void;
 }) {
   const toast = useToasts();
@@ -77,7 +60,7 @@ export function UploadSkillForm({
 
   useEffect(() => onStatusChange({ ready, pending, dirty }), [ready, pending, dirty, onStatusChange]);
   // Switching tabs unmounts this form and drops what was picked, so the dialog must stop guarding it.
-  useEffect(() => () => onStatusChange({ ready: false, pending: false, dirty: false }), [onStatusChange]);
+  useEffect(() => () => onStatusChange(IDLE_IMPORT), [onStatusChange]);
 
   const stage = (normalize: () => NormalizedUpload) => {
     try {

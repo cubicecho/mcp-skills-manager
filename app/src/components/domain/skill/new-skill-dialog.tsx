@@ -16,7 +16,8 @@ import { isKeyOf } from '@/lib/is-key-of';
 import { useCreateSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { GIT_SKILL_FORM_ID, GitSkillForm } from './git-skill-form';
-import { UPLOAD_SKILL_FORM_ID, UploadSkillForm, type UploadStatus } from './upload-skill-dialog';
+import { IDLE_IMPORT, type ImportStatus } from './import-status';
+import { UPLOAD_SKILL_FORM_ID, UploadSkillForm } from './upload-skill-form';
 
 const CREATE_SKILL_FORM_ID = 'create-skill-form';
 
@@ -30,8 +31,6 @@ const CREATE_DEFAULTS: { title: string; description: string; format: SkillFormat
   description: '',
   format: 'file',
 };
-
-const IDLE_UPLOAD: UploadStatus = { ready: false, pending: false, dirty: false };
 
 /** A title must slugify to a usable skill id. */
 export function validateSkillTitle({ value }: { value: string }): string | undefined {
@@ -47,8 +46,8 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const navigate = useNavigate();
   const create = useCreateSkill();
   const [tab, setTab] = useState<Tab>('create');
-  const [upload, setUpload] = useState<UploadStatus>(IDLE_UPLOAD);
-  const [git, setGit] = useState<UploadStatus>(IDLE_UPLOAD);
+  const [upload, setUpload] = useState<ImportStatus>(IDLE_IMPORT);
+  const [git, setGit] = useState<ImportStatus>(IDLE_IMPORT);
 
   const form = useAppForm({
     defaultValues: CREATE_DEFAULTS,

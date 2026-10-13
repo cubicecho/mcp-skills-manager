@@ -2,7 +2,7 @@ import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
-import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
+import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { Markdown } from '@/components/markdown';

@@ -7,7 +7,7 @@ import { FormElement } from '@/components/ui/form-element';
 import { useImportGitSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from './git-source-fields';
-import { type UploadStatus, validateSkillId } from './upload-skill-dialog';
+import { IDLE_IMPORT, type ImportStatus, validateSkillId } from './import-status';
 
 export const GIT_SKILL_FORM_ID = 'git-skill-form';
 
@@ -27,7 +27,7 @@ export function GitSkillForm({
   onStatusChange,
   onImported,
 }: {
-  onStatusChange: (status: UploadStatus) => void;
+  onStatusChange: (status: ImportStatus) => void;
   onImported: () => void;
 }) {
   const toast = useToasts();
@@ -64,7 +64,7 @@ export function GitSkillForm({
 
   useEffect(() => onStatusChange({ ready, pending, dirty }), [ready, pending, dirty, onStatusChange]);
   // Switching tabs unmounts this form and drops what was typed, so the dialog must stop guarding it.
-  useEffect(() => () => onStatusChange({ ready: false, pending: false, dirty: false }), [onStatusChange]);
+  useEffect(() => () => onStatusChange(IDLE_IMPORT), [onStatusChange]);
 
   return (
     <FormElement id={GIT_SKILL_FORM_ID} className="gap-4 py-4" onSubmit={() => void form.handleSubmit()}>

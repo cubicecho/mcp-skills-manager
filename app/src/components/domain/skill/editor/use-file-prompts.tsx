@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { isMarkdownPath } from '@/components/domain/skill/editor/file-tree';
+import { isMarkdownPath } from '@/components/domain/skill/editor/skill-file-key';
 import type { PathPrompt } from '@/components/domain/skill/path-prompt-dialog';
 import { Code } from '@/components/ui/code';
 import { useCreateSkillFolder, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';

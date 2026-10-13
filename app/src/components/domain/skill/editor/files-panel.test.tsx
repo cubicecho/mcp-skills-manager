@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { A_SOURCE, aSkill } from '@/test/fixtures';
 import { toasts } from '@/test/toasts';
-import { SKILL_MD_KEY } from './file-tree';
 import { FilesPanel } from './files-panel';
+import { SKILL_MD_KEY } from './skill-file-key';
 
 type MutateOptions = { onSuccess?: () => void };
 const writeFile = vi.fn(async (_input: unknown) => ({}));

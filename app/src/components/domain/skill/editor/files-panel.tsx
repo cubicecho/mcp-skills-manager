@@ -1,7 +1,7 @@
 import type { SkillDetail, SkillFile } from '@mcp-skills/shared';
 import { useState } from 'react';
 import { FilePlus, FolderPlus } from '@/components/app-icons';
-import { SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
+import { SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SkillToolbar } from '@/components/domain/skill/editor/skill-toolbar';
 import { useFilePrompts } from '@/components/domain/skill/editor/use-file-prompts';
 import { PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';

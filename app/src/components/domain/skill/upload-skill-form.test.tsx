@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UPLOAD_SKILL_FORM_ID, UploadSkillForm } from './upload-skill-dialog';
+import { UPLOAD_SKILL_FORM_ID, UploadSkillForm } from './upload-skill-form';
 
 const mutate = vi.fn();
 const navigate = vi.fn();
