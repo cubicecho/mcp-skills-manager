@@ -132,6 +132,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private skills = new Map<string, Skill>();
   /** Workspaces keyed by slug. */
   private workspaces = new Map<string, WorkspaceConfig>();
+  /** The file name each loaded workspace was read from, keyed by slug; it need not be `<slug>.json`. */
+  private workspaceFileNames = new Map<string, string>();
   /** The file watcher; null until `startWatching` and again after `close`. */
   private watcher: FSWatcher | null = null;
   /** The reload waiting on a burst of watch events to end; null when none is waiting. */
@@ -993,6 +995,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async deleteWorkspace(slug: string): Promise<void> {
     this.workspaces.delete(slug);
     await rm(this.workspaceFile(slug), { force: true });
+    this.workspaceFileNames.delete(slug);
   }
 
   /**
@@ -1014,10 +1017,10 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * Builds the path of a workspace's config file.
    *
    * @param slug - Workspace slug.
-   * @returns Absolute path of `<slug>.json` in the workspaces dir.
+   * @returns Absolute path of the file the workspace was loaded from, or of `<slug>.json` for a new one.
    */
   private workspaceFile(slug: string): string {
-    return path.join(this.workspacesDir, `${slug}.json`);
+    return path.join(this.workspacesDir, this.workspaceFileNames.get(slug) ?? `${slug}.json`);
   }
 
   /**
@@ -1219,10 +1222,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    *
    * @remarks
    * An invalid file is logged and skipped. A config whose slug differs from its file name is kept, with a
-   * warning.
+   * warning, and its file name is remembered so that saving and deleting it reach that file.
    */
   private async loadWorkspaces(): Promise<Map<string, WorkspaceConfig>> {
     const workspaces = new Map<string, WorkspaceConfig>();
+    this.workspaceFileNames = new Map();
     if (!existsSync(this.workspacesDir)) {
       return workspaces;
     }
@@ -1235,6 +1239,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
           console.warn(`Workspace config ${fullPath} has slug "${config.slug}" that does not match its filename`);
         }
         workspaces.set(config.slug, config);
+        this.workspaceFileNames.set(config.slug, file);
       } catch (err) {
         console.error(`Ignoring invalid workspace config ${fullPath}: ${errorMessage(err)}`);
       }

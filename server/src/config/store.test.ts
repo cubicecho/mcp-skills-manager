@@ -479,6 +479,22 @@ describe('ConfigStore workspace membership integrity', () => {
     expect(temp.store.getWorkspace('a')?.skills).toEqual(['other', 'after']);
   });
 
+  it('saves and deletes a workspace in the file it was loaded from, whatever that file is called', async () => {
+    const workspacesDir = path.join(temp.dir, 'config/workspaces');
+    await writeFile(path.join(workspacesDir, 'misnamed.json'), JSON.stringify({ slug: 'team', name: 'Team' }));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await temp.store.reload();
+
+    await temp.store.saveWorkspace({ ...temp.store.requireWorkspace('team'), name: 'Renamed' });
+    expect(await readdir(workspacesDir)).not.toContain('team.json');
+    expect(JSON.parse(await readFile(path.join(workspacesDir, 'misnamed.json'), 'utf8')).name).toBe('Renamed');
+
+    await temp.store.deleteWorkspace('team');
+    await temp.store.reload();
+    expect(temp.store.getWorkspace('team')).toBeUndefined();
+    vi.restoreAllMocks();
+  });
+
   it('silently prunes members that no longer exist when a workspace is saved', async () => {
     await temp.store.createSkill({ name: 'real', description: 'r', body: '# real' });
     const saved = await temp.store.saveWorkspace({
