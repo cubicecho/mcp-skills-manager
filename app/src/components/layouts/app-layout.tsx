@@ -2,7 +2,7 @@ import type { SkillSummary } from '@mcp-skills/shared';
 import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { BookMarked, GitBranch, Layers } from '@/components/app-icons';
+import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
 import { EmptyState } from '@/components/page';
@@ -14,6 +14,7 @@ import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus, useSkills } from '@/lib/queries';
 import { skillFileCount } from '@/lib/skill';
+import { SKILL_STATUS, skillStatuses } from '@/lib/skill-status';
 
 /** The places the phone bar links to; on a wide screen the sidebar lists the skills themselves instead. */
 const NAV_ITEMS = [
@@ -50,13 +51,12 @@ function Brand({ compact = false }: { compact?: boolean }) {
 
 /** The one fact the rail adds about a skill: it follows a git repo, agents cannot change it, or the root endpoint does not serve it. */
 function skillStatus(skill: SkillSummary): SidebarNavItemStatus | undefined {
-  if (skill.source) {
-    return { label: 'synced from git', iconSlot: <GitBranch /> };
+  const [first] = skillStatuses(skill);
+  if (first === undefined) {
+    return undefined;
   }
-  if (skill.readOnly) {
-    return { label: 'read-only for agents', iconSlot: <Lock /> };
-  }
-  return skill.global ? undefined : { label: 'workspace-scoped', iconSlot: <Layers /> };
+  const { hint, icon: Icon } = SKILL_STATUS[first];
+  return { label: hint, iconSlot: <Icon /> };
 }
 
 /** Every skill as a row that opens it, under a row for the full list with its filters. */

@@ -2,7 +2,7 @@ import type { SkillSummary } from '@mcp-skills/shared';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { BookMarked, GitBranch } from '@/components/app-icons';
+import { BookMarked } from '@/components/app-icons';
 import { ConnectCard } from '@/components/domain/connect-card';
 import { DeleteButton } from '@/components/domain/delete-button';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
@@ -13,7 +13,7 @@ import { PageLayout } from '@/components/page-layout';
 import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Folder, Lock, Pencil, Plus, Search } from '@/components/ui/icons';
+import { FileText, Folder, Pencil, Plus, Search } from '@/components/ui/icons';
 import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,6 +31,7 @@ import {
   SORT_LABELS,
   type SortKey,
 } from '@/lib/skill-list';
+import { SKILL_STATUS, skillStatuses } from '@/lib/skill-status';
 import { ANY_TAG_OPTION, optionToTag, tagToOption } from '@/lib/tag-option';
 import { useToasts } from '@/lib/toast';
 
@@ -222,18 +223,18 @@ function SkillsPage() {
                           <Link to="/skills/$name" params={{ name: skill.name }} className="hover:underline">
                             {skill.name}
                           </Link>
-                          {skill.source && (
-                            <GitBranch
-                              className="size-3.5 shrink-0 text-muted-foreground"
-                              aria-label="Synced from a git repo"
-                            />
-                          )}
-                          {skill.readOnly && (
-                            <Lock
-                              className="size-3.5 shrink-0 text-muted-foreground"
-                              aria-label="Read-only for agents"
-                            />
-                          )}
+                          {skillStatuses(skill)
+                            .filter((status) => status !== 'scoped')
+                            .map((status) => {
+                              const { hint, icon: Icon } = SKILL_STATUS[status];
+                              return (
+                                <Icon
+                                  key={status}
+                                  className="size-3.5 shrink-0 text-muted-foreground"
+                                  aria-label={hint}
+                                />
+                              );
+                            })}
                           {skill.tags.map((t) => (
                             <Badge key={t} variant="outline" className="font-normal">
                               {t}

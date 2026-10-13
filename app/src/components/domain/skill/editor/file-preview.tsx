@@ -1,7 +1,6 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { GitBranch, Layers } from '@/components/app-icons';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
@@ -10,10 +9,11 @@ import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from '@/components/ui/code';
-import { Lock, Pencil } from '@/components/ui/icons';
+import { Pencil } from '@/components/ui/icons';
 import { formatBytes, formatCount, formatDate, joinStats } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
 import { skillMarkdownPath } from '@/lib/skill';
+import { SKILL_STATUS, type SkillStatusKey, skillStatuses } from '@/lib/skill-status';
 import type { SlotNode } from '@/lib/utils';
 
 /** The pane a file is read in: its name, path and facts pinned over a body that scrolls. */
@@ -54,6 +54,17 @@ function EditButton({ onEdit }: { onEdit: () => void }) {
   return <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit} iconSlot={<Pencil />} />;
 }
 
+/** One status fact as a badge; its hint is a tooltip for a pointer and hidden text for a screen reader. */
+function SkillStatusBadge({ status }: { status: SkillStatusKey }) {
+  const { label, hint, icon: Icon } = SKILL_STATUS[status];
+  return (
+    <Badge variant="outline" className="gap-1 font-normal" title={hint}>
+      <Icon className="size-3" aria-hidden /> {label}
+      <span className="sr-only">: {hint}</span>
+    </Badge>
+  );
+}
+
 /** The skill's own Markdown, rendered: what an agent gets when it loads the skill. */
 function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => void }) {
   const facts = joinStats(
@@ -68,21 +79,9 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
       actionSlot={skill.source ? undefined : <EditButton onEdit={onEdit} />}
       badgesSlot={
         <div className="flex flex-wrap items-center gap-1.5">
-          {skill.source && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Synced from a git repo; not edited here">
-              <GitBranch className="size-3" /> Git
-            </Badge>
-          )}
-          {skill.readOnly && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Agents cannot modify this skill over MCP">
-              <Lock className="size-3" /> Read-only
-            </Badge>
-          )}
-          {!skill.global && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Hidden from the root /mcp endpoint">
-              <Layers className="size-3" /> Workspace-scoped
-            </Badge>
-          )}
+          {skillStatuses(skill).map((status) => (
+            <SkillStatusBadge key={status} status={status} />
+          ))}
           {skill.tags.map((tag) => (
             <Badge key={tag} variant="secondary">
               {tag}
