@@ -272,6 +272,19 @@ describe('management REST API', () => {
       expect(workspace.body.skills).toEqual(['welcome']);
     });
 
+    it('changes nothing when the new name in a PATCH is taken', async () => {
+      await request(api).post('/api/skills').send({ name: 'taken' });
+      const before = (await request(api).get('/api/skills/getting-started')).body;
+
+      const res = await request(api)
+        .patch('/api/skills/getting-started')
+        .send({ name: 'taken', description: 'Never applied', readOnly: true });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'Skill "taken" already exists' });
+      expect((await request(api).get('/api/skills/getting-started')).body).toEqual(before);
+    });
+
     it('deletes a skill with 204, and 404s the second time', async () => {
       expect((await request(api).delete('/api/skills/getting-started')).status).toBe(204);
       const again = await request(api).delete('/api/skills/getting-started');
