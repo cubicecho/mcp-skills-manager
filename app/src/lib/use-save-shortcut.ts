@@ -18,7 +18,9 @@ export function useSaveShortcut(onSave: () => void, enabled: boolean): void {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      const isSaveChord = (event.metaKey || event.ctrlKey) && event.key === 's';
+      // Caps Lock reports the key as `S`; Shift makes it another chord, which is left to the browser.
+      const isSaveChord =
+        (event.metaKey || event.ctrlKey) && event.shiftKey === false && event.key.toLowerCase() === 's';
       if (isSaveChord === false) {
         return;
       }
