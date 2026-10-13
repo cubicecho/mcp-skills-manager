@@ -49,9 +49,11 @@ async function main(): Promise<void> {
         `Port ${port} is already in use by another process. ` +
           'Set PORT (or the "port" field in settings.json) to a free port and restart.',
       );
-      process.exit(1);
+    } else {
+      // Thrown from here it would surface as an uncaught exception, with a stack in place of the reason.
+      console.error(`The HTTP server failed: ${err.message}`);
     }
-    throw err;
+    process.exit(1);
   });
 
   closeOnSignal(
