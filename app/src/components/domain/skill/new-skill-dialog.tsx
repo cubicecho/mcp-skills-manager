@@ -73,7 +73,7 @@ export function NewSkillDialog({
           format: value.format,
           body: `# ${value.title || name}\n\n`,
         });
-        handleOpenChange(false);
+        onOpenChange(false);
         navigate({ to: '/skills/$name', params: { name: skill.name } });
       } catch (error) {
         toast.apiError(error);
@@ -81,20 +81,11 @@ export function NewSkillDialog({
     },
   });
 
-  // For a caller that keeps the dialog mounted while closed: the next opening starts over on the create tab.
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      form.reset();
-      setTab('create');
-    }
-    onOpenChange(next);
-  };
-
   return (
     <form.AppForm>
       <DialogLayout
         open={open}
-        onOpenChange={handleOpenChange}
+        onOpenChange={onOpenChange}
         title="New skill"
         description="A skill is a Markdown document agents can load over MCP. Create one from scratch, upload an existing one, or link one to a git repo."
         hasUnsavedChanges={() => form.state.isDefaultValue === false || upload.dirty || git.dirty}
@@ -171,10 +162,10 @@ export function NewSkillDialog({
               </FormElement>
             </TabsContent>
             <TabsContent value="upload">
-              <UploadSkillForm onStatusChange={setUpload} onImported={() => handleOpenChange(false)} />
+              <UploadSkillForm onStatusChange={setUpload} onImported={() => onOpenChange(false)} />
             </TabsContent>
             <TabsContent value="git">
-              <GitSkillForm onStatusChange={setGit} onImported={() => handleOpenChange(false)} />
+              <GitSkillForm onStatusChange={setGit} onImported={() => onOpenChange(false)} />
             </TabsContent>
           </Tabs>
         }
