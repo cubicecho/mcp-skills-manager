@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenGate } from './token-gate';
 
 const setToken = vi.fn();
-const auth = { needsAuth: true };
+const auth: { needsAuth: boolean; stored: string | null } = { needsAuth: true, stored: null };
 
 vi.mock('@/lib/auth', () => ({
+  getToken: () => auth.stored,
   setToken: (token: string) => setToken(token),
   useNeedsAuth: () => auth.needsAuth,
 }));
@@ -28,6 +29,7 @@ describe('TokenGate', () => {
   beforeEach(() => {
     setToken.mockReset();
     auth.needsAuth = true;
+    auth.stored = null;
   });
 
   it('renders the app when no call has been refused', () => {
@@ -59,5 +61,19 @@ describe('TokenGate', () => {
     await waitFor(() => expect(setToken).toHaveBeenCalledWith('secret'));
     expect(invalidate).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText(/^Token/)).toHaveValue(''));
+  });
+
+  it('asks for a token without complaint when none has been tried', () => {
+    renderGate();
+
+    expect(screen.queryByText('The server did not accept that token')).not.toBeInTheDocument();
+  });
+
+  it('says so when the stored token was refused', () => {
+    auth.stored = 'wrong';
+    renderGate();
+
+    expect(screen.getByText('The server did not accept that token')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Token/)).toHaveValue('');
   });
 });
