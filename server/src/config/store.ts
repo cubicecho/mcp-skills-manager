@@ -35,7 +35,6 @@ import { localFlags, parseMarkdown, serializeMarkdown } from '../skills/markdown
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { SkillSync, type StagedSource, type SyncTarget } from '../sources/skill-sync.ts';
 import { parseJsonFile, writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
-import { migrateLegacyWorkspaces } from './legacy-workspaces.ts';
 import { isBinary, pruneEmptyDirs, safeRelPath, toPosix, walkEntries } from './skill-files.ts';
 import { dirSkillPath, fileSkillPath, isMarkdownFile, SKILL_FILE, skillFolder, skillPath } from './skill-layout.ts';
 import { STARTER_SKILL, STARTER_WORKSPACE } from './starter-skill.ts';
@@ -155,7 +154,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async init(): Promise<void> {
     await mkdir(this.workspacesDir, { recursive: true });
     await mkdir(this.skillsDir, { recursive: true });
-    await migrateLegacyWorkspaces(this.configDir, this.workspacesDir);
     await this.loadAll();
     // Usage lives outside the watched dirs and stays authoritative in memory, so it is loaded
     // once here rather than in loadAll() (which reruns on every disk-change reload).
