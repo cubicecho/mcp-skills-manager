@@ -1315,7 +1315,8 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    *
    * @remarks
    * An invalid file is logged and skipped. A config whose slug differs from its file name is kept, with a
-   * warning, and its file name is remembered so that saving and deleting it reach that file.
+   * warning, and its file name is remembered so that saving and deleting it reach that file. When two files
+   * declare one slug the first by file name is kept and the other is skipped with a warning.
    */
   private async loadWorkspaces(): Promise<Map<string, WorkspaceConfig>> {
     const workspaces = new Map<string, WorkspaceConfig>();
@@ -1330,6 +1331,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         const config = await parseJsonFile(fullPath, workspaceConfigSchema.parse.bind(workspaceConfigSchema));
         if (`${config.slug}.json` !== file) {
           console.warn(`Workspace config ${fullPath} has slug "${config.slug}" that does not match its filename`);
+        }
+        const earlier = this.workspaceFileNames.get(config.slug);
+        if (earlier !== undefined) {
+          console.warn(`Ignoring workspace config ${fullPath}: ${earlier} already declares the slug "${config.slug}"`);
+          continue;
         }
         workspaces.set(config.slug, config);
         this.workspaceFileNames.set(config.slug, file);
