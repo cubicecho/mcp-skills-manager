@@ -387,6 +387,9 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
   });
 }
 
+/** A prompt file as read: the prompt, or why it cannot be served. */
+type ReadPrompt = { prompt: ReturnType<typeof parsePrompt> } | { unreadable: string };
+
 /**
  * Register `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
  *
@@ -399,13 +402,13 @@ function registerPromptHandlers(
   getSkills: SkillServerDeps['getSkills'],
   readSupportingFile: NonNullable<SkillServerDeps['readSupportingFile']>,
 ): void {
-  // Resolves to `undefined` for a file that cannot be served as a prompt: unreadable, or not text.
-  const readPrompt = async (ref: SkillPromptRef) => {
+  // A file that cannot be served as a prompt, unreadable or not text, comes back as the reason why.
+  const readPrompt = async (ref: SkillPromptRef): Promise<ReadPrompt> => {
     try {
       const file = await readSupportingFile(ref.skillName, ref.path);
-      return file.binary ? undefined : parsePrompt(file.content);
-    } catch {
-      return undefined;
+      return file.binary ? { unreadable: 'not a text file' } : { prompt: parsePrompt(file.content) };
+    } catch (err) {
+      return { unreadable: errorMessage(err) };
     }
   };
 
@@ -414,14 +417,19 @@ function registerPromptHandlers(
     const parsed = await Promise.all(refs.map(readPrompt));
     const prompts = [];
     for (const [index, ref] of refs.entries()) {
-      const prompt = parsed[index];
-      if (prompt) {
-        prompts.push({
-          name: ref.name,
-          description: prompt.description ?? `Prompt from the "${ref.skillName}" skill.`,
-          arguments: prompt.arguments,
-        });
+      const read = parsed[index];
+      if (read === undefined) {
+        continue;
       }
+      if ('unreadable' in read) {
+        console.warn(`Skipping prompt "${ref.name}" of skill "${ref.skillName}": ${read.unreadable}`);
+        continue;
+      }
+      prompts.push({
+        name: ref.name,
+        description: read.prompt.description ?? `Prompt from the "${ref.skillName}" skill.`,
+        arguments: read.prompt.arguments,
+      });
     }
     return { prompts };
   });
@@ -429,10 +437,14 @@ function registerPromptHandlers(
   server.setRequestHandler(GetPromptRequestSchema, async (req) => {
     const { name } = req.params;
     const ref = listPromptRefs(getSkills()).find((candidate) => candidate.name === name);
-    const prompt = ref ? await readPrompt(ref) : undefined;
-    if (!prompt) {
+    if (!ref) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown prompt "${name}"`);
     }
+    const read = await readPrompt(ref);
+    if ('unreadable' in read) {
+      throw new McpError(ErrorCode.InvalidParams, `Cannot read prompt "${name}": ${read.unreadable}`);
+    }
+    const { prompt } = read;
     const given = req.params.arguments ?? {};
     const missing = missingArguments(prompt.arguments, given);
     if (missing.length > 0) {

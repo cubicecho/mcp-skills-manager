@@ -9,7 +9,7 @@ import {
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigStore } from '../config/store.ts';
 import { firstText } from '../test/tool-result.ts';
 import { createSkillServer } from './skill-server.ts';
@@ -645,6 +645,27 @@ describe('skill-server prompts', () => {
   it('rejects an unknown prompt', async () => {
     const client = await connect(() => PROMPT_SKILLS, reader);
     await expect(client.getPrompt({ name: 'nope' })).rejects.toThrow(/Unknown prompt "nope"/);
+  });
+
+  it('says why a prompt file could not be served, and logs it when listing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const broken = [dirSkill('standards', ['prompts/refactor.md', 'prompts/gone.md', 'prompts/image.md'])];
+    const client = await connect(() => broken, {
+      readSupportingFile: async (skillName: string, relPath: string) => {
+        if (relPath === 'prompts/image.md') {
+          return { path: relPath, content: 'AAAA', encoding: 'base64' as const, size: 3, binary: true };
+        }
+        return reader.readSupportingFile(skillName, relPath);
+      },
+    });
+
+    await expect(client.getPrompt({ name: 'gone' })).rejects.toThrow(/Cannot read prompt "gone": no such file/);
+    await expect(client.getPrompt({ name: 'image' })).rejects.toThrow(/Cannot read prompt "image": not a text file/);
+
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((p) => p.name)).toEqual(['refactor']);
+    expect(warn).toHaveBeenCalledWith('Skipping prompt "gone" of skill "standards": no such file');
+    warn.mockRestore();
   });
 
   it('serves only the prompts of the skills this endpoint serves', async () => {
