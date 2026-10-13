@@ -1,4 +1,5 @@
-import type { ReactNode, Ref } from 'react';
+import type { Ref } from "react";
+import type { SlotNode } from "@/lib/utils";
 
 /**
  * Everything but `text`, `number`, `password` and the four keyboard types falls back to plain text
@@ -16,25 +17,25 @@ import type { ReactNode, Ref } from 'react';
  * something on both platforms.
  */
 export type InputType =
-  | 'text'
-  | 'number'
-  | 'password'
-  | 'email'
-  | 'search'
-  | 'url'
-  | 'tel'
-  | 'time'
-  | 'date'
-  | 'datetime-local'
-  | 'color';
+  | "text"
+  | "number"
+  | "password"
+  | "email"
+  | "search"
+  | "url"
+  | "tel"
+  | "time"
+  | "date"
+  | "datetime-local"
+  | "color";
 
 /** The keyboard each type raises on native when the caller has not chosen one with `inputMode`. */
-export const NATIVE_INPUT_MODE: Partial<Record<InputType, NonNullable<InputProps['inputMode']>>> = {
-  number: 'numeric',
-  email: 'email',
-  search: 'search',
-  url: 'url',
-  tel: 'tel',
+export const NATIVE_INPUT_MODE: Partial<Record<InputType, NonNullable<InputProps["inputMode"]>>> = {
+  number: "numeric",
+  email: "email",
+  search: "search",
+  url: "url",
+  tel: "tel",
 };
 
 /**
@@ -67,7 +68,43 @@ export type InputKeyPressEvent = { nativeEvent: { key: string } };
  */
 export type InputKeyPressHandler = {
   bivarianceHack(event: InputKeyPressEvent): void;
-}['bivarianceHack'];
+}["bivarianceHack"];
+
+/**
+ * What a field holds, said to the browser's autofill, a password manager and the keyboard's
+ * suggestion strip. These are the names HTML's `autocomplete` and React Native's `autoComplete`
+ * share, so one value means the same thing on both halves. The web half takes every DOM token on
+ * top of them.
+ */
+export type InputAutoComplete =
+  | "off"
+  | "name"
+  | "given-name"
+  | "additional-name"
+  | "family-name"
+  | "honorific-prefix"
+  | "honorific-suffix"
+  | "nickname"
+  | "username"
+  | "email"
+  | "current-password"
+  | "new-password"
+  | "one-time-code"
+  | "organization"
+  | "organization-title"
+  | "street-address"
+  | "address-line1"
+  | "address-line2"
+  | "postal-code"
+  | "country"
+  | "tel"
+  | "url"
+  | "cc-name"
+  | "cc-number"
+  | "cc-exp"
+  | "cc-exp-month"
+  | "cc-exp-year"
+  | "cc-csc";
 
 export type InputProps = {
   value?: string | undefined;
@@ -96,7 +133,24 @@ export type InputProps = {
    * gets the DOM spinners and the browser's numeric parsing, `inputMode="decimal"`
    * is what gets a phone keypad, and a number field wants both.
    */
-  inputMode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url' | undefined;
+  inputMode?: "text" | "decimal" | "numeric" | "tel" | "search" | "email" | "url" | undefined;
+  /**
+   * What the keyboard capitalises by itself. `none` for what is typed as written: a URL, a model
+   * id, a shell command. Left out, the platform decides, which on a phone is `sentences`.
+   */
+  autoCapitalize?: "none" | "sentences" | "words" | "characters" | undefined;
+  /**
+   * Whether the keyboard rewrites what was typed. Off for an identifier, which it would "correct"
+   * into a word. On the web it also switches the spelling underline, unless `spellCheck` says
+   * otherwise there.
+   */
+  autoCorrect?: boolean | undefined;
+  /**
+   * What the field holds, so a saved address, a password manager's entry or a texted code is
+   * offered for it: `email` on a sign-in, `one-time-code`, `street-address`. `type="email"` alone
+   * does not say it. `off` asks for no suggestions.
+   */
+  autoComplete?: InputAutoComplete | undefined;
   maxLength?: number | undefined;
   /** Web only; the native keyboard has no equivalent constraint. */
   min?: number | undefined;
@@ -117,19 +171,19 @@ export type InputProps = {
    * The accessible name, for an input no `<label>` points at — the time box beside
    * a date trigger. `TextInput` takes it on device, and react-native-web renders it.
    */
-  'aria-label'?: string | undefined;
+  "aria-label"?: string | undefined;
   /**
    * The accessible name by reference. The web honours a list of ids; Android reads one, and iOS
    * none, so a native caller that needs the name everywhere passes `aria-label` too.
    */
-  'aria-labelledby'?: string | undefined;
+  "aria-labelledby"?: string | undefined;
   /**
    * What says more about the field — its hint, its error — by id. Web only: React Native has no
    * description relation, so on device the error is read where it is drawn.
    */
-  'aria-describedby'?: string | undefined;
+  "aria-describedby"?: string | undefined;
   /** The value was refused: a validator's error, a save that failed. Web only, as above. */
-  'aria-invalid'?: boolean | 'true' | 'false' | undefined;
+  "aria-invalid"?: boolean | "true" | "false" | undefined;
   autoFocus?: boolean | undefined;
   /**
    * An icon drawn inside the field at its start — a `<Search />`, a `<Clock />` — with the text
@@ -137,37 +191,45 @@ export type InputProps = {
    * press on it lands in the field. Thirteen search boxes wrote this by hand as an absolute icon
    * and a `pl-8`, each with its own offset.
    */
-  leading?: ReactNode | undefined;
+  leadingSlot?: SlotNode | undefined;
   /**
    * The far end of the field, inside it: one icon-sized control, such as a clear button. The text
-   * stops short of it. Unlike `leading` it is pressable, so give a button its own name.
+   * stops short of it. Unlike `leadingSlot` it is pressable, so give a button its own name.
    */
-  trailing?: ReactNode | undefined;
+  trailingSlot?: SlotNode | undefined;
   /**
-   * The class of the box that holds the field and its `leading` / `trailing`, which only exists
-   * when one of them is passed. `className` stays on the field itself, as it is on every input, so
-   * size the pair here: `wrapperClassName="w-64"`.
+   * The class of the box that holds the field and its `leadingSlot` / `trailingSlot`, which only
+   * exists when one of them is passed. `className` stays on the field itself, as it is on every
+   * input, so size the pair here: `wrapperClassName="w-64"`.
    */
   wrapperClassName?: string | undefined;
   ref?: Ref<InputHandle> | undefined;
 };
 
-/** The box a `leading` or `trailing` is positioned in. Full width, as the field is on its own. */
-export const INPUT_WRAPPER_CLASS = 'relative w-full min-w-0';
+/**
+ * The box a `leadingSlot` or `trailingSlot` is positioned in. Full width, as the field is on its
+ * own.
+ */
+export const INPUT_WRAPPER_CLASS = "relative w-full min-w-0";
 
-/** Where `leading` sits: an icon-wide cell at the field's start, muted, never the press target. */
+/**
+ * Where `leadingSlot` sits: an icon-wide cell at the field's start, muted, never the press target.
+ */
 export const INPUT_LEADING_CLASS =
-  'pointer-events-none absolute inset-y-0 left-0 flex w-9 flex-row items-center justify-center';
+  "pointer-events-none absolute inset-y-0 left-0 flex w-9 flex-row items-center justify-center";
 
-/** Where `trailing` sits: the same cell at the far end, which does take a press. */
-export const INPUT_TRAILING_CLASS = 'absolute inset-y-0 right-0 flex w-9 flex-row items-center justify-center';
+/** Where `trailingSlot` sits: the same cell at the far end, which does take a press. */
+export const INPUT_TRAILING_CLASS =
+  "absolute inset-y-0 right-0 flex w-9 flex-row items-center justify-center";
 
 /** The icon inside either slot, handed down through `IconClassContext`: on device nothing inherits. */
-export const INPUT_SLOT_ICON_CLASS = 'size-4 shrink-0 text-muted-foreground';
+export const INPUT_SLOT_ICON_CLASS = "size-4 shrink-0 text-foreground/60";
 
 /** The text's padding past a slot, so it never runs under the icon. */
-export const INPUT_LEADING_PAD_CLASS = 'pl-9';
-export const INPUT_TRAILING_PAD_CLASS = 'pr-9';
+export const INPUT_LEADING_PAD_CLASS = "pl-9";
+/** The text's padding before a trailing slot, so it never runs under the icon. */
+export const INPUT_TRAILING_PAD_CLASS = "pr-9";
 
+/** The input's box: border, background, height and type. */
 export const INPUT_CLASS =
-  'border-input bg-background text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
+  "border-foreground/15 bg-background text-foreground placeholder:text-foreground/60 focus:border-active flex h-10 w-full rounded-md border px-3 py-2 text-sm focus:outline-none";

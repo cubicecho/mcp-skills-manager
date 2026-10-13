@@ -1,54 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
 import { CardLayout } from '@/components/card-layout';
 import { DescriptionList, PropertyRow } from '@/components/description-list';
+import { ToggleRow } from '@/components/domain/toggle-row';
 import { PageLayout } from '@/components/page-layout';
-import { SettingRow } from '@/components/setting-row';
 import { Button } from '@/components/ui/button';
 import { Code, CodeBlock } from '@/components/ui/code';
 import { RefreshCw } from '@/components/ui/icons';
-import { Switch } from '@/components/ui/switch';
-import { reloadConfig } from '@/lib/api';
 import { formatDuration } from '@/lib/format';
-import { useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
+import { useReloadConfig, useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
 import { useToasts } from '@/lib/toast';
 
+/** The `/settings` route. */
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 });
 
-/** One toggle option — the shared row used by every switch on this page. */
-function ToggleRow({
-  label,
-  description,
-  checked,
-  disabled,
-  onCheckedChange,
-}: {
-  label: string;
-  description: ReactNode;
-  checked: boolean;
-  disabled?: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  return (
-    <SettingRow
-      title={label}
-      description={description}
-      action={({ titleId, descriptionId }) => (
-        <Switch
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={onCheckedChange}
-          aria-labelledby={titleId}
-          aria-describedby={descriptionId}
-        />
-      )}
-    />
-  );
-}
-
+/** Toggles for how the MCP endpoints behave: tool exposure, agent authoring and HTTP live updates. */
 function McpOptionsCard() {
   const toast = useToasts();
   const { data: settings, isPending } = useSettings();
@@ -65,11 +33,11 @@ function McpOptionsCard() {
       }
       loading={isPending}
       contentClassName="flex flex-col gap-4"
-      content={
+      contentSlot={
         settings && (
           <>
             <ToggleRow
-              label={SKILL_TOOL_MODE_LABELS['per-skill']}
+              title={SKILL_TOOL_MODE_LABELS['per-skill']}
               description={SKILL_TOOL_MODE_HINTS[settings.skillToolMode]}
               checked={settings.skillToolMode === 'per-skill'}
               disabled={updateSettings.isPending}
@@ -81,7 +49,7 @@ function McpOptionsCard() {
               }
             />
             <ToggleRow
-              label="Allow agents to author skills"
+              title="Allow agents to author skills"
               description={
                 settings.authoringEnabled
                   ? 'Authoring tools (create_skill, update_skill, …) are exposed on every endpoint.'
@@ -103,7 +71,7 @@ function McpOptionsCard() {
               }
             />
             <ToggleRow
-              label="Push live updates over HTTP"
+              title="Push live updates over HTTP"
               description={
                 settings.httpLiveUpdates
                   ? 'Stateful sessions push resources/list_changed and resources/updated over SSE.'
@@ -133,17 +101,20 @@ function McpOptionsCard() {
   );
 }
 
+/** Server status, the MCP options, a reload-from-disk button and the stdio command line. */
 function SettingsPage() {
   const toast = useToasts();
   const { data, isPending } = useServerStatus();
 
-  const reload = async () => {
-    try {
-      const result = await reloadConfig();
-      toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
-    } catch (error) {
-      toast.apiError(error);
-    }
+  const reloadConfig = useReloadConfig();
+
+  const reload = () => {
+    reloadConfig.mutate(undefined, {
+      onSuccess: (result) => {
+        toast.success(`Reloaded: ${result.skillCount} skills, ${result.workspaceCount} workspaces`);
+      },
+      onError: toast.apiError,
+    });
   };
 
   return (
@@ -151,15 +122,15 @@ function SettingsPage() {
       title="Settings"
       description="Server status and configuration."
       width="prose"
-      content={
+      contentSlot={
         <div className="flex flex-col gap-6 py-6">
           <CardLayout
             title="Status"
             loading={isPending}
-            content={
+            contentSlot={
               data && (
                 <DescriptionList
-                  content={[
+                  contentSlot={[
                     <PropertyRow key="version" label="Version" value={data.version} />,
                     <PropertyRow key="port" label="Port" value={String(data.port)} />,
                     <PropertyRow key="uptime" label="Uptime" value={formatDuration(data.uptimeSeconds)} />,
@@ -182,17 +153,13 @@ function SettingsPage() {
                 automatically, but you can force an immediate re-read here.
               </>
             }
-            content={
-              <Button variant="outline" onClick={reload}>
-                <RefreshCw /> Reload config
-              </Button>
-            }
+            contentSlot={<Button variant="outline" onClick={reload} content="Reload config" iconSlot={<RefreshCw />} />}
           />
 
           <CardLayout
             title="Connect over stdio"
             description="Run the server as a stdio MCP process instead of HTTP."
-            content={
+            contentSlot={
               <CodeBlock
                 content={`# all skills\nmcp-skills-stdio --data-dir /path/to/data\n\n# only a workspace's skills\nmcp-skills-stdio --data-dir /path/to/data --workspace backend`}
               />

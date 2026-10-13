@@ -1,44 +1,25 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { SettingRow } from '@/components/setting-row';
+import { useSkillFlags } from '@/components/domain/skill/use-skill-flags';
+import { ToggleRow } from '@/components/domain/toggle-row';
 import { Code } from '@/components/ui/code';
-import { Switch } from '@/components/ui/switch';
-import { useUpdateSkill } from '@/lib/queries';
-import { useToasts } from '@/lib/toast';
 
 /**
  * A skill's local settings: whether the root endpoint serves it and whether agents may change it.
+ *
+ * @remarks
  * They are this server's, not the content's, so they stay switchable on a skill linked to a git source.
- * @param props.skill - The skill the switches belong to.
  */
-export function SkillFlags({ skill }: { skill: SkillDetail }) {
-  const toast = useToasts();
-  const visibility = useUpdateSkill(skill.name);
-
-  const toggleGlobal = (next: boolean) => {
-    visibility.mutate(
-      { global: next },
-      {
-        onSuccess: () =>
-          toast.success(next ? 'Now served on the root /mcp endpoint' : 'Now workspace-scoped — hidden from root /mcp'),
-        onError: toast.apiError,
-      },
-    );
-  };
-
-  const toggleReadOnly = (next: boolean) => {
-    visibility.mutate(
-      { readOnly: next },
-      {
-        onSuccess: () =>
-          toast.success(next ? 'Now read-only — agents can no longer modify it' : 'Agents can modify this skill again'),
-        onError: toast.apiError,
-      },
-    );
-  };
+export function SkillFlags({
+  skill,
+}: {
+  /** The skill the switches belong to. */
+  skill: SkillDetail;
+}) {
+  const flags = useSkillFlags(skill.name);
 
   return (
     <>
-      <SettingRow
+      <ToggleRow
         title={
           <>
             Serve on root <Code>/mcp</Code>
@@ -50,17 +31,11 @@ export function SkillFlags({ skill }: { skill: SkillDetail }) {
             <Code>/mcp</Code>, served only on workspaces that list it (frontmatter <Code>global: false</Code>).
           </>
         }
-        action={({ titleId, descriptionId }) => (
-          <Switch
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            checked={skill.global}
-            disabled={visibility.isPending}
-            onCheckedChange={toggleGlobal}
-          />
-        )}
+        checked={skill.global}
+        disabled={flags.isPending}
+        onCheckedChange={flags.setGlobal}
       />
-      <SettingRow
+      <ToggleRow
         title="Read-only for agents"
         description={
           skill.source ? (
@@ -76,15 +51,9 @@ export function SkillFlags({ skill }: { skill: SkillDetail }) {
             </>
           )
         }
-        action={({ titleId, descriptionId }) => (
-          <Switch
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            checked={skill.readOnly}
-            disabled={visibility.isPending}
-            onCheckedChange={toggleReadOnly}
-          />
-        )}
+        checked={skill.readOnly}
+        disabled={flags.isPending}
+        onCheckedChange={flags.setReadOnly}
       />
     </>
   );

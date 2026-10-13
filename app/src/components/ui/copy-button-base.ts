@@ -1,6 +1,6 @@
-import type { ComponentProps } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Button } from '@/components/ui/button';
+import type { ComponentProps } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Button } from "@/components/ui/button";
 
 type ButtonProps = ComponentProps<typeof Button>;
 
@@ -13,10 +13,10 @@ export type CopyButtonProps = {
    * press the name is `Copied`, whatever this says.
    */
   label?: string | undefined;
-  /** The button's variant. The default is `ghost`, since a copy button sits beside its text. */
-  variant?: ButtonProps['variant'] | undefined;
+  /** The button's variant. The default is `outline`. */
+  variant?: ButtonProps["variant"] | undefined;
   /** The button's size. The default is `icon-sm`, which sits flush in a row of small text. */
-  size?: ButtonProps['size'] | undefined;
+  size?: ButtonProps["size"] | undefined;
   /** Called once the text is on the clipboard — a toast, an analytics event. */
   onCopied?: (() => void) | undefined;
   /**
@@ -42,7 +42,7 @@ export const COPIED_MS = 1500;
  */
 export function useCopy(
   write: (text: string) => Promise<void>,
-  { value, onCopied, onError }: Pick<CopyButtonProps, 'value' | 'onCopied' | 'onError'>,
+  { value, onCopied, onError }: Pick<CopyButtonProps, "value" | "onCopied" | "onError">,
 ) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -66,7 +66,9 @@ export function useCopy(
     onCopied?.();
     // The write is async, so the button can be gone by the time it lands, and a timer started
     // then would outlive the cleanup above.
-    if (!mounted.current) return;
+    if (mounted.current === false) {
+      return;
+    }
     setCopied(true);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(false), COPIED_MS);

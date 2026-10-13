@@ -1,90 +1,102 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
 import { ActionButton } from '@/components/action-button';
-import { GitBranch, Layers } from '@/components/app-icons';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
-import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
+import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from '@/components/ui/code';
-import { Lock, Pencil } from '@/components/ui/icons';
-import { formatBytes, formatCount, formatDate } from '@/lib/format';
+import { Pencil } from '@/components/ui/icons';
+import { formatBytes, formatCount, formatDate, joinStats } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
+import { skillMarkdownPath } from '@/lib/skill';
+import { SKILL_STATUS, type SkillStatusKey, skillStatuses } from '@/lib/skill-status';
+import type { SlotNode } from '@/lib/utils';
 
 /** The pane a file is read in: its name, path and facts pinned over a body that scrolls. */
 function PreviewFrame({
   title,
   path,
   description,
-  action,
-  badges,
-  content,
+  actionSlot,
+  badgesSlot,
+  contentSlot,
 }: {
+  /** The file's name, as the pane's heading. */
   title: string;
+  /** The file's path, shown over the name. */
   path: string;
+  /** A line of facts under the name. */
   description?: ReactNode;
-  action?: ReactNode;
-  badges?: ReactNode;
-  content: ReactNode;
+  /** The Edit button, or what stands in for it. */
+  actionSlot?: SlotNode;
+  /** Badges and facts pinned under the header. */
+  badgesSlot?: SlotNode;
+  /** The file as it reads; this part scrolls. */
+  contentSlot: SlotNode;
 }) {
   return (
     <StickyHeaderContentFooter
       width="prose"
-      header={
+      headerSlot={
         <PageHeader
           title={title}
-          breadcrumbs={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
+          breadcrumbsSlot={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
           description={description}
-          action={action}
-          content={badges}
+          actionSlot={actionSlot}
+          contentSlot={badgesSlot}
         />
       }
       contentClassName="pb-10"
-      content={content}
+      contentSlot={contentSlot}
     />
   );
 }
 
+/** The button that opens the previewed file in the editor. */
 function EditButton({ onEdit }: { onEdit: () => void }) {
+  return <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit} iconSlot={<Pencil />} />;
+}
+
+/** One status fact as a badge; its hint is a tooltip for a pointer and hidden text for a screen reader. */
+function SkillStatusBadge({ status }: { status: SkillStatusKey }) {
+  const { label, hint, icon: Icon } = SKILL_STATUS[status];
   return (
-    <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit}>
-      <Pencil />
-    </ActionButton>
+    <Badge variant="outline" className="gap-1 font-normal" title={hint}>
+      <Icon className="size-3" aria-hidden /> {label}
+      <span className="sr-only">: {hint}</span>
+    </Badge>
   );
 }
 
 /** The skill's own Markdown, rendered: what an agent gets when it loads the skill. */
-function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => void }) {
-  const facts = [
+function SkillPreview({
+  skill,
+  onEdit,
+}: {
+  /** The skill to show; one linked to a git source gets its source panel and no Edit button. */
+  skill: SkillDetail;
+  /** Called when the reader asks to edit the skill's Markdown. */
+  onEdit: () => void;
+}) {
+  const facts = joinStats(
     `Updated ${formatDate(skill.updatedAt)}`,
     skill.usage.count > 0 ? `loaded ${formatCount(skill.usage.count, 'time')}` : 'never loaded',
-  ].join(' · ');
+  );
   return (
     <PreviewFrame
       title={skill.name}
-      path={skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`}
+      path={skillMarkdownPath(skill)}
       description={skill.description || undefined}
-      action={skill.source ? undefined : <EditButton onEdit={onEdit} />}
-      badges={
+      actionSlot={skill.source ? undefined : <EditButton onEdit={onEdit} />}
+      badgesSlot={
         <div className="flex flex-wrap items-center gap-1.5">
-          {skill.source && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Synced from a git repo; not edited here">
-              <GitBranch className="size-3" /> Git
-            </Badge>
-          )}
-          {skill.readOnly && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Agents cannot modify this skill over MCP">
-              <Lock className="size-3" /> Read-only
-            </Badge>
-          )}
-          {!skill.global && (
-            <Badge variant="outline" className="gap-1 font-normal" title="Hidden from the root /mcp endpoint">
-              <Layers className="size-3" /> Workspace-scoped
-            </Badge>
-          )}
+          {skillStatuses(skill).map((status) => (
+            <SkillStatusBadge key={status} status={status} />
+          ))}
           {skill.tags.map((tag) => (
             <Badge key={tag} variant="secondary">
               {tag}
@@ -93,10 +105,13 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
           <span className="text-muted-foreground text-xs">{facts}</span>
         </div>
       }
-      content={
+      contentSlot={
         <>
           {skill.source && <SourcePanel skill={skill} source={skill.source} />}
-          <Markdown content={skill.body} empty="This skill has no body yet." />
+          <Markdown
+            content={skill.body}
+            emptySlot={<p className="text-foreground/60">This skill has no body yet.</p>}
+          />
         </>
       }
     />
@@ -104,7 +119,18 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
 }
 
 /** A supporting file: Markdown rendered, any other text as written, a binary file as a notice. */
-function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; path: string; onEdit: () => void }) {
+function SupportingFilePreview({
+  skill,
+  path,
+  onEdit,
+}: {
+  /** The skill the file belongs to. */
+  skill: SkillDetail;
+  /** The file's path relative to the skill root. */
+  path: string;
+  /** Called when the reader asks to edit the file. */
+  onEdit: () => void;
+}) {
   const file = useSkillFileContent(skill.name, path);
   const { data } = file;
   const markdown = isMarkdownPath(path);
@@ -113,7 +139,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
       title={path.slice(path.lastIndexOf('/') + 1)}
       path={`skills/${skill.name}/${path}`}
       description={data ? formatBytes(data.size) : undefined}
-      action={
+      actionSlot={
         markdown && !skill.source ? (
           <EditButton onEdit={onEdit} />
         ) : (
@@ -129,7 +155,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
           </Badge>
         )
       }
-      content={
+      contentSlot={
         <>
           <FileLoadState
             file={file}
@@ -138,7 +164,7 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
           {data &&
             !data.binary &&
             (markdown ? (
-              <Markdown content={data.content} empty="This file is empty." />
+              <Markdown content={data.content} emptySlot={<p className="text-foreground/60">This file is empty.</p>} />
             ) : (
               <CodeBlock content={data.content} />
             ))}
@@ -148,13 +174,19 @@ function SupportingFilePreview({ skill, path, onEdit }: { skill: SkillDetail; pa
   );
 }
 
-/**
- * The selected file as it reads, with a button that opens it in the editor.
- * @param props.skill - The skill the file belongs to.
- * @param props.path - The file's path relative to the skill root, or `SKILL_MD_KEY` for the skill's own Markdown.
- * @param props.onEdit - Called when the reader asks to edit the file.
- */
-export function FilePreview({ skill, path, onEdit }: { skill: SkillDetail; path: string; onEdit: () => void }) {
+/** The selected file as it reads, with a button that opens it in the editor when it can be edited here. */
+export function FilePreview({
+  skill,
+  path,
+  onEdit,
+}: {
+  /** The skill the file belongs to. */
+  skill: SkillDetail;
+  /** The file's path relative to the skill root, or `SKILL_MD_KEY` for the skill's own Markdown. */
+  path: string;
+  /** Called when the reader asks to edit the file. */
+  onEdit: () => void;
+}) {
   return path === SKILL_MD_KEY ? (
     <SkillPreview skill={skill} onEdit={onEdit} />
   ) : (

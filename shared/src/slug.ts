@@ -15,7 +15,8 @@ export const slugSchema = z
 
 /**
  * Derives a slug from a free-form title or display name.
- * @param text Title or name to convert.
+ *
+ * @param text - Title or name to convert.
  * @returns A value {@link slugSchema} accepts, or an empty string when the text has no letter or digit.
  */
 export function slugify(text: string): string {

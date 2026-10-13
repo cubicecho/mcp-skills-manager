@@ -1,11 +1,20 @@
 import path from 'node:path';
 import { buildApp } from './app.ts';
-import { authDisabledByEnv } from './auth.ts';
+import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
-import { tuneKeepAlive } from './http-tuning.ts';
+import { EnvVar } from './core/defaults.ts';
+import { McpSessionManager } from './gateway/session-manager.ts';
+import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
+import { closeOnSignal } from './shutdown.ts';
 
+/**
+ * Starts the HTTP server: loads and watches the store, listens, and closes everything on SIGTERM or SIGINT.
+ *
+ * @remarks
+ * The data dir is `DATA_DIR`, else `./data`. A port already in use ends the process with exit code 1.
+ */
 async function main(): Promise<void> {
-  const dataDir = path.resolve(process.env.DATA_DIR ?? './data');
+  const dataDir = path.resolve(process.env[EnvVar.DataDir] ?? './data');
   const store = new ConfigStore(dataDir);
   await store.init();
 
@@ -14,19 +23,21 @@ async function main(): Promise<void> {
   });
   store.startWatching();
 
-  const port = Number(process.env.PORT ?? store.getSettings().port);
-  const app = buildApp({ store, port });
+  const port = resolvePort(store.getSettings().port);
+  const sessions = new McpSessionManager();
+  const app = buildApp({ store, port, sessions });
   const httpServer = app.listen(port, () => {
     console.log(`mcp-skills-manager listening on http://localhost:${port} (data dir: ${dataDir})`);
     const settings = store.getSettings();
+    const auth = resolveAuth(settings);
     if (authDisabledByEnv()) {
       console.log('Auth: disabled (SECURE_LOCAL_NET env var) — /api and /mcp are open on this network');
     } else if (!settings.authEnabled) {
       console.log('Auth: disabled (authEnabled: false in settings.json)');
-    } else if (process.env.MCP_SKILLS_TOKEN) {
+    } else if (auth.tokenSource === 'env') {
       console.log('Auth: bearer token from MCP_SKILLS_TOKEN env var (overrides settings.json)');
     } else {
-      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${settings.authToken}`);
+      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}`);
     }
   });
 
@@ -43,20 +54,15 @@ async function main(): Promise<void> {
     throw err;
   });
 
-  let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals) => {
-    if (shuttingDown) {
-      return;
-    }
-    shuttingDown = true;
-    console.log(`Received ${signal}; shutting down`);
-    httpServer.close();
-    store.close().then(() => {
-      process.exit(0);
-    });
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  closeOnSignal(
+    [
+      // Not awaited: it only settles once every connection has ended, and the sessions hold theirs open.
+      { label: 'HTTP server', close: () => void httpServer.close() },
+      { label: 'MCP sessions', close: () => sessions.closeAll() },
+      { label: 'store', close: () => store.close() },
+    ],
+    { on: (signal, listener) => process.on(signal, listener), exit: (code) => process.exit(code), log: console.log },
+  );
 }
 
 main().catch((err: unknown) => {

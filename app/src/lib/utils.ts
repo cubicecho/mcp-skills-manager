@@ -1,7 +1,13 @@
-import { type ClassValue, clsx } from 'clsx';
-import type { ReactElement } from 'react';
-import { twMerge } from 'tailwind-merge';
+import { type ClassValue, clsx } from "clsx";
+import type { ReactElement } from "react";
+import { twMerge } from "tailwind-merge";
 
+/**
+ * Joins class names and lets the later of two conflicting Tailwind classes win.
+ *
+ * @param inputs - Class names, and the arrays and objects of them `clsx` takes.
+ * @returns The one class string.
+ */
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
@@ -13,7 +19,7 @@ export function cn(...inputs: ClassValue[]): string {
  * good — on native they are simply always visible. Kept here rather than inline
  * so no component has to reach for `Platform` to express it.
  */
-export const HOVER_REVEAL = 'opacity-0 transition-opacity group-hover:opacity-100';
+export const HOVER_REVEAL = "opacity-0 transition-opacity group-hover:opacity-100";
 
 /**
  * What a prop whose name ends in `Slot` takes: an element, several, or nothing.

@@ -20,6 +20,7 @@ export const Route = createFileRoute('/skills/$name')({
   component: SkillPage,
 });
 
+/** The editor for the skill named in the URL, or a skeleton or an error while it cannot be shown. */
 function SkillPage() {
   const { name } = Route.useParams();
   const { file, edit } = Route.useSearch();
@@ -57,8 +58,8 @@ function SkillPage() {
   }
   if (!data) {
     return (
-      <div className="h-full p-6" aria-busy>
-        <Skeleton className="h-full min-h-60 w-full" />
+      <div className="h-full p-6">
+        <Skeleton role="status" aria-label="Loading the skill" className="h-full min-h-60 w-full" />
       </div>
     );
   }

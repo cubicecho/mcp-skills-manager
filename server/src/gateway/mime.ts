@@ -1,10 +1,4 @@
-/**
- * Extension → MIME type for bundled supporting files. Purely extension-driven so
- * the resource *listing* and the resource *read* agree on the type (the read
- * path decides blob-vs-text from the actual `binary` flag, independent of this).
- * Returns `undefined` for unknown extensions — we omit the mimeType rather than
- * guess `text/plain` and mislabel a binary blob.
- */
+/** MIME type by file extension, in lower case and without the dot, for bundled supporting files. */
 const MIME_BY_EXT: Record<string, string> = {
   md: 'text/markdown',
   markdown: 'text/markdown',
@@ -32,7 +26,16 @@ const MIME_BY_EXT: Record<string, string> = {
   zip: 'application/zip',
 };
 
-/** Best-effort MIME type for a bundled supporting file; `undefined` when the extension is unrecognized. */
+/**
+ * Names the MIME type of a bundled supporting file, from its extension alone.
+ *
+ * @param relPath - The file's path within the skill.
+ * @returns The type, or `undefined` for an unknown extension.
+ *
+ * @remarks
+ * The extension decides, so a resource's listing and its read agree. An unknown one gets no type:
+ * a guess of `text/plain` would mislabel a binary file.
+ */
 export function fileMimeType(relPath: string): string | undefined {
   const dot = relPath.lastIndexOf('.');
   if (dot === -1) {

@@ -1,32 +1,52 @@
+export type Moment = string | number | Date;
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB"] as const;
+const BYTE_STEP = 1024;
+
 /**
- * Format a byte count for display.
- * @param bytes - The size in bytes.
- * @returns The size in B, KB or MB (1 KB = 1024 B), to one decimal place from 1 KB up.
+ * A size in bytes as `512 B`, `1.5 KB`, `3.0 MB`, `2.1 GB`.
+ *
+ * A step is 1024, and a size from a kilobyte up carries one decimal place. Sizes past the last
+ * unit stay in it — `2048.0 GB` — and do not grow a unit nobody asked for.
  */
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
+  let value = bytes;
+  let unit = 0;
+  while (value >= BYTE_STEP && unit < BYTE_UNITS.length - 1) {
+    value /= BYTE_STEP;
+    unit += 1;
   }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${unit === 0 ? value : value.toFixed(1)} ${BYTE_UNITS[unit]}`;
 }
 
 /**
- * Format a count with its noun, pluralised with an `s`.
- * @param count - How many there are.
- * @param noun - The singular noun, e.g. `file`.
- * @returns The count and noun, e.g. `1 file` or `3 files`.
+ * A count with its thousands grouped, and its noun when one is given: `1,204`, `1 file`,
+ * `3 files`, `2 entries`.
+ *
+ * @param one - The noun for exactly one. Left out, the number is returned alone.
+ * @param many - The noun for any other count, when adding an `s` is not it.
  */
-export function formatCount(count: number, noun: string): string {
-  return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
+export function formatCount(count: number, one?: string, many = `${one}s`): string {
+  const number = count.toLocaleString();
+  return one === undefined ? number : `${number} ${count === 1 ? one : many}`;
 }
 
 /**
- * Format a duration for display, to its two largest units.
- * @param seconds - The duration in seconds.
- * @returns The duration, e.g. `42s`, `5m`, `3h 12m` or `2d 4h`.
+ * The facts under a title as one line: `1 file · 2 chunks · human-only`.
+ *
+ * A part that is empty, `false`, `null` or `undefined` is left out, so a fact that only sometimes
+ * applies is written inline — `joinStats(formatCount(files, "file"), locked && "human-only")` —
+ * and no dot is left hanging where it would have been.
+ */
+export function joinStats(...parts: (string | false | null | undefined)[]): string {
+  return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * A span of seconds at the grain a reader wants: `42s`, `5m`, `3h 12m`, `2d 4h`.
+ *
+ * Seconds and minutes stand alone; from an hour up the next unit down rides along, because
+ * `3h` could be anything up to an hour out.
  */
 export function formatDuration(seconds: number): string {
   if (seconds < 60) {
@@ -43,12 +63,103 @@ export function formatDuration(seconds: number): string {
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
+/** The moment in epoch milliseconds, or nothing when it does not parse. */
+function milliseconds(moment: Moment): number | undefined {
+  const time = new Date(moment).getTime();
+  return Number.isNaN(time) ? undefined : time;
+}
+
 /**
- * Format an ISO timestamp as a medium-length local date.
- * @param iso - The timestamp.
- * @returns The date, e.g. `Oct 3, 2026`, or an empty string when the timestamp does not parse.
+ * A medium-length date in the reader's own locale — `Oct 3, 2026` — or an empty string when the
+ * moment does not parse, so a missing timestamp draws nothing where `Invalid Date` would show.
  */
-export function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { dateStyle: 'medium' });
+export function formatDate(moment: Moment): string {
+  const time = milliseconds(moment);
+  if (time === undefined) {
+    return "";
+  }
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(time);
+}
+
+/**
+ * A medium date and a short time in the reader's own locale — `Oct 3, 2026, 2:32 PM` — for the
+ * place where two things arrived on the same day and the hour is what tells them apart. Empty for
+ * a moment that does not parse, as in {@link formatDate}.
+ */
+export function formatDateTime(moment: Moment): string {
+  const time = milliseconds(moment);
+  if (time === undefined) {
+    return "";
+  }
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+    time,
+  );
+}
+
+const MS_PER_SECOND = 1000;
+/** Lengths in seconds. A month is thirty days and a year 365: this is for "3 mo ago", not dates. */
+const MINUTE = 60;
+const HOUR = 3600;
+const DAY = 86_400;
+const WEEK = 604_800;
+const MONTH = 2_592_000;
+const YEAR = 31_536_000;
+
+/**
+ * The units `formatAgo` counts in, largest first, each with its length in seconds and the letters
+ * the narrow English fallback writes it with.
+ */
+const AGO_STEPS = [
+  ["year", YEAR, "y"],
+  ["month", MONTH, "mo"],
+  ["week", WEEK, "w"],
+  ["day", DAY, "d"],
+  ["hour", HOUR, "h"],
+  ["minute", MINUTE, "m"],
+] as const;
+
+/** How `formatAgo` words an age. */
+export type FormatAgoOptions = {
+  /**
+   * `long`, the default, writes `5 minutes ago`. `narrow` writes `5m ago`, for a column where the
+   * time is one fact among several.
+   */
+  style?: "long" | "narrow" | undefined;
+};
+
+/**
+ * How long ago a moment was, in its largest whole unit: `3 days ago`, `yesterday`, `just now`
+ * under a minute. A moment still to come reads `in 2 hours`, and one that does not parse is an
+ * empty string, as in {@link formatDate}.
+ *
+ * @param now - The moment to count from, for a caller that ticks its own clock.
+ * @param options.style - `narrow` writes `5m ago`, `3d ago`, `in 2h` for a dense column.
+ */
+export function formatAgo(
+  moment: Moment,
+  now: Moment = Date.now(),
+  { style = "long" }: FormatAgoOptions = {},
+): string {
+  const then = milliseconds(moment);
+  const from = milliseconds(now);
+  if (then === undefined || from === undefined) {
+    return "";
+  }
+
+  const seconds = Math.round((then - from) / MS_PER_SECOND);
+  for (const [unit, size, letters] of AGO_STEPS) {
+    if (Math.abs(seconds) < size) {
+      continue;
+    }
+    const amount = Math.round(seconds / size);
+    // Hermes ships `Intl` without `RelativeTimeFormat` on some devices, and a missing
+    // constructor would take the screen down with it. English is the fallback there.
+    if (typeof Intl.RelativeTimeFormat !== "function") {
+      const count = Math.abs(amount);
+      const span = style === "narrow" ? `${count}${letters}` : formatCount(count, unit);
+      return amount < 0 ? `${span} ago` : `in ${span}`;
+    }
+    return new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style }).format(amount, unit);
+  }
+  return "just now";
 }

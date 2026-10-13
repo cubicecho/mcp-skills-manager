@@ -8,14 +8,23 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
  * `---` line; everything after is the Markdown body.
  */
 
+/** A leading frontmatter block; captures the YAML between its two `---` lines. */
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
+/** A Markdown document, split into its frontmatter and body. */
 export interface ParsedMarkdown {
+  /** The frontmatter keys that fit the schema; empty when the document has no block, or its YAML is malformed. */
   frontmatter: SkillFrontmatter;
+  /** Everything after the block; the whole document when it has none, or its YAML is malformed. */
   body: string;
 }
 
-/** Split a raw Markdown document into its frontmatter and body. */
+/**
+ * Splits a raw Markdown document into its frontmatter and body.
+ *
+ * @param raw - The document's full text.
+ * @returns The two parts; a document with no frontmatter block, or with malformed YAML in it, is all body.
+ */
 export function parseMarkdown(raw: string): ParsedMarkdown {
   const match = raw.match(FRONTMATTER_RE);
   if (!match) {
@@ -28,15 +37,39 @@ export function parseMarkdown(raw: string): ParsedMarkdown {
     // Malformed frontmatter: treat the whole document as body rather than losing content.
     return { frontmatter: {}, body: raw };
   }
-  const frontmatter = skillFrontmatterSchema.safeParse(parsed);
-  const body = raw.slice(match[0].length);
-  return { frontmatter: frontmatter.success ? frontmatter.data : {}, body };
+  return { frontmatter: readFrontmatter(parsed), body: raw.slice(match[0].length) };
 }
 
 /**
- * Serialize frontmatter + body back into a Markdown document. `name` and
- * `description` are written first (merged over any preserved unknown keys) so
- * the file round-trips losslessly. An entirely empty frontmatter is omitted.
+ * Validates parsed frontmatter, giving up only the keys that are wrong.
+ *
+ * @param parsed - The YAML value of the frontmatter block.
+ * @returns The frontmatter without its mistyped keys; empty when the block is not a mapping.
+ *
+ * @remarks
+ * One mistyped value must not take `readonly` or `global` down with it, nor erase the other keys on the next save.
+ */
+function readFrontmatter(parsed: unknown): SkillFrontmatter {
+  const whole = skillFrontmatterSchema.safeParse(parsed);
+  if (whole.success) {
+    return whole.data;
+  }
+  const isMapping = typeof parsed === 'object' && parsed !== null && Array.isArray(parsed) === false;
+  if (isMapping === false) {
+    return {};
+  }
+  const mistyped = new Set(whole.error.issues.map((issue) => issue.path[0]));
+  const kept = Object.entries(parsed as Record<string, unknown>).filter(([key]) => mistyped.has(key) === false);
+  const rest = skillFrontmatterSchema.safeParse(Object.fromEntries(kept));
+  return rest.success ? rest.data : {};
+}
+
+/**
+ * Serializes frontmatter and a body back into a Markdown document.
+ *
+ * @param frontmatter - The keys to write, in the order given; an `undefined` value is left out.
+ * @param body - The Markdown under the frontmatter; surrounding blank space is trimmed.
+ * @returns The document, ending in one newline; no frontmatter block when no key is left.
  */
 export function serializeMarkdown(frontmatter: SkillFrontmatter, body: string): string {
   const entries = Object.entries(frontmatter).filter(([, value]) => value !== undefined);
@@ -46,4 +79,20 @@ export function serializeMarkdown(frontmatter: SkillFrontmatter, body: string): 
   }
   const yaml = stringifyYaml(Object.fromEntries(entries)).trimEnd();
   return `---\n${yaml}\n---\n\n${normalizedBody}\n`;
+}
+
+/**
+ * Writes a skill's local-only settings the way frontmatter keeps them.
+ *
+ * @param flags - Whether the skill is served on the root endpoint, and whether agents may edit it.
+ * @returns The `global` and `readonly` frontmatter keys.
+ *
+ * @remarks
+ * Only the non-default value is stored, so a key is `undefined` when the skill is global, or writable.
+ */
+export function localFlags(flags: {
+  global: boolean;
+  readOnly: boolean;
+}): Pick<SkillFrontmatter, 'global' | 'readonly'> {
+  return { global: flags.global ? undefined : false, readonly: flags.readOnly ? true : undefined };
 }

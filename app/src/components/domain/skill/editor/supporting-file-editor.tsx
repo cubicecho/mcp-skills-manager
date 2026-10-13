@@ -1,23 +1,27 @@
-import { useStore } from '@tanstack/react-form';
-import { useEffect, useState } from 'react';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useAppForm } from '@/components/app-form';
-import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
+import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { MarkdownEditor } from '@/components/markdown-editor';
+import { useFormStore } from '@/lib/form-store';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
-/** Edit a supporting `.md` file's contents. */
+/** The editor for a supporting `.md` file's contents. */
 export function SupportingFileEditor({
   skillName,
   path,
-  onDirtyChange,
+  ref,
   onClose,
 }: {
+  /** The skill the file belongs to. */
   skillName: string;
+  /** The file's path relative to the skill root. */
   path: string;
-  onDirtyChange: (dirty: boolean) => void;
+  /** Lets the pane holding the editor ask whether it has unsaved edits. */
+  ref?: Ref<EditorHandle>;
+  /** Called when the reader leaves the editor for the preview. */
   onClose: () => void;
 }) {
   const toast = useToasts();
@@ -44,21 +48,30 @@ export function SupportingFileEditor({
     },
   });
 
-  // The file arrives after the form exists, and again when a refetch finds it changed.
+  const savedNow = useRef(saved);
+  savedNow.current = saved;
+
+  // The file arrives after the form exists, and again when a refetch finds it changed. Unsaved edits
+  // outlive that: the refetch a save sets off lands while the reader may be typing again, and what
+  // they typed is then measured against the text it brought.
   useEffect(() => {
-    if (text !== undefined) {
-      setSaved(text);
+    if (text === undefined) {
+      return;
+    }
+    const untouched = savedNow.current === undefined || form.state.values.content === savedNow.current;
+    setSaved(text);
+    if (untouched) {
       form.reset({ content: text });
     }
   }, [text, form]);
 
-  const content = useStore(form.store, (state) => state.values.content);
+  const content = useFormStore(form.store, (state) => state.values.content);
   const dirty = saved !== undefined && content !== saved;
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useImperativeHandle(ref, () => ({ hasUnsavedChanges: () => dirty }), [dirty]);
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && !write.isPending);
+  useSaveShortcut(save, dirty && write.isPending === false);
 
   return (
     <EditorFrame
@@ -67,7 +80,7 @@ export function SupportingFileEditor({
       onClose={onClose}
       saving={write.isPending}
       dirty={dirty}
-      content={
+      contentSlot={
         <>
           <FileLoadState
             file={file}
@@ -81,7 +94,7 @@ export function SupportingFileEditor({
                   value={field.state.value}
                   onValueChange={field.handleChange}
                   onBlur={field.handleBlur}
-                  empty="Nothing to preview yet."
+                  emptySlot={<p className="text-foreground/60">Nothing to preview yet.</p>}
                 />
               )}
             </form.AppField>

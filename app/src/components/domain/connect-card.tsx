@@ -10,21 +10,24 @@ export function ConnectCard({
   label,
   description,
 }: {
+  /** The endpoint's URL, shown and copied. */
   endpoint: string;
+  /** What the endpoint serves, named in the card's title. */
   label: string;
+  /** The short explanation under the title. */
   description: string;
 }) {
   const toast = useToasts();
   return (
     <CardLayout
-      icon={<Plug />}
+      iconSlot={<Plug />}
       title={`Connect: ${label}`}
       description={description}
-      content={
+      contentSlot={
         <CodeBlock
           content={endpoint}
           wrap
-          action={
+          actionSlot={
             <CopyButton
               value={endpoint}
               label="Copy endpoint URL"

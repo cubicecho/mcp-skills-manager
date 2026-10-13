@@ -2,7 +2,8 @@
 export const SKILL_MD_KEY = '\0skill-md';
 
 /**
- * Tell whether a path names a Markdown file, which is the only kind editable in the web UI.
+ * Tells whether a path names a Markdown file, which is the only kind editable in the web UI.
+ *
  * @param path - The file path to test.
  * @returns True when the path ends in `.md`, in any case.
  */

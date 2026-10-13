@@ -1,15 +1,17 @@
-import { cva } from 'class-variance-authority';
-import { Children, type ReactNode } from 'react';
+import { cva } from "class-variance-authority";
+import { Children, type ReactNode } from "react";
 
+/** The meanings a badge can carry, which pick its colours. */
 export type BadgeVariant =
-  | 'default'
-  | 'secondary'
-  | 'destructive'
-  | 'outline'
-  | 'ghost'
-  | 'link'
-  | 'success'
-  | 'warning';
+  | "default"
+  | "secondary"
+  | "destructive"
+  | "outline"
+  | "ghost"
+  | "link"
+  | "positive"
+  | "warning"
+  | "info";
 
 export type BadgeProps = {
   variant?: BadgeVariant | undefined;
@@ -17,7 +19,7 @@ export type BadgeProps = {
    * Overrides the variant's background with a literal colour — for a badge
    * standing in for a user-chosen tag or category. Passing it also drops the
    * variant's label colour, since the caller's background is unknown and
-   * `text-primary-foreground` would be a guess. Pair it with `readableTextColor`
+   * `text-neutral-foreground` would be a guess. Pair it with `readableTextColor`
    * when the label has to stay legible on an arbitrary hue.
    */
   backgroundColor?: string | undefined;
@@ -53,7 +55,7 @@ export type BadgeProps = {
 
 /** Whether `children` holds anything to show, which is what decides pill or dot. */
 export function badgeHasLabel(children: ReactNode): boolean {
-  return !(children === undefined || children === null || children === false || children === '');
+  return children !== undefined && children !== null && children !== false && children !== "";
 }
 
 /**
@@ -62,11 +64,11 @@ export function badgeHasLabel(children: ReactNode): boolean {
  */
 export function badgeRemoveLabel(children: ReactNode, label?: string | undefined): string {
   const text = Children.toArray(children)
-    .filter((child) => typeof child === 'string' || typeof child === 'number')
-    .join('')
+    .filter((child) => typeof child === "string" || typeof child === "number")
+    .join("")
     .trim();
   const name = text || label;
-  return name ? `Remove ${name}` : 'Remove';
+  return name ? `Remove ${name}` : "Remove";
 }
 
 /**
@@ -79,66 +81,68 @@ export function badgeRemoveLabel(children: ReactNode, label?: string | undefined
  * already is, and making it a second axis would allow the two states that mean
  * nothing: a dot with a label it cannot show, and an empty pill.
  */
-export const badgeContainerVariants = cva('shrink-0 rounded-full border border-transparent', {
+export const badgeContainerVariants = cva("shrink-0 rounded-full border border-transparent", {
   variants: {
     variant: {
-      default: 'bg-primary',
-      secondary: 'bg-secondary',
-      destructive: 'bg-destructive',
-      outline: 'border-border bg-transparent',
-      ghost: 'bg-transparent',
-      link: 'bg-transparent',
-      success: 'bg-green-700',
-      warning: 'bg-amber-700',
+      default: "bg-neutral",
+      secondary: "bg-foreground/10",
+      destructive: "bg-negative",
+      outline: "border-foreground/10 bg-transparent",
+      ghost: "bg-transparent",
+      link: "bg-transparent",
+      positive: "bg-positive",
+      warning: "bg-warning",
+      info: "bg-info",
     },
     shape: {
-      pill: 'flex-row items-center justify-center gap-1 px-2 py-0.5',
-      dot: 'h-2 w-2',
+      pill: "flex-row items-center justify-center gap-1 px-2 py-0.5",
+      dot: "h-2 w-2",
     },
   },
-  defaultVariants: { variant: 'default', shape: 'pill' },
+  defaultVariants: { variant: "default", shape: "pill" },
 });
 
 /** The label's colour and nothing else, per variant. */
 const BADGE_INK = {
-  default: 'text-primary-foreground',
-  secondary: 'text-secondary-foreground',
-  destructive: 'text-white',
-  outline: 'text-foreground',
-  ghost: 'text-foreground',
-  link: 'text-primary',
-  success: 'text-white',
-  warning: 'text-white',
+  default: "text-neutral-foreground",
+  secondary: "text-foreground",
+  destructive: "text-negative-foreground",
+  outline: "text-foreground",
+  ghost: "text-foreground",
+  link: "text-info",
+  positive: "text-positive-foreground",
+  warning: "text-warning-foreground",
+  info: "text-info-foreground",
 } satisfies Record<BadgeVariant, string>;
 
 /** The label's type and colour, per variant. */
-export const badgeTextVariants = cva('text-xs font-medium', {
+export const badgeTextVariants = cva("text-xs font-medium", {
   variants: {
-    variant: { ...BADGE_INK, link: 'text-primary underline-offset-4' },
+    variant: { ...BADGE_INK, link: "text-info underline-offset-4" },
   },
-  defaultVariants: { variant: 'default' },
+  defaultVariants: { variant: "default" },
 });
 
 /**
  * The ✕'s colour on native, where nothing inherits: the label's ink without its
  * type, which an `<Svg>` has no use for. The web ✕ takes `currentColor` instead.
  */
-export const badgeInkVariants = cva('', {
+export const badgeInkVariants = cva("", {
   variants: { variant: BADGE_INK },
-  defaultVariants: { variant: 'default' },
+  defaultVariants: { variant: "default" },
 });
 
 /** The label's class when `backgroundColor` replaced the variant's own. */
-export const badgeTextFallback = 'text-xs font-medium text-foreground';
+export const badgeTextFallback = "text-xs font-medium text-foreground";
 
 /** `badgeInkVariants`' counterpart, for when `backgroundColor` replaced the variant's own. */
-export const badgeInkFallback = 'text-foreground';
+export const badgeInkFallback = "text-foreground";
 
 /**
  * The badge's icon size — the one the web half gives an `<svg>` child — and so the ✕'s. It is
  * shorter than the label's line, so the ✕ never makes the pill taller.
  */
-export const badgeIconClass = 'size-3 shrink-0';
+export const badgeIconClass = "size-3 shrink-0";
 
 /**
  * shadcn's `badgeVariants`: the whole pill's classes, container and label together, for dressing
@@ -150,7 +154,7 @@ export function badgeVariants({
   shape,
 }: {
   variant?: BadgeVariant | null | undefined;
-  shape?: 'pill' | 'dot' | null | undefined;
+  shape?: "pill" | "dot" | null | undefined;
 } = {}): string {
   return `${badgeContainerVariants({ variant, shape })} ${badgeTextVariants({ variant })}`;
 }

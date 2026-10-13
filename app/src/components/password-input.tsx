@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Eye, EyeOff } from '@/components/ui/icons';
-import { Input, type InputProps } from '@/components/ui/input';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Eye, EyeOff } from "@/components/ui/icons";
+import { Input, type InputProps } from "@/components/ui/input";
 
-export type PasswordInputProps = Omit<InputProps, 'type' | 'trailing'> & {
+export type PasswordInputProps = Omit<InputProps, "type" | "trailingSlot"> & {
   /** The reveal button's name while the value is hidden. */
   showLabel?: string | undefined;
   /** And while it is showing. Both are announced; the icon alone says nothing. */
@@ -12,9 +12,10 @@ export type PasswordInputProps = Omit<InputProps, 'type' | 'trailing'> & {
   revealable?: boolean | undefined;
 };
 
+/** A password box with a button that shows and hides what was typed. */
 export function PasswordInput({
-  showLabel = 'Show password',
-  hideLabel = 'Hide password',
+  showLabel = "Show password",
+  hideLabel = "Hide password",
   revealable = true,
   disabled,
   ...props
@@ -25,19 +26,18 @@ export function PasswordInput({
   return (
     <Input
       {...props}
-      type={visible ? 'text' : 'password'}
+      type={visible ? "text" : "password"}
       disabled={disabled}
-      trailing={
+      trailingSlot={
         revealable ? (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="icon-xs"
             aria-label={visible ? hideLabel : showLabel}
             disabled={disabled}
-            onClick={() => setShown((was) => !was)}
-          >
-            {visible ? <EyeOff /> : <Eye />}
-          </Button>
+            onClick={() => setShown((was) => was === false)}
+            content={visible ? <EyeOff /> : <Eye />}
+          />
         ) : undefined
       }
     />

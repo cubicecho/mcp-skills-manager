@@ -1,8 +1,10 @@
+import { HttpStatus } from '@mcp-skills/shared';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import type { ConfigStore } from '../config/store.ts';
+import { sendError } from '../errors.ts';
 import { closeQuietly } from './close-quietly.ts';
 import { endpointDeps } from './endpoint.ts';
 import { McpSessionManager } from './session-manager.ts';
@@ -10,25 +12,27 @@ import { createSkillServer } from './skill-server.ts';
 
 /** What the MCP endpoints need from the process that mounts them. */
 export interface McpRouterDeps {
+  /** The store the endpoints serve skills from. */
   store: ConfigStore;
+  /** Holds the stateful sessions; pass one to be able to close them on shutdown. */
+  sessions?: McpSessionManager;
 }
 
 /**
- * Streamable-HTTP MCP endpoints:
+ * Builds the Streamable-HTTP MCP endpoints: `/` serves every global skill, `/w/:slug` one enabled workspace's.
  *
- *  - `/`            → every skill
- *  - `/w/:slug`     → only the skills in that workspace
+ * @param deps - The store, and optionally the session manager that holds the stateful sessions.
+ * @returns The router to mount.
  *
- * Stateless by default (a fresh skill `Server` + transport per request, torn
- * down on response close). When `settings.httpLiveUpdates` is on, requests are
- * routed through {@link McpSessionManager} instead — persistent sessions that
- * can push `resources/list_changed` + `updated` over SSE. The mode is read fresh
- * per request, so toggling the setting takes effect without a restart.
+ * @remarks
+ * Stateless unless `settings.httpLiveUpdates` is on: a fresh skill server and transport per request, closed with
+ * the response. With it on, requests go through {@link McpSessionManager}, whose persistent sessions can push
+ * notifications over SSE. The setting is read on every request, so a change needs no restart.
  */
 export function createMcpRouter(deps: McpRouterDeps): Router {
   const { store } = deps;
   const router = Router();
-  const sessions = new McpSessionManager();
+  const sessions = deps.sessions ?? new McpSessionManager();
 
   // Stateless path: fresh server + transport per request, cleaned up on close.
   const handleStateless = async (req: Request, res: Response, buildServer: () => Server): Promise<void> => {
@@ -45,9 +49,8 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
     await transport.handleRequest(req, res, req.body);
   };
 
-  // Dispatch to the stateful session manager or the stateless path per the live
-  // setting. Only a stateful session is built with live updates, so a stateless
-  // server never advertises capabilities it can't honor.
+  // Dispatches per the live setting. Only a stateful session is built with live updates, so a
+  // stateless server never advertises capabilities it can't honor.
   const handle = async (req: Request, res: Response, workspaceSlug: string | undefined): Promise<void> => {
     const buildServer = (liveUpdates: boolean): Server =>
       createSkillServer(endpointDeps(store, { workspaceSlug, liveUpdates }));
@@ -67,9 +70,12 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
   router.all('/w/:slug', async (req, res) => {
     const slug = req.params.slug;
     const workspace = store.getWorkspace(slug);
-    const isServed = workspace?.enabled === true;
-    if (!isServed) {
-      res.status(404).json({ error: `Unknown workspace "${slug}"` });
+    if (workspace === undefined) {
+      sendError(res, HttpStatus.NotFound, `Unknown workspace "${slug}": ${store.knownWorkspaces()}`);
+      return;
+    }
+    if (workspace.enabled === false) {
+      sendError(res, HttpStatus.NotFound, `Workspace "${slug}" is disabled: enable it to serve its endpoint`);
       return;
     }
     await handle(req, res, slug);

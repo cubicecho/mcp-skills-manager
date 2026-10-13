@@ -12,8 +12,10 @@ import {
   createSkillRequestSchema,
   createWorkspaceRequestSchema,
   gitSourceSchema,
+  HttpStatus,
   importGitSkillRequestSchema,
   importSkillRequestSchema,
+  MS_PER_SECOND,
   moveSkillPathRequestSchema,
   slugify,
   slugSchema,
@@ -32,6 +34,7 @@ import { SERVER_VERSION } from '../version.ts';
 
 /** What the management API needs from the process that mounts it. */
 export interface ApiDeps {
+  /** The store every route reads and writes. */
   store: ConfigStore;
   /** The port the HTTP server is listening on, surfaced via GET /status. */
   port: number;
@@ -39,8 +42,9 @@ export interface ApiDeps {
 
 /**
  * Builds the body-less API view of a skill.
- * @param store Store supplying the usage stats.
- * @param skill Skill to render.
+ *
+ * @param store - Store supplying the usage stats.
+ * @param skill - Skill to render.
  * @returns The summary DTO.
  */
 function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
@@ -61,8 +65,9 @@ function toSummary(store: ConfigStore, skill: Skill): SkillSummary {
 
 /**
  * Builds the full API view of a skill.
- * @param store Store supplying the usage stats.
- * @param skill Skill to render.
+ *
+ * @param store - Store supplying the usage stats.
+ * @param skill - Skill to render.
  * @returns The summary plus body and frontmatter.
  */
 function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
@@ -71,39 +76,39 @@ function toDetail(store: ConfigStore, skill: Skill): SkillDetail {
 
 /**
  * Reads the `path` query parameter of a supporting-file request, answering 400 when it is missing.
- * @param req Request whose query string carries the path.
+ *
+ * @param req - Request whose query string carries the path.
  * @returns The non-empty path, relative to the skill root.
  */
 function requirePathQuery(req: Request): string {
   const relPath = req.query.path;
   const isUsable = typeof relPath === 'string' && relPath !== '';
-  if (!isUsable) {
-    throw new HttpError(400, 'A "path" query parameter is required');
+  if (isUsable === false) {
+    throw new HttpError(HttpStatus.BadRequest, 'A "path" query parameter is required');
   }
   return relPath;
 }
 
 /**
  * Resolves the name of a skill being created or imported, answering 400 when the request yields none.
- * @param request Parsed request body carrying an optional name and title.
- * @param action Verb used in the error message.
+ *
+ * @param request - Parsed request body carrying an optional name and title.
+ * @param action - Verb used in the error message.
  * @returns A valid skill slug.
  */
 function requireSkillName(request: { name?: string; title?: string }, action: 'create' | 'import'): string {
   const name = resolveSkillName(request.name, request.title);
   if (!name) {
-    throw new HttpError(400, `A "name" or "title" is required to ${action} a skill`);
+    throw new HttpError(HttpStatus.BadRequest, `A "name" or "title" is required to ${action} a skill`);
   }
-  const parsed = slugSchema.safeParse(name);
-  if (!parsed.success) {
-    throw new HttpError(400, `Invalid skill name "${name}"`, 'lowercase alphanumerics, dots, dashes, underscores');
-  }
-  return parsed.data;
+  // An explicit name was checked at the request boundary, and a slugified title is a slug by construction.
+  return name;
 }
 
 /**
  * Builds the management REST API mounted at /api.
- * @param deps Store and listening port.
+ *
+ * @param deps - Store and listening port.
  * @returns The router; errors thrown by its handlers reach the error middleware.
  */
 export function createApiRouter(deps: ApiDeps): Router {
@@ -111,19 +116,11 @@ export function createApiRouter(deps: ApiDeps): Router {
   const startedAt = Date.now();
   const router = Router();
 
-  const requireSkill = (name: string): Skill => {
-    const skill = store.getSkill(name);
-    if (!skill) {
-      throw new HttpError(404, `Unknown skill "${name}"`);
-    }
-    return skill;
-  };
-
   /** Refuse a content edit to a skill whose content is owned by its git source. */
   const requireUnlinked = (name: string): void => {
-    if (requireSkill(name).source) {
+    if (store.requireSkill(name).source) {
       throw new HttpError(
-        409,
+        HttpStatus.Conflict,
         `Skill "${name}" is linked to a git source`,
         'its content comes from the repo; sync it, or unlink it to edit it here',
       );
@@ -133,7 +130,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.get('/status', (_req, res) => {
     const status: ServerStatus = {
       version: SERVER_VERSION,
-      uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+      uptimeSeconds: Math.floor((Date.now() - startedAt) / MS_PER_SECOND),
       skillCount: store.getSkills().length,
       workspaceCount: store.getWorkspaces().length,
       // Report the *effective* auth state: SECURE_LOCAL_NET overrides settings.json,
@@ -168,7 +165,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       global: request.global,
       tags: request.tags,
     });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   // Create a skill from an uploaded .md / directory / zip (normalized client-side).
@@ -180,23 +177,23 @@ export function createApiRouter(deps: ApiDeps): Router {
       content: Buffer.from(file.content, file.encoding),
     }));
     const skill = await store.importSkill({ name, format: request.format, files });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   // Create a skill linked to a folder in a git repo, fetching it right away.
   router.post('/skills/import-git', async (req, res) => {
     const { name, global, ...source } = importGitSkillRequestSchema.parse(req.body);
     const skill = await store.importSkillFromSource({ name, source, global });
-    res.status(201).json(toDetail(store, skill));
+    res.status(HttpStatus.Created).json(toDetail(store, skill));
   });
 
   router.get('/skills/:name', (req, res) => {
-    res.json(toDetail(store, requireSkill(req.params.name)));
+    res.json(toDetail(store, store.requireSkill(req.params.name)));
   });
 
   router.patch('/skills/:name', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     const update = updateSkillRequestSchema.parse(req.body);
     // A linked skill keeps its local-only settings (name, global, read-only) editable; its content is the repo's.
     const editsContent = update.description !== undefined || update.body !== undefined || update.tags !== undefined;
@@ -220,29 +217,25 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.delete('/skills/:name', async (req, res) => {
     await store.deleteSkill(req.params.name);
-    res.status(204).end();
+    res.status(HttpStatus.NoContent).end();
   });
 
   // Link a skill to a folder in a git repo and replace its content with that folder.
   router.put('/skills/:name/source', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     const source = gitSourceSchema.parse(req.body);
     res.json(toDetail(store, await store.linkSkillSource(name, source)));
   });
 
   // Drop a skill's git link; its content stays as last synced and becomes editable again.
   router.delete('/skills/:name/source', async (req, res) => {
-    const name = req.params.name;
-    requireSkill(name);
-    res.json(toDetail(store, await store.unlinkSkillSource(name)));
+    res.json(toDetail(store, await store.unlinkSkillSource(req.params.name)));
   });
 
   // Replace a linked skill's folder with the newest copy from its source.
   router.post('/skills/:name/sync', async (req, res) => {
-    const name = req.params.name;
-    requireSkill(name);
-    const { skill, changed } = await store.syncSkill(name);
+    const { skill, changed } = await store.syncSkill(req.params.name);
     const response: SyncSkillResponse = { skill: toDetail(store, skill), changed };
     res.json(response);
   });
@@ -250,7 +243,6 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Export a skill as a .zip download.
   router.get('/skills/:name/export', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
     const zip = await store.exportSkillZip(name);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
@@ -260,7 +252,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Read one supporting file's content: GET /skills/:name/files/content?path=<relative path>
   router.get('/skills/:name/files/content', async (req, res) => {
     const name = req.params.name;
-    requireSkill(name);
+    store.requireSkill(name);
     res.json(await store.readSupportingFile(name, requirePathQuery(req)));
   });
 
@@ -306,18 +298,14 @@ export function createApiRouter(deps: ApiDeps): Router {
     resolvedCount: store.getSkillsForWorkspace(workspace).length,
   });
 
-  const requireWorkspace = (slug: string): WorkspaceConfig => {
-    const workspace = store.getWorkspace(slug);
-    if (!workspace) {
-      throw new HttpError(404, `Unknown workspace "${slug}"`);
-    }
-    return workspace;
-  };
-
   const requireValidSlug = (slug: string): string => {
     const parsed = slugSchema.safeParse(slug);
     if (!parsed.success) {
-      throw new HttpError(400, `Invalid workspace slug "${slug}"`, 'derive a name that yields a valid URL slug');
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `Invalid workspace slug "${slug}"`,
+        'derive a name that yields a valid URL slug',
+      );
     }
     return parsed.data;
   };
@@ -330,7 +318,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     const request = createWorkspaceRequestSchema.parse(req.body);
     const slug = requireValidSlug(request.slug ?? slugify(request.name));
     if (store.getWorkspace(slug)) {
-      throw new HttpError(409, `Workspace "${slug}" already exists`);
+      throw new HttpError(HttpStatus.Conflict, `Workspace "${slug}" already exists`);
     }
     const config = workspaceConfigSchema.parse({
       name: request.name,
@@ -341,15 +329,15 @@ export function createApiRouter(deps: ApiDeps): Router {
       skillToolMode: request.skillToolMode,
     });
     const saved = await store.saveWorkspace(config);
-    res.status(201).json(toWorkspaceStatus(saved));
+    res.status(HttpStatus.Created).json(toWorkspaceStatus(saved));
   });
 
   router.get('/workspaces/:slug', (req, res) => {
-    res.json(toWorkspaceStatus(requireWorkspace(req.params.slug)));
+    res.json(toWorkspaceStatus(store.requireWorkspace(req.params.slug)));
   });
 
   router.patch('/workspaces/:slug', async (req, res) => {
-    const existing = requireWorkspace(req.params.slug);
+    const existing = store.requireWorkspace(req.params.slug);
     const update = updateWorkspaceRequestSchema.parse(req.body);
     // Auto-slug: renaming re-derives the slug (and thus the URL). Keep the old
     // slug when the name is unchanged so member-only edits never move the URL.
@@ -357,7 +345,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     const slug = update.name !== undefined ? requireValidSlug(slugify(name)) : existing.slug;
     const collidesWithAnother = slug !== existing.slug && store.getWorkspace(slug) !== undefined;
     if (collidesWithAnother) {
-      throw new HttpError(409, `Workspace "${slug}" already exists`);
+      throw new HttpError(HttpStatus.Conflict, `Workspace "${slug}" already exists`);
     }
     // skillToolMode: undefined → keep; null → clear the override (inherit global); a value → set it.
     const skillToolMode =
@@ -379,9 +367,8 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.delete('/workspaces/:slug', async (req, res) => {
-    requireWorkspace(req.params.slug);
     await store.deleteWorkspace(req.params.slug);
-    res.status(204).end();
+    res.status(HttpStatus.NoContent).end();
   });
 
   router.post('/reload', async (_req, res) => {

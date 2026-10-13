@@ -1,4 +1,4 @@
-import type { LucideIcon, LucideProps } from 'lucide-react';
+import type { LucideIcon, LucideProps } from "lucide-react";
 
 /** What an icon takes — the name `icons.tsx` exports for its wrapped icons. */
 export type IconProps = LucideProps;
@@ -62,4 +62,4 @@ export {
   Upload,
   UserRound,
   X,
-} from 'lucide-react';
+} from "lucide-react";

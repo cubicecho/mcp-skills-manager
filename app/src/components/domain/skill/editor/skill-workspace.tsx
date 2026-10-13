@@ -1,24 +1,22 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FilePreview } from '@/components/domain/skill/editor/file-preview';
-import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
 import { FilesPanel } from '@/components/domain/skill/editor/files-panel';
 import { SkillBodyEditor } from '@/components/domain/skill/editor/skill-body-editor';
+import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { SidebarLayout } from '@/components/split-layout';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 
 /**
- * One skill: its files in a list, and the selected one beside it. A file opens as a preview, and its
- * Edit button swaps the preview for the editor; only the skill's Markdown and `.md` files have one.
- * @param props.skill - The skill on screen.
- * @param props.selected - The selected file's path relative to the skill root; absent, the skill's own Markdown.
- * @param props.startEditing - Open the selected file in the editor rather than as a preview, once.
- * @param props.onSelect - Called with the file to open, and whether to open it in the editor.
- * @param props.onEditStarted - Called once `startEditing` has been acted on, so the caller can drop it.
- * @param props.onRenamed - Called with the skill's new name once a rename has been saved.
+ * One skill: its files in a list, and the selected one beside it.
+ *
+ * @remarks
+ * A file opens as a preview, and its Edit button swaps the preview for the editor; only the skill's Markdown
+ * and `.md` files have one.
  */
 export function SkillWorkspace({
   skill,
@@ -28,11 +26,17 @@ export function SkillWorkspace({
   onEditStarted,
   onRenamed,
 }: {
+  /** The skill on screen. */
   skill: SkillDetail;
+  /** The selected file's path relative to the skill root; absent, the skill's own Markdown. */
   selected: string | undefined;
+  /** Opens the selected file in the editor rather than as a preview, once. */
   startEditing: boolean;
+  /** Called with the file to open (undefined for the skill's own Markdown), and whether to open it in the editor. */
   onSelect: (path: string | undefined, options?: { edit?: boolean }) => void;
+  /** Called once `startEditing` has been acted on, so the caller can drop it. */
   onEditStarted: () => void;
+  /** Called with the skill's new name once a rename has been saved. */
   onRenamed: (name: string) => void;
 }) {
   const exists = selected !== undefined && skill.files.some((f) => f.type === 'file' && f.path === selected);
@@ -52,7 +56,7 @@ export function SkillWorkspace({
       sidebarWidth="md"
       stackBelow="md"
       divider="line"
-      sidebar={
+      sidebarSlot={
         <FilesPanel
           skill={skill}
           selected={path}
@@ -60,7 +64,7 @@ export function SkillWorkspace({
           onRenamed={onRenamed}
         />
       }
-      content={
+      contentSlot={
         <FilePane key={path} skill={skill} path={path} startEditing={startEditing} onEditStarted={onEditStarted} />
       }
     />
@@ -74,17 +78,19 @@ function FilePane({
   startEditing,
   onEditStarted,
 }: {
+  /** The skill the file belongs to. */
   skill: SkillDetail;
+  /** The file's path relative to the skill root, or `SKILL_MD_KEY` for the skill's own Markdown. */
   path: string;
+  /** Starts in the editor rather than the preview, when the file can be edited here. */
   startEditing: boolean;
+  /** Called once `startEditing` has been seen, so the caller can drop it. */
   onEditStarted: () => void;
 }) {
   // A skill linked to a git source is read here, never edited: its content is the repo's.
   const editable = !skill.source && (path === SKILL_MD_KEY || isMarkdownPath(path));
   const [editing, setEditing] = useState(startEditing && editable);
-  const [dirty, setDirty] = useState(false);
-  // Close was pressed over unsaved edits, and the reader has not yet said what happens to them.
-  const [closing, setClosing] = useState(false);
+  const editor = useRef<EditorHandle>(null);
 
   useEffect(() => {
     if (startEditing) {
@@ -92,45 +98,23 @@ function FilePane({
     }
   }, [startEditing, onEditStarted]);
 
-  // Opening another file, another skill or another page, and closing or reloading the tab.
-  const unsaved = editing && editable && dirty;
-  const blocker = useBlocker({ shouldBlockFn: () => unsaved, enableBeforeUnload: () => unsaved, withResolver: true });
+  // Asked when the reader leaves: by Close, by opening another file, skill or page, or by closing the tab.
+  const hasUnsavedChanges = () => editor.current?.hasUnsavedChanges() ?? false;
+  const blocker = useBlocker({ shouldBlockFn: hasUnsavedChanges, enableBeforeUnload: false, withResolver: true });
+  // Only an open editor can hold edits, and the guard listens for the tab closing only while one is open.
+  const guard = useUnsavedChangesGuard({
+    hasUnsavedChanges: editing && editable ? hasUnsavedChanges : false,
+    blocker,
+  });
 
-  const stopEditing = () => {
-    setDirty(false);
-    setEditing(false);
-  };
-
-  const keepEditing = () => {
-    setClosing(false);
-    blocker.reset?.();
-  };
-
-  const discard = () => {
-    setClosing(false);
-    if (blocker.status === 'blocked') {
-      blocker.proceed();
-    } else {
-      stopEditing();
-    }
-  };
-
-  const close = () => (dirty ? setClosing(true) : stopEditing());
+  const close = () => guard.leave(() => setEditing(false));
 
   return (
     <>
-      <ConfirmDialog
-        open={closing || blocker.status === 'blocked'}
-        onOpenChange={(open) => {
-          if (!open) {
-            keepEditing();
-          }
-        }}
-        title="Discard unsaved changes?"
-        description="The edits to the open file have not been saved, and leaving the editor loses them."
-        confirmLabel="Discard"
-        cancelLabel="Keep editing"
-        onConfirm={discard}
+      <UnsavedChangesDialog
+        guard={guard}
+        discardTitle="Discard unsaved changes?"
+        discardDescription="The edits to the open file have not been saved, and leaving the editor loses them."
       />
 
       {!editing || !editable ? (
@@ -138,11 +122,11 @@ function FilePane({
       ) : (
         <StickyHeaderContentFooter
           contentClassName="p-4"
-          content={
+          contentSlot={
             path === SKILL_MD_KEY ? (
-              <SkillBodyEditor skill={skill} onDirtyChange={setDirty} onClose={close} />
+              <SkillBodyEditor ref={editor} skill={skill} onClose={close} />
             ) : (
-              <SupportingFileEditor skillName={skill.name} path={path} onDirtyChange={setDirty} onClose={close} />
+              <SupportingFileEditor ref={editor} skillName={skill.name} path={path} onClose={close} />
             )
           }
         />

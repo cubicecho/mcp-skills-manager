@@ -18,10 +18,17 @@ export type SwitchProps = {
    * title. The web honours it, Android reads it, iOS does not — a native caller that needs the
    * name on an iPhone passes `accessibilityLabel` too.
    */
-  'aria-labelledby'?: string | undefined;
+  "aria-labelledby"?: string | undefined;
+  /**
+   * What says more about the switch — a `SwitchField`'s `description` — by id. Web only: React
+   * Native has no description relation, so on device the line is read where it is drawn.
+   */
+  "aria-describedby"?: string | undefined;
   className?: string | undefined;
 };
 
 /** Shared between the two files so the track cannot drift between platforms. */
-export const SWITCH_TRACK_CLASS = 'h-5 w-9 shrink-0 flex-row items-center rounded-full border-2 border-transparent';
-export const SWITCH_THUMB_CLASS = 'h-4 w-4 rounded-full bg-background';
+export const SWITCH_TRACK_CLASS =
+  "h-5 w-9 shrink-0 flex-row items-center rounded-full border-2 border-transparent";
+/** The switch's thumb: the circle that slides along the track. */
+export const SWITCH_THUMB_CLASS = "h-4 w-4 rounded-full bg-background";

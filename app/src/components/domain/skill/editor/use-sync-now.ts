@@ -5,7 +5,8 @@ import { useToasts } from '@/lib/toast';
 const SHORT_COMMIT_LENGTH = 7;
 
 /**
- * Shorten a commit SHA for display.
+ * Shortens a commit SHA for display.
+ *
  * @param commit - The full SHA.
  * @returns Its first seven characters.
  */
@@ -14,9 +15,10 @@ export function shortCommit(commit: string): string {
 }
 
 /**
- * Sync a linked skill from its git source, toasting what came of it.
+ * Syncs a linked skill from its git source on request, toasting what came of it.
+ *
  * @param name - The skill's slug.
- * @returns `sync` to start it, and `pending` while it runs.
+ * @returns `sync` to start it (ignored while one runs), and `pending` while it runs.
  */
 export function useSyncNow(name: string): { sync: () => void; pending: boolean } {
   const toast = useToasts();

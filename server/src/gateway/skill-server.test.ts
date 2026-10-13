@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import type { Skill } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -9,8 +6,9 @@ import {
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ConfigStore } from '../config/store.ts';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useTempStore } from '../test/temp-store.ts';
+import { firstText } from '../test/tool-result.ts';
 import { createSkillServer } from './skill-server.ts';
 
 function skill(overrides: Partial<Skill> & Pick<Skill, 'name'>): Skill {
@@ -44,13 +42,6 @@ const SKILLS: Skill[] = [
   }),
 ];
 
-/** The text of a tool result's first content block. */
-function firstText(res: unknown): string {
-  const block = (res as { content?: Array<{ type: string; text: string }> }).content?.[0];
-  if (!block) throw new Error('tool result had no content');
-  return block.text;
-}
-
 /** The first resource-content block, widened past the text|blob union for assertions. */
 function firstContent(res: { contents: unknown[] }): { text?: string; blob?: string; mimeType?: string } {
   return res.contents[0] as { text?: string; blob?: string; mimeType?: string };
@@ -66,6 +57,29 @@ async function connect(getSkills: () => Skill[], opts: ConnectOpts = {}): Promis
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return client;
 }
+
+describe('skills whose names share one tool name', () => {
+  const TWINS: Skill[] = [
+    skill({ name: 'a.b', body: 'dotted body' }),
+    skill({ name: 'a_b', body: 'underscored body' }),
+  ];
+
+  it('advertises each under its own tool name and loads the right one', async () => {
+    const client = await connect(() => TWINS);
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    expect(names.filter((name) => name.startsWith('a_b'))).toEqual(['a_b__2', 'a_b']);
+    expect(firstText(await client.callTool({ name: 'a_b' }))).toBe('underscored body');
+    expect(firstText(await client.callTool({ name: 'a_b__2' }))).toBe('dotted body');
+  });
+
+  it('names the qualified tool in the catalogue, also when a search returns only that skill', async () => {
+    const client = await connect(() => TWINS);
+    expect(firstText(await client.callTool({ name: 'list_skills' }))).toContain('a.b (tool a_b__2;');
+    const found = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'dotted' } }));
+    expect(found).toContain('skills: 1');
+    expect(found).toContain('a.b (tool a_b__2;');
+  });
+});
 
 describe('skill-server index tool', () => {
   let client: Client;
@@ -223,6 +237,24 @@ describe('skill-server loader mode', () => {
     await expect(client.callTool({ name: 'load_skill', arguments: { name: 'commit_messages' } })).rejects.toThrow(
       /Unknown skill/,
     );
+  });
+
+  it('refuses wrong-typed arguments rather than reading them as absent', async () => {
+    await expect(client.callTool({ name: 'search_skills', arguments: { query: 5 } })).rejects.toThrow(
+      /Invalid arguments for search_skills: query: /,
+    );
+    await expect(client.callTool({ name: 'search_skills', arguments: { tags: 'git' } })).rejects.toThrow(
+      /Invalid arguments for search_skills: tags: /,
+    );
+    await expect(client.callTool({ name: 'load_skill', arguments: { name: 5 } })).rejects.toThrow(
+      /Invalid arguments for load_skill: name: /,
+    );
+    await expect(client.callTool({ name: 'load_skill' })).rejects.toThrow(/Invalid arguments for load_skill: name: /);
+  });
+
+  it('refuses a per-skill tool name, which it does not advertise', async () => {
+    await expect(client.callTool({ name: 'pdf-forms' })).rejects.toThrow(/Unknown skill tool "pdf-forms"/);
+    await expect(client.callTool({ name: 'commit_messages' })).rejects.toThrow(/Unknown skill tool/);
   });
 });
 
@@ -553,8 +585,12 @@ describe('skill-server prompts', () => {
   /** The text of a prompt result's only message. */
   function promptText(res: { messages: Array<{ role: string; content: unknown }> }): string {
     expect(res.messages).toHaveLength(1);
-    expect(res.messages[0]?.role).toBe('user');
-    return (res.messages[0]?.content as { text: string }).text;
+    const [message] = res.messages;
+    if (message === undefined) {
+      throw new Error('prompt result had no message');
+    }
+    expect(message.role).toBe('user');
+    return (message.content as { text: string }).text;
   }
 
   it('does not advertise prompts when the endpoint cannot read skill files', async () => {
@@ -619,6 +655,27 @@ describe('skill-server prompts', () => {
   it('rejects an unknown prompt', async () => {
     const client = await connect(() => PROMPT_SKILLS, reader);
     await expect(client.getPrompt({ name: 'nope' })).rejects.toThrow(/Unknown prompt "nope"/);
+  });
+
+  it('says why a prompt file could not be served, and logs it when listing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const broken = [dirSkill('standards', ['prompts/refactor.md', 'prompts/gone.md', 'prompts/image.md'])];
+    const client = await connect(() => broken, {
+      readSupportingFile: async (skillName: string, relPath: string) => {
+        if (relPath === 'prompts/image.md') {
+          return { path: relPath, content: 'AAAA', encoding: 'base64' as const, size: 3, binary: true };
+        }
+        return reader.readSupportingFile(skillName, relPath);
+      },
+    });
+
+    await expect(client.getPrompt({ name: 'gone' })).rejects.toThrow(/Cannot read prompt "gone": no such file/);
+    await expect(client.getPrompt({ name: 'image' })).rejects.toThrow(/Cannot read prompt "image": not a text file/);
+
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((p) => p.name)).toEqual(['refactor']);
+    expect(warn).toHaveBeenCalledWith('Skipping prompt "gone" of skill "standards": no such file');
+    warn.mockRestore();
   });
 
   it('serves only the prompts of the skills this endpoint serves', async () => {
@@ -727,32 +784,20 @@ describe('skill-server live updates (stdio)', () => {
 });
 
 describe('skill-server advertised tools with authoring on', () => {
-  let dir: string;
-  let store: ConfigStore;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-tools-'));
-    store = new ConfigStore(dir);
-    await store.init();
-  });
-
-  afterEach(async () => {
-    await store.close();
-    await rm(dir, { recursive: true, force: true });
-  });
+  const temp = useTempStore();
 
   it('pins every tool definition in per-skill mode', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store } });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store } });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 
   it('pins every tool definition in loader mode', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store }, getSkillToolMode: () => 'loader' });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store }, getSkillToolMode: () => 'loader' });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 
   it('pins the authoring tools of a workspace endpoint', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store, workspaceSlug: 'examples' } });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store, workspaceSlug: 'examples' } });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 });

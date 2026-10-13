@@ -29,6 +29,17 @@ describe('parseMarkdown', () => {
     expect(body).toBe(raw);
   });
 
+  it('drops only the keys whose values are mistyped, keeping the rest', () => {
+    const raw = '---\nname: demo\ndescription: 123\nreadonly: true\nglobal: false\nauthor: ada\n---\nbody\n';
+    const { frontmatter, body } = parseMarkdown(raw);
+    expect(frontmatter).toEqual({ name: 'demo', readonly: true, global: false, author: 'ada' });
+    expect(body).toBe('body\n');
+  });
+
+  it('reads frontmatter that is not a mapping as empty', () => {
+    expect(parseMarkdown('---\n- a\n- b\n---\nbody\n')).toEqual({ frontmatter: {}, body: 'body\n' });
+  });
+
   it('handles CRLF line endings', () => {
     const { frontmatter, body } = parseMarkdown('---\r\nname: demo\r\n---\r\n# Body\r\n');
     expect(frontmatter.name).toBe('demo');

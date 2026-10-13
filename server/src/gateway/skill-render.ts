@@ -1,16 +1,26 @@
 import type { Skill, SkillToolMode } from '@mcp-skills/shared';
-import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
+import { bundledFiles } from '../skills/skill-view.ts';
 import { fileResourceUri } from './resource-uri.ts';
 import { promptFileName } from './skill-prompts.ts';
 
-/** Normalize the `allowed-tools` frontmatter (a comma-separated string or a list) to a clean string array. */
+/**
+ * Reads the `allowed-tools` frontmatter, which is a comma-separated string or a list.
+ *
+ * @param skill - The skill whose frontmatter to read.
+ * @returns The tool names, trimmed and without empty ones; empty when the key is absent or another type.
+ */
 function allowedTools(skill: Skill): string[] {
   const raw = skill.frontmatter['allowed-tools'];
   const parts = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [];
   return parts.map((t) => t.trim()).filter((t) => t.length > 0);
 }
 
-/** The optional Agent Skills metadata (license, allowed-tools) an agent may care about, if present. */
+/**
+ * Reads the optional Agent Skills metadata an agent may care about: the license and the allowed tools.
+ *
+ * @param skill - The skill whose frontmatter to read.
+ * @returns Each of the two that the skill declares; a key it does not declare is absent.
+ */
 function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } {
   const meta: { license?: string; allowedTools?: string[] } = {};
   const license = skill.frontmatter.license;
@@ -25,14 +35,24 @@ function skillMeta(skill: Skill): { license?: string; allowedTools?: string[] } 
   return meta;
 }
 
-/** Optional human-readable display title, from frontmatter `title` when authored (never fabricated from the slug). */
+/**
+ * Reads a skill's display title from its frontmatter `title`.
+ *
+ * @param skill - The skill whose frontmatter to read.
+ * @returns The trimmed title, or `undefined` when the author set none; it is never made up from the slug.
+ */
 export function skillTitle(skill: Skill): string | undefined {
   const title = skill.frontmatter.title;
   const hasTitle = typeof title === 'string' && title.trim().length > 0;
   return hasTitle ? title.trim() : undefined;
 }
 
-/** The text handed to an agent when it loads a skill: the Markdown body, plus footers for metadata and bundled files. */
+/**
+ * Renders the text handed to an agent when it loads a skill.
+ *
+ * @param skill - The skill to render.
+ * @returns The Markdown body, then a footer for its metadata and one for its bundled files, prompt files left out.
+ */
 export function renderSkill(skill: Skill): string {
   const sections = [skill.body];
 
@@ -64,10 +84,17 @@ export function renderSkill(skill: Skill): string {
 /** The characters of an ISO timestamp that are its date. */
 const DATE_CHARS = '2026-01-01'.length;
 
-/** One catalogue line: the metadata an agent needs to decide whether to load a skill (never the body). */
-function indexLine(skill: Skill, mode: SkillToolMode): string {
+/**
+ * Renders one catalogue line: the metadata an agent needs to decide whether to load a skill, never the body.
+ *
+ * @param skill - The skill the line is for.
+ * @param mode - How the endpoint advertises skills; a per-skill tool name is only shown under `per-skill`.
+ * @param toolNames - Tool name by skill name, for every skill the endpoint serves.
+ * @returns The line, as `name [#tags] (notes): description`.
+ */
+function indexLine(skill: Skill, mode: SkillToolMode, toolNames: ReadonlyMap<string, string>): string {
   const tags = skill.tags.length > 0 ? ` [${skill.tags.map((tag) => `#${tag}`).join(' ')}]` : '';
-  const toolName = skillToolName(skill.name);
+  const toolName = toolNames.get(skill.name) ?? skill.name;
   const loadsUnderAnotherName = mode === 'per-skill' && toolName !== skill.name;
   // Flagged so an agent knows up front that the authoring tools will refuse this skill — because a
   // human marked it read-only, or because its content is owned by a git source.
@@ -87,15 +114,19 @@ function indexLine(skill: Skill, mode: SkillToolMode): string {
 }
 
 /**
- * The catalogue returned by the index and search tools: a line that counts the skills, then one
- * line per skill. Text rather than JSON, since an agent pays for every character of it.
+ * Renders the catalogue the index and search tools answer with: a line that counts the skills, then one per skill.
+ *
  * @param skills - The skills to list.
  * @param mode - How the endpoint advertises skills; a per-skill tool name is only shown under `per-skill`.
- * @returns The catalogue text, with no skill bodies.
+ * @param toolNames - Tool name by skill name, for every skill the endpoint serves.
+ * @returns The catalogue text, with no skill bodies; `No skills.` for an empty list.
+ *
+ * @remarks
+ * It is text rather than JSON, since an agent pays for every character of it.
  */
-export function renderIndex(skills: Skill[], mode: SkillToolMode): string {
+export function renderIndex(skills: Skill[], mode: SkillToolMode, toolNames: ReadonlyMap<string, string>): string {
   if (skills.length === 0) {
     return 'No skills.';
   }
-  return [`skills: ${skills.length}`, ...skills.map((skill) => indexLine(skill, mode))].join('\n');
+  return [`skills: ${skills.length}`, ...skills.map((skill) => indexLine(skill, mode, toolNames))].join('\n');
 }

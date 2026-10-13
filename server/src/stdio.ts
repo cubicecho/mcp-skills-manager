@@ -3,17 +3,19 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConfigStore } from './config/store.ts';
+import { EnvVar } from './core/defaults.ts';
 import { errorMessage } from './errors.ts';
 import { endpointDeps } from './gateway/endpoint.ts';
 import { createSkillServer } from './gateway/skill-server.ts';
+import { closeOnSignal } from './shutdown.ts';
 
 /**
- * stdio MCP entry point. Serves every skill by default, or only a workspace's
- * skills with `--workspace <slug>`. Skills are read from DATA_DIR (default
- * ./data) and the store watches for on-disk edits so tools/list stays current
- * within a long-lived session.
+ * Runs the stdio MCP server: `mcp-skills-stdio --data-dir /path/to/data --workspace backend`.
  *
- *   mcp-skills-stdio --data-dir /path/to/data --workspace backend
+ * @remarks
+ * It serves the root endpoint's skills, or only a workspace's with `--workspace <slug>`; an unknown slug
+ * exits 1. Skills are read from `--data-dir`, else `DATA_DIR`, else `./data`. The store watches for
+ * on-disk edits, so tools/list stays current within a long-lived session.
  */
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -23,14 +25,14 @@ async function main(): Promise<void> {
     },
   });
 
-  const dataDir = path.resolve(values['data-dir'] ?? process.env.DATA_DIR ?? './data');
+  const dataDir = path.resolve(values['data-dir'] ?? process.env[EnvVar.DataDir] ?? './data');
   const store = new ConfigStore(dataDir);
   await store.init();
   store.startWatching();
 
   const workspaceSlug = values.workspace;
   if (workspaceSlug && !store.getWorkspace(workspaceSlug)) {
-    console.error(`Unknown workspace "${workspaceSlug}" (data dir: ${dataDir})`);
+    console.error(`Unknown workspace "${workspaceSlug}" in data dir ${dataDir}: ${store.knownWorkspaces()}`);
     process.exit(1);
   }
 
@@ -45,14 +47,13 @@ async function main(): Promise<void> {
       `${workspaceSlug ? ` from workspace "${workspaceSlug}"` : ''} (data dir: ${dataDir})`,
   );
 
-  const shutdown = () => {
-    store
-      .close()
-      .catch((err: unknown) => console.error(`Shutdown error: ${errorMessage(err)}`))
-      .finally(() => process.exit(0));
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  closeOnSignal(
+    [
+      { label: 'MCP server', close: () => server.close() },
+      { label: 'store', close: () => store.close() },
+    ],
+    { on: (signal, listener) => process.on(signal, listener), exit: (code) => process.exit(code), log: console.error },
+  );
 }
 
 main().catch((err: unknown) => {

@@ -1,7 +1,8 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_KEEP_ALIVE_TIMEOUT_MS, tuneKeepAlive } from './http-tuning.ts';
+import { DEFAULT_KEEP_ALIVE_TIMEOUT_MS } from './core/defaults.ts';
+import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 
 const servers: Server[] = [];
 
@@ -40,5 +41,16 @@ describe('tuneKeepAlive', () => {
     const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     await response.text();
     expect(response.headers.get('keep-alive')).toBe(`timeout=${DEFAULT_KEEP_ALIVE_TIMEOUT_MS / 1000}`);
+  });
+});
+
+describe('resolvePort', () => {
+  it('takes PORT over the settings port, including 0 for any free port', () => {
+    expect(resolvePort(3001, { PORT: '8080' })).toBe(8080);
+    expect(resolvePort(3001, { PORT: '0' })).toBe(0);
+  });
+
+  it.each([undefined, '', '  ', 'http', '-1', '80.5', '70000'])('falls back to the settings port for %j', (value) => {
+    expect(resolvePort(3001, { PORT: value })).toBe(3001);
   });
 });

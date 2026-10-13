@@ -45,7 +45,9 @@ one line per skill (`renderIndex` in `skill-render.ts`), not JSON. A skill autho
 workspace endpoint** is scoped to that workspace by default: written with a
 `global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
 see `ConfigStore.getGlobalSkills`) and appended to the workspace's member list.
-Root-authored skills are global. `create_skill`/`update_skill` take a `global`
+Root-authored skills are global. A workspace endpoint authors only the skills it
+serves: every authoring tool aimed at another skill is refused (`requireServed`),
+while the root endpoint reaches them all. `create_skill`/`update_skill` take a `global`
 argument to override either default (e.g. promote a workspace skill to global).
 New skills default to the `dir` layout so ref files can be attached.
 
@@ -62,7 +64,8 @@ ref?, path?, commit, syncedAt }` → `Skill.source`; schemas in
 `linkSkillSource` / `syncSkill` / `unlinkSkillSource` fetch the folder with the
 git CLI (`server/src/sources/git-fetch.ts`, no shell, injected as the store's
 `fetchSource` option so tests use a fake), stage it under `DATA_DIR/.sync` —
-outside the watched dirs — and swap it in for the skill's folder. Sync is manual
+outside the watched dirs — and swap it in for the skill's folder (`SkillSync` in
+`server/src/sources/skill-sync.ts`; the store loads the result). Sync is manual
 (`POST /api/skills/:name/sync`); it forces the local `name` and carries
 `global`/`readonly` over, so identity and workspace membership survive. A linked
 skill's content is **locked**: the REST content routes answer 409
@@ -85,7 +88,7 @@ npm run dev:server       # Express + MCP server only (port 3001, DATA_DIR=./data
 npm run dev:app          # Vite dev server only (port 3000, proxies /api + /mcp)
 
 # Quality — run before every commit
-npm run check            # biome check + tsc --noEmit for all packages
+npm run check            # biome check --write (fixes what it can) + tsc --noEmit; CI runs `biome ci`
 npm run check:fix        # biome with auto-fix
 npm run lint / lint:fix  # biome lint only
 npm test                 # vitest run
@@ -102,7 +105,7 @@ docker compose up        # run the container; ./data mounted at /data
 
 | Choice | Why |
 | --- | --- |
-| **Biome** | Single formatter+linter; enforces `useImportType`, `noUnusedImports` |
+| **Biome** | Single formatter+linter on the org config: `useImportType`, `noUnusedImports`, `useBlockStatements`, `noMagicNumbers`, kebab-case filenames, and `no-negation.grit` (negate a logic check with `=== false`, not `!`). Vendored cubeui files are excluded |
 | **Express 5 + @modelcontextprotocol/sdk** | `StreamableHTTPServerTransport` (stateless) for `/mcp`; `StdioServerTransport` for the CLI entry. One `Server` per request/process exposing tools + resources |
 | **Flat-file config** | `DATA_DIR/config/{settings.json,workspaces/<slug>.json}` (JSON) + `DATA_DIR/skills/<name>.md` or `<name>/SKILL.md` (Markdown + YAML frontmatter); hand-editable, watched (chokidar, debounced) + `POST /api/reload`; atomic writes, mode 0600 |
 | **Node ≥22.18 type stripping** | Server dev runs `.ts` directly (`node --watch`), no build step; `tsc` with `rewriteRelativeImportExtensions` emits `dist/` for prod — so **use `.ts` extensions in all relative imports** in `server/` and `shared/` |
@@ -132,7 +135,9 @@ const input = createSkillRequestSchema.parse(req.body); // throws → 400 via er
 hand-added keys survive round-trips.
 
 **Skill names are slugs:** `^[a-z0-9][a-z0-9._-]*$`, max 64. Names double as
-tool names (dots sanitized to `_` for the MCP tool name) and resource URIs
+tool names (dots sanitized to `_` for the MCP tool name; when two served skills
+sanitize to one name the later is numbered `<tool>__2` — `skillToolNames` in
+`server/src/skills/skill-view.ts`) and resource URIs
 (`skill://<name>`). A skill's canonical identity is its frontmatter `name` when
 that is a valid slug (so a folder can be named anything — the on-disk basename
 is only a storage detail, resolved via the skill's stored `path`); it falls

@@ -1,7 +1,9 @@
+import { HttpStatus } from '@mcp-skills/shared';
 import { HttpError } from '../errors.ts';
 
 /** One change to part of a text: an exact passage, and the text that takes its place. */
 export interface Replacement {
+  /** The passage to find, compared character for character once line endings are `\n`. */
   oldText: string;
   /** Empty to delete the passage. */
   newText: string;
@@ -10,13 +12,16 @@ export interface Replacement {
 }
 
 /**
- * Makes each replacement in order, each on the result of the one before. Line endings are
- * compared as `\n`, and the result has `\n`.
+ * Makes each replacement in order, each on the result of the one before.
+ *
  * @param text - The text to change.
  * @param replacements - The passages to swap, in the order they are made.
  * @returns The new text, and `replaced`: how many passages were swapped.
- * @throws HttpError 400 for a replacement that changes nothing, 404 for a passage the text does
- *   not have, and 409 for one it has more than once without `replaceAll`.
+ * @throws HttpError 400 for a no-op replacement, 404 for a passage not in the text, 409 for an ambiguous one.
+ *
+ * @remarks
+ * CRLF line endings are compared as `\n`, and the result has `\n`. A passage is ambiguous when the text has it
+ * more than once and `replaceAll` is not set.
  */
 export function applyReplacements(text: string, replacements: Replacement[]): { text: string; replaced: number } {
   let next = withUnixNewlines(text);
@@ -26,7 +31,10 @@ export function applyReplacements(text: string, replacements: Replacement[]): { 
     const oldText = withUnixNewlines(replacement.oldText);
     const newText = withUnixNewlines(replacement.newText);
     if (oldText === newText) {
-      throw new HttpError(400, `${which}: old_text and new_text are the same, so nothing was written`);
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `${which}: old_text and new_text are the same, so nothing was written`,
+      );
     }
 
     const pieces = next.split(oldText);
@@ -34,14 +42,14 @@ export function applyReplacements(text: string, replacements: Replacement[]): { 
     if (occurrences === 0) {
       const isFirstEdit = index === 0;
       throw new HttpError(
-        404,
+        HttpStatus.NotFound,
         `${which}: old_text is not in the text, so nothing was written. ${howToFix(next, oldText, isFirstEdit)}`,
       );
     }
     const isAmbiguous = occurrences > 1 && replacement.replaceAll !== true;
     if (isAmbiguous) {
       throw new HttpError(
-        409,
+        HttpStatus.Conflict,
         `${which}: old_text is in the text ${occurrences} times, so nothing was written. ` +
           'Add the text around the one you mean until it matches once, or pass replace_all: true',
       );
@@ -61,8 +69,9 @@ interface Passage {
 }
 
 /**
- * What to tell an agent whose `oldText` matched nothing: the nearest passage when there is one, so
- * the text need not be read again.
+ * Says what to tell an agent whose `oldText` matched nothing: the nearest passage when there is one, so the text
+ * need not be read again.
+ *
  * @param text - The text that was searched.
  * @param oldText - The passage that was not found.
  * @param linesAreAsStored - False once an earlier edit has moved the lines, so none are named.
@@ -78,8 +87,9 @@ function howToFix(text: string, oldText: string, linesAreAsStored: boolean): str
 }
 
 /**
- * Finds the passage of `text` an `oldText` that matched nothing most likely meant: the one that
- * differs from it only in whitespace, or else the lines from the one `oldText` starts with.
+ * Finds the passage of `text` an `oldText` that matched nothing most likely meant: the one that differs from it
+ * only in whitespace, or else the lines from the one `oldText` starts with.
+ *
  * @param text - The text that was searched.
  * @param oldText - The passage that was not found.
  * @returns The nearest passage, or `undefined` when nothing in the text resembles `oldText`.
@@ -107,10 +117,22 @@ function nearestPassage(text: string, oldText: string): Passage | undefined {
   return { start: first + 1, end: first + passage.length, text: passage.join('\n') };
 }
 
+/**
+ * Escapes a text so a regular expression matches it literally.
+ *
+ * @param text - The text to match.
+ * @returns The text with every regex metacharacter backslash-escaped.
+ */
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Turns CRLF line endings into `\n`.
+ *
+ * @param text - The text to normalize.
+ * @returns The text with every `\r\n` replaced; a lone `\r` is kept.
+ */
 function withUnixNewlines(text: string): string {
   return text.replaceAll('\r\n', '\n');
 }

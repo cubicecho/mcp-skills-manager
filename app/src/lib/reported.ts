@@ -1,5 +1,7 @@
 /**
- * Await a request, reporting a failure before rethrowing it, so a prompt dialog stays open on a failed request.
+ * Awaits a request, reporting a failure before rethrowing it, so a prompt dialog stays open on a failed request.
+ *
+ * @typeParam T - What the request resolves to.
  * @param request - The request to await.
  * @param onError - Called with the failure, typically to toast it.
  * @returns The request's result.

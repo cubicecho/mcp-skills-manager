@@ -1,10 +1,10 @@
-import type { ComponentProps, ReactNode } from 'react';
-import { useId } from 'react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import type { ComponentProps, ReactNode } from "react";
+import { useId } from "react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-type ActionButtonProps = Omit<ComponentProps<typeof Button>, 'aria-label'> & {
+type ActionButtonProps = Omit<ComponentProps<typeof Button>, "aria-label"> & {
   /**
    * The accessible name, and the tooltip when there is nothing more to say.
    *
@@ -25,7 +25,7 @@ type ActionButtonProps = Omit<ComponentProps<typeof Button>, 'aria-label'> & {
    * read after the name; a node is shown in the tooltip and not read.
    */
   hint?: ReactNode | undefined;
-  side?: ComponentProps<typeof TooltipContent>['side'] | undefined;
+  side?: ComponentProps<typeof TooltipContent>["side"] | undefined;
   /** Off, the button keeps its accessible name and drops the tooltip. */
   tooltip?: boolean | undefined;
   /**
@@ -37,39 +37,39 @@ type ActionButtonProps = Omit<ComponentProps<typeof Button>, 'aria-label'> & {
    * note: an app with a root delay has to repeat it here, and there is no way for the button to
    * read it.
    */
-  delayDuration?: ComponentProps<typeof TooltipProvider>['delayDuration'] | undefined;
+  delayDuration?: ComponentProps<typeof TooltipProvider>["delayDuration"] | undefined;
   /**
    * How long after one tooltip closes that the next opens with no delay — what makes a row of
    * these feel like one control rather than several. Grouping only spans a single provider, so
    * it groups the buttons under this one, which is one button. Web only.
    */
-  skipDelayDuration?: ComponentProps<typeof TooltipProvider>['skipDelayDuration'] | undefined;
+  skipDelayDuration?: ComponentProps<typeof TooltipProvider>["skipDelayDuration"] | undefined;
   /**
    * More ids to describe the button with, kept ahead of the hint's own. Web only — a device
    * describes a control with its accessibility hint, which is what `hint` becomes there.
    */
-  'aria-describedby'?: string | undefined;
+  "aria-describedby"?: string | undefined;
 };
 
+/** A named button with a tooltip, whose `hint` can still be read while it is disabled. */
 export function ActionButton({
   label,
   hint,
-  side = 'top',
+  side = "top",
   tooltip = true,
   delayDuration,
   skipDelayDuration,
   disabled,
   className,
   onClick: onPress,
-  children,
-  'aria-describedby': ariaDescribedBy,
+  "aria-describedby": ariaDescribedBy,
   ...props
 }: ActionButtonProps) {
   const hintId = useId();
   // Destructured rather than left in `props`, which is spread after this and would drop the id.
   // Only pointed at when there is a hint: with none the tooltip repeats the name, and describing
   // the button with its own name has it read as "Delete workspace, Delete workspace".
-  const describedBy = hint ? [ariaDescribedBy, hintId].filter(Boolean).join(' ') : ariaDescribedBy;
+  const describedBy = hint ? [ariaDescribedBy, hintId].filter(Boolean).join(" ") : ariaDescribedBy;
 
   const button = (
     <Button
@@ -79,7 +79,7 @@ export function ActionButton({
       // `opacity-50` is what `disabled` would have drawn.
       aria-disabled={disabled || undefined}
       aria-describedby={describedBy}
-      className={cn(disabled && 'opacity-50', className)}
+      className={cn(disabled && "opacity-50", className)}
       onClick={(event) => {
         if (disabled) {
           event.preventDefault();
@@ -88,9 +88,7 @@ export function ActionButton({
         onPress?.(event);
       }}
       {...props}
-    >
-      {children}
-    </Button>
+    />
   );
 
   // Outside the trigger, not inside the button: `TooltipTrigger asChild` takes exactly one
@@ -105,7 +103,7 @@ export function ActionButton({
 
   // `tooltip={false}` drops the tooltip, not the explanation: the hint is still the reason the
   // control is the way it is, and it is still the only place a screen reader can get it.
-  if (!tooltip) {
+  if (tooltip === false) {
     return (
       <>
         {button}

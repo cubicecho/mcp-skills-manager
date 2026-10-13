@@ -6,35 +6,29 @@ import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { shortCommit, useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
 import { Section } from '@/components/section';
 import { Button } from '@/components/ui/button';
-import { Code } from '@/components/ui/code';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RefreshCw } from '@/components/ui/icons';
+import { formatDateTime } from '@/lib/format';
 import { useUnlinkSkillSource } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 
 /**
- * Format when a skill was last synced.
- * @param iso - The sync time as stored.
- * @returns A local date and time, or nothing when the time does not parse.
- */
-function formatSyncedAt(iso: string | undefined): string | undefined {
-  const date = iso ? new Date(iso) : undefined;
-  return date && !Number.isNaN(date.getTime())
-    ? date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-    : undefined;
-}
-
-/**
  * Where a linked skill comes from and how to bring it up to date: its repo, ref, folder and synced
  * commit, a Sync now button, Unlink, and the local settings that survive a sync.
- * @param props.skill - The linked skill.
- * @param props.source - Its git source.
  */
-export function SourcePanel({ skill, source }: { skill: SkillDetail; source: SkillSource }) {
+export function SourcePanel({
+  skill,
+  source,
+}: {
+  /** The linked skill. */
+  skill: SkillDetail;
+  /** Its git source. */
+  source: SkillSource;
+}) {
   const toast = useToasts();
   const unlink = useUnlinkSkillSource(skill.name);
   const { sync, pending } = useSyncNow(skill.name);
-  const syncedAt = formatSyncedAt(source.syncedAt);
+  const syncedAt = formatDateTime(source.syncedAt ?? '');
 
   return (
     <Section
@@ -42,11 +36,18 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
       description="This skill's content comes from a git repo, so it is not edited here. Sync it to pull the newest version."
       surface="card"
       className="mb-6"
-      action={
+      actionSlot={
         <>
-          <Button size="sm" variant="outline" disabled={pending || unlink.isPending} onClick={sync}>
-            <RefreshCw className={pending ? 'animate-spin' : undefined} /> {pending ? 'Syncing…' : 'Sync now'}
-          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={unlink.isPending}
+            loading={pending}
+            loadingLabel="Syncing…"
+            onClick={sync}
+            content="Sync now"
+            iconSlot={<RefreshCw />}
+          />
           <ConfirmButton
             variant="ghost"
             size="icon-sm"
@@ -61,33 +62,37 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
                 onError: toast.apiError,
               })
             }
-          >
-            <Unlink />
-          </ConfirmButton>
+            iconSlot={<Unlink />}
+          />
         </>
       }
-      content={
+      contentSlot={
         <>
           <DescriptionList
-            content={[
+            contentSlot={[
               <PropertyRow
                 key="repo"
                 label="Repository"
-                value={<Code className="break-all">{source.repo}</Code>}
-                action={<CopyButton value={source.repo} label="Copy repository URL" />}
+                value={source.repo}
+                valueClassName="break-all font-mono"
+                actionSlot={<CopyButton value={source.repo} label="Copy repository URL" />}
               />,
               <PropertyRow key="ref" label="Branch or tag" value={source.ref ?? 'Default branch'} />,
               <PropertyRow
                 key="path"
                 label="Folder"
-                value={source.path ? <Code className="break-all">{source.path}</Code> : 'Repo root'}
+                value={source.path || 'Repo root'}
+                valueClassName={source.path ? 'break-all font-mono' : undefined}
               />,
               <PropertyRow
                 key="commit"
                 label="Synced commit"
-                value={source.commit ? <Code>{shortCommit(source.commit)}</Code> : 'Not synced yet'}
+                value={source.commit ? shortCommit(source.commit) : 'Not synced yet'}
+                valueClassName={source.commit ? 'font-mono' : undefined}
                 hint={syncedAt ? `Synced ${syncedAt}` : undefined}
-                action={source.commit ? <CopyButton value={source.commit} label="Copy full commit SHA" /> : undefined}
+                actionSlot={
+                  source.commit ? <CopyButton value={source.commit} label="Copy full commit SHA" /> : undefined
+                }
               />,
             ]}
           />

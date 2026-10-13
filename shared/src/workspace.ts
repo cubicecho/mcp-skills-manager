@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS } from './defaults.ts';
 import { skillToolModeSchema } from './settings.ts';
 import { slugSchema } from './slug.ts';
 
@@ -9,11 +10,14 @@ import { slugSchema } from './slug.ts';
  * in hand-editable JSON under DATA_DIR/config/workspaces/<slug>.json.
  */
 
+/** A workspace's human-facing display name; at most 100 characters. */
+export const workspaceNameSchema = z.string().min(1).max(LENGTH_LIMITS.workspaceName);
+
 /** One workspace config file, DATA_DIR/config/workspaces/<slug>.json. */
 export const workspaceConfigSchema = z
   .object({
     /** Human-facing display name. */
-    name: z.string().min(1).max(100),
+    name: workspaceNameSchema,
     /** URL slug — the route segment at /mcp/w/<slug>, also the config filename. */
     slug: slugSchema,
     /** Disable to 404 the workspace's endpoint without deleting it. */
@@ -31,4 +35,5 @@ export const workspaceConfigSchema = z
   })
   .passthrough();
 
+/** One workspace's parsed config, defaults filled in. */
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;

@@ -1,15 +1,23 @@
-import type { ComponentProps, ReactNode } from 'react';
-import { useId, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { ColorDot } from '@/components/ui/color-dot';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { matchesEveryWord } from '@/components/ui/command-base';
-import { Check, ChevronsUpDown, Plus, X } from '@/components/ui/icons';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { readableTextColor } from '@/lib/readable-text-color';
-import { cn } from '@/lib/utils';
+import type { ComponentProps, ReactNode } from "react";
+import { useId, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ColorDot } from "@/components/ui/color-dot";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { matchesEveryWord } from "@/components/ui/command-base";
+import { Check, ChevronsUpDown, Plus, X } from "@/components/ui/icons";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { readableTextColor } from "@/lib/readable-text-color";
+import { cn } from "@/lib/utils";
 
+/** One choice in a `MultiSelect`. */
 export type MultiSelectOption = {
   value: string;
   /** What is read, searched and shown on the chip. A string, because all three need one. */
@@ -64,7 +72,7 @@ export function mergeMultiSelectOptions(
   value: readonly string[],
 ): MultiSelectOption[] {
   const known = new Set(options.map((option) => option.value));
-  const orphans = value.filter((selected) => !known.has(selected));
+  const orphans = value.filter((selected) => known.has(selected) === false);
   return orphans.length === 0
     ? [...options]
     : [...options, ...orphans.map((selected) => ({ value: selected, label: selected }))];
@@ -102,9 +110,11 @@ function groupsOf(options: readonly MultiSelectOption[]): MultiSelectRun[] {
  */
 export function isAddableOptionName(name: string, options: readonly MultiSelectOption[]): boolean {
   const trimmed = name.trim();
-  if (trimmed === '') return false;
+  if (trimmed === "") {
+    return false;
+  }
   const folded = trimmed.toLocaleLowerCase();
-  return !options.some((option) => option.label.trim().toLocaleLowerCase() === folded);
+  return options.every((option) => option.label.trim().toLocaleLowerCase() !== folded);
 }
 
 /**
@@ -115,16 +125,18 @@ export function isAddableOptionName(name: string, options: readonly MultiSelectO
  * down to it.
  */
 function chipColors(color: string | undefined) {
-  if (!color) return {};
+  if (!color) {
+    return {};
+  }
   return { backgroundColor: color, textColor: readableTextColor(color) };
 }
 
 /** Off the screen and still read. `sr-only` is a clip, which the device does not have. */
-const SR_ONLY = 'sr-only';
+const SR_ONLY = "sr-only";
 
 type MultiSelectProps = Omit<
   ComponentProps<typeof Button>,
-  'value' | 'onChange' | 'type' | 'children' | 'variant' | 'size' | 'asChild' | 'onPress'
+  "value" | "onChange" | "type" | "children" | "variant" | "size" | "asChild" | "onPress"
 > & {
   options: readonly MultiSelectOption[];
   value: readonly string[];
@@ -180,26 +192,30 @@ function OptionLine({
   className: string;
   children: ReactNode;
 }) {
-  if (typeof children === 'string' || typeof children === 'number') {
+  if (typeof children === "string" || typeof children === "number") {
     return (
-      <span id={id} data-slot={slot} className={cn('cube-rn-text', 'text-xs text-muted-foreground', className)}>
+      <span
+        id={id}
+        data-slot={slot}
+        className={cn("cube-rn-text", "text-xs text-foreground/60", className)}
+      >
         {children}
       </span>
     );
   }
   return (
-    <div id={id} data-slot={slot} className={cn('cube-rn-view', className)}>
+    <div id={id} data-slot={slot} className={cn("cube-rn-view", className)}>
       {children}
     </div>
   );
 }
 
 /**
- * The muted lines answering the highlight. cmdk paints the highlighted row `bg-accent`, and muted
+ * The muted lines answering the highlight. cmdk paints the highlighted row `bg-hover`, and muted
  * text on it is 4.34:1 — under the 4.5 a body-size string needs, so whichever row the arrow keys
  * are on is the one that cannot be read. There is no highlight on device.
  */
-const ON_HIGHLIGHT = 'group-data-[selected=true]:text-accent-foreground/80';
+const ON_HIGHLIGHT = "group-data-[selected=true]:text-foreground";
 
 /**
  * One option, which is up to four things: the tick, the colour dot, what it is called, and what
@@ -231,7 +247,7 @@ function OptionRow({
     <CommandItem
       // What the filter sees. `value` alone would search ids, which nobody types; the heading is
       // in here so that typing a lane's name still finds the cards in it.
-      value={[option.label, option.group, ...(option.keywords ?? [])].filter(Boolean).join(' ')}
+      value={[option.label, option.group, ...(option.keywords ?? [])].filter(Boolean).join(" ")}
       {...(option.disabled === undefined ? {} : { disabled: option.disabled })}
       // `aria-checked`, not `aria-selected`, and not by preference: cmdk uses
       // `aria-selected` for which option is *highlighted* and sets it after the
@@ -247,18 +263,24 @@ function OptionRow({
       // sentence.
       aria-label={option.label}
       // In reading order: the end of the row, then the line under it.
-      aria-describedby={[metaId, hintId].filter(Boolean).join(' ') || undefined}
+      aria-describedby={[metaId, hintId].filter(Boolean).join(" ") || undefined}
       onSelect={() => onToggle(option.value)}
       // `group` so the two muted lines can answer the highlight — see `ON_HIGHLIGHT`.
-      className={cn('group', stacked && 'items-start')}
+      className={cn("group", stacked && "items-start")}
     >
       <Check
-        className={cn('size-4 shrink-0', stacked && 'mt-0.5', selected ? 'opacity-100' : 'opacity-0')}
+        className={cn(
+          "size-4 shrink-0",
+          stacked && "mt-0.5",
+          selected ? "opacity-100" : "opacity-0",
+        )}
         aria-hidden
       />
-      {option.color ? <ColorDot color={option.color} size="sm" className={cn(stacked && 'mt-1.5')} /> : null}
+      {option.color ? (
+        <ColorDot color={option.color} size="sm" className={cn(stacked && "mt-1.5")} />
+      ) : null}
       <div className="cube-rn-view min-w-0 flex-1">
-        <span className="cube-rn-text truncate text-sm text-popover-foreground">{option.label}</span>
+        <span className="cube-rn-text truncate text-sm text-foreground">{option.label}</span>
         {option.hint ? (
           // Wrapped rather than truncated: a reason cut off at the edge of the
           // popover is the same as no reason.
@@ -271,7 +293,7 @@ function OptionRow({
         <OptionLine
           id={metaId}
           slot="multi-select-option-meta"
-          className={cn('shrink-0', ON_HIGHLIGHT, stacked && 'mt-0.5')}
+          className={cn("shrink-0", ON_HIGHLIGHT, stacked && "mt-0.5")}
         >
           {option.meta}
         </OptionLine>
@@ -281,40 +303,26 @@ function OptionRow({
 }
 
 /**
- * A combobox that selects more than one thing.
+ * A combobox that selects more than one thing: a `Popover` over a `Command` on both halves. On
+ * the web that is radix over cmdk, which owns the keyboard; on device it is a centred sheet whose
+ * rows are pressed.
  *
- * There are three of these across these projects and none of them is the same shape. One is a
- * `Popover` over a `Command` with search and a create row; one is a hand-rolled `div` with an
- * outside-click `useEffect`, no portal, no keyboard navigation, and `aria-haspopup="listbox"` on
- * a button with no listbox anywhere beneath it; the third is a stack of checkboxes. The middle
- * one is the one that matters, because it looks like a combobox and is not operable as one — it
- * cannot be opened, moved through or chosen from without a mouse.
- *
- * So this is the first shape, kept: a real `Popover` over a `Command`, on both halves. On the web
- * that is radix (portalled, focus-trapped, closes on Escape and on outside click without anyone
- * writing the listener) over cmdk, which owns the roving focus and the typeahead. On device it is
- * the native popover's centred sheet over the native command list, where a row is chosen by
- * pressing it.
- *
- * **Clearing is in the footer, not on the trigger.** The obvious place for an `X` is inside the
- * trigger, and the trigger is a `<button>` — a button inside a button is not valid HTML and the
- * inner one is unreachable by keyboard in every browser. So on the web the chips have no remove
- * buttons and the footer holds the one Clear. On device a `Pressable` inside a `Pressable` is
- * fine — the inner one takes the touch — so there each chip is a removable `Badge` as well, for
- * the thumb; the sheet's rows and its Clear are still the way a screen reader does it.
+ * Clearing is in the footer and not on the trigger, because the trigger is a `<button>` and a
+ * button inside a button is invalid and unreachable by keyboard. On device each chip is also a
+ * removable `Badge`, since a `Pressable` inside a `Pressable` takes the touch.
  */
 export function MultiSelect({
   options,
   value,
   onValueChange,
-  placeholder = 'Select…',
-  searchPlaceholder = 'Search…',
-  searchLabel = 'Search',
-  popoverLabel = 'Options',
-  emptyMessage = 'No matches.',
+  placeholder = "Select…",
+  searchPlaceholder = "Search…",
+  searchLabel = "Search",
+  popoverLabel = "Options",
+  emptyMessage = "No matches.",
   searchable = true,
   onCreateOption,
-  createLabel = 'Add',
+  createLabel = "Add",
   maxDisplay = 3,
   clearable = true,
   className,
@@ -324,7 +332,7 @@ export function MultiSelect({
   ...props
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const generatedId = useId();
   const titleId = useId();
   const rowId = useId();
@@ -363,38 +371,39 @@ export function MultiSelect({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            'h-auto min-h-9 w-full justify-between gap-2 bg-transparent px-3 py-1.5 font-normal',
-            'whitespace-normal shadow-xs aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 disabled:cursor-not-allowed',
+            "h-auto min-h-9 w-full justify-between gap-2 bg-transparent px-3 py-1.5 font-normal",
+            "whitespace-normal shadow-xs aria-invalid:border-negative aria-invalid:ring-negative/40 disabled:cursor-not-allowed",
             className,
           )}
           {...props}
-        >
-          <div className="cube-rn-view min-w-0 flex-1 flex-row flex-wrap items-center gap-1">
-            {selected.length === 0 ? (
-              <span className="cube-rn-text text-sm text-muted-foreground">{placeholder}</span>
-            ) : (
-              <>
-                {shown.map((option) => (
-                  <Badge
-                    key={option.value}
-                    variant="secondary"
-                    {...chipColors(option.color)}
-                    className={'max-w-40 truncate'}
-                    // Device only: on the web this would be a button inside the trigger's button.
-                  >
-                    {option.label}
-                  </Badge>
-                ))}
-                {overflow > 0 ? (
-                  <span className="cube-rn-text text-xs text-muted-foreground">
-                    {shown.length === 0 ? `${overflow} selected` : `+${overflow}`}
-                  </span>
-                ) : null}
-              </>
-            )}
-          </div>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />
-        </Button>
+          content={
+            <div className="cube-rn-view min-w-0 flex-1 flex-row flex-wrap items-center gap-1">
+              {selected.length === 0 ? (
+                <span className="cube-rn-text text-sm text-foreground/60">{placeholder}</span>
+              ) : (
+                <>
+                  {shown.map((option) => (
+                    <Badge
+                      key={option.value}
+                      variant="secondary"
+                      {...chipColors(option.color)}
+                      className={"max-w-40 truncate"}
+                      // Device only: on the web this would be a button inside the trigger's button.
+                    >
+                      {option.label}
+                    </Badge>
+                  ))}
+                  {overflow > 0 ? (
+                    <span className="cube-rn-text text-xs text-foreground/60">
+                      {shown.length === 0 ? `${overflow} selected` : `+${overflow}`}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </div>
+          }
+          trailingSlot={<ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />}
+        />
       </PopoverTrigger>
 
       <PopoverContent
@@ -402,14 +411,18 @@ export function MultiSelect({
         // radix names its dialog from this; the native sheet has no dialog role to name, and the
         // title below is simply the first thing read in it.
         aria-labelledby={titleId}
-        className={cn('w-[var(--radix-popover-trigger-width)] p-0', contentClassName)}
+        className={cn("w-[var(--radix-popover-trigger-width)] p-0", contentClassName)}
       >
-        <span id={titleId} className={cn('cube-rn-text', SR_ONLY, 'text-popover-foreground')}>
+        <span id={titleId} className={cn("cube-rn-text", SR_ONLY, "text-foreground")}>
           {popoverLabel}
         </span>
         <Command label={searchLabel} filter={matchesEveryWord} shouldFilter={searchable}>
           {searchable ? (
-            <CommandInput value={search} onValueChange={setSearch} placeholder={searchPlaceholder} />
+            <CommandInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder={searchPlaceholder}
+            />
           ) : null}
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
@@ -434,17 +447,20 @@ export function MultiSelect({
               // An explicit row, not an Enter handler on the input: cmdk already consumes Enter
               // to choose the highlighted item, so a keydown listener races it and wins only
               // sometimes. A row is a thing you can see, arrow to, and press.
-              <CommandGroup forceMount className={cn('border-t border-border bg-popover', 'sticky bottom-0')}>
+              <CommandGroup
+                forceMount
+                className={cn("border-t border-foreground/10 bg-secondary", "sticky bottom-0")}
+              >
                 <CommandItem
                   forceMount
                   value={`__create__${search}`}
                   onSelect={() => {
                     onCreateOption?.(search.trim());
-                    setSearch('');
+                    setSearch("");
                   }}
                 >
                   <Plus className="size-4" aria-hidden />
-                  <span className="cube-rn-text min-w-0 flex-1 truncate text-sm text-popover-foreground">
+                  <span className="cube-rn-text min-w-0 flex-1 truncate text-sm text-foreground">
                     {createLabel} “{search.trim()}”
                   </span>
                 </CommandItem>
@@ -454,11 +470,15 @@ export function MultiSelect({
         </Command>
 
         {clearable && selected.length > 0 ? (
-          <div className="cube-rn-view flex-row justify-end border-t border-border p-1">
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onValueChange([])}>
-              <X className="size-4" aria-hidden />
-              Clear
-            </Button>
+          <div className="cube-rn-view flex-row justify-end border-t border-foreground/10 p-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-foreground/60"
+              onClick={() => onValueChange([])}
+              iconSlot={<X className="size-4" aria-hidden />}
+              content="Clear"
+            />
           </div>
         ) : null}
       </PopoverContent>

@@ -14,11 +14,12 @@ import {
   SubscribeRequestSchema,
   UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import { errorMessage } from '../errors.ts';
-import { bundledFiles, skillToolName } from '../skills/skill-view.ts';
+import { bundledFiles, skillToolNames } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
-import { buildAuthoringTools } from './authoring-tools.ts';
+import { buildAuthoringTools, issueSummary } from './authoring-tools.ts';
 import {
   INDEX_TOOL_NAME,
   indexToolDefinition,
@@ -31,11 +32,10 @@ import {
 import { fileMimeType } from './mime.ts';
 import {
   decodeCursor,
-  decodeResourcePart,
   encodeCursor,
   fileResourceUri,
+  parseResourceUri,
   RESOURCE_PAGE_SIZE,
-  RESOURCE_SCHEME,
   resourceNotFound,
   SKILL_FILE_URI_TEMPLATE,
   SKILL_URI_TEMPLATE,
@@ -47,12 +47,14 @@ import { renderIndex, renderSkill, skillTitle } from './skill-render.ts';
 import { searchSkills } from './skill-search.ts';
 
 /**
- * Server capabilities. `liveUpdates` toggles the sub-capabilities that only
- * make sense on a long-lived transport (stdio): `listChanged` (the served skill
- * set changed on disk) for resources and prompts, and `subscribe` (per-resource
- * change notifications). The stateless HTTP path leaves them off — it cannot
- * push and re-lists fresh on every request anyway. `servesPrompts` is off when
- * the endpoint cannot read skill files, since a prompt is one.
+ * Builds the capabilities the server advertises.
+ *
+ * @param liveUpdates - Whether the transport is long-lived, and so can push `listChanged` and take `subscribe`.
+ * @param servesPrompts - Whether the endpoint can read skill files; a prompt is one, so none are served without.
+ * @returns The options object the `Server` constructor takes.
+ *
+ * @remarks
+ * The stateless HTTP path leaves live updates off: it cannot push, and re-lists fresh on every request anyway.
  */
 function skillCapabilities(liveUpdates: boolean, servesPrompts: boolean) {
   return {
@@ -67,7 +69,8 @@ function skillCapabilities(liveUpdates: boolean, servesPrompts: boolean) {
 }
 
 /**
- * Wrap text as a `tools/call` result.
+ * Wraps text as a `tools/call` result.
+ *
  * @param text - The text to hand back to the agent.
  * @returns A tool result holding one text block.
  */
@@ -79,9 +82,11 @@ function textResult(text: string) {
 const COMPLETION_LIMIT = 100;
 
 /**
- * Prefix-match `candidates` (case-insensitively) against a partial `value` and
- * shape them into a `completion/complete` result: the first `COMPLETION_LIMIT`
- * matches, the true `total`, and `hasMore` when the total exceeds what we return.
+ * Shapes the candidates a partial value is a prefix of into a `completion/complete` result.
+ *
+ * @param candidates - Every value the argument could take.
+ * @param value - What the user has typed so far; compared ignoring case.
+ * @returns The first `COMPLETION_LIMIT` matches, the true `total`, and `hasMore` when there are more than returned.
  */
 function completeFrom(candidates: string[], value: string) {
   const prefix = value.toLowerCase();
@@ -90,53 +95,60 @@ function completeFrom(candidates: string[], value: string) {
   return { completion: { values, total: matches.length, hasMore: matches.length > values.length } };
 }
 
+/** What a skill server needs from the endpoint that builds it. */
 export interface SkillServerDeps {
-  /** Resolved fresh per request so config edits take effect without a restart. */
+  /** Returns the served skills; called fresh per request, so config edits take effect without a restart. */
   getSkills: () => Skill[];
-  /** Endpoint label used in the MCP server info (e.g. "all skills" or a workspace slug). */
+  /** Endpoint label used in the MCP server info (e.g. `all` or a workspace slug). */
   label: string;
   /**
-   * When set, this endpoint also exposes skill-authoring tools (create/update/…),
-   * gated at call time on the store's `authoringEnabled` and `disabledAuthoringTools`
-   * settings. Omit for a strictly read-only server.
+   * Exposes the skill-authoring tools on this endpoint too; left out, the server is strictly read-only.
+   *
+   * @remarks
+   * Which of them are served is decided at call time, from the store's `authoringEnabled` and
+   * `disabledAuthoringTools` settings.
    */
   authoring?: AuthoringDeps;
   /**
-   * How skills are advertised as tools, resolved fresh per request so a
-   * settings change takes effect without a restart. Omit to default to
-   * `per-skill` (one tool per skill).
+   * Returns how skills are advertised as tools; left out, each skill gets its own tool.
+   *
+   * @remarks
+   * It is called fresh per request, so a settings change takes effect without a restart.
    */
   getSkillToolMode?: () => SkillToolMode;
   /**
-   * Read a bundled supporting file's contents, so `dir`-skill files can be
-   * exposed as `skill://<name>/<path>` resources independent of whether the
-   * authoring tools are enabled, and so a skill's `prompts/*.md` files can be
-   * served as MCP prompts. Omit to expose neither file resources nor prompts.
+   * Reads a bundled supporting file's contents; left out, the server exposes neither file resources nor prompts.
+   *
+   * @remarks
+   * With it, a skill's files are `skill://<name>/<path>` resources whether or not the authoring tools are enabled,
+   * and its `prompts/*.md` files are served as MCP prompts.
    */
   readSupportingFile?: (skillName: string, relPath: string) => Promise<SkillFileRead>;
   /**
-   * Called with a skill's name whenever its body is loaded over MCP (a per-skill
-   * tool or `load_skill`), for usage analytics. Best-effort — must not throw.
+   * Called with a skill's name whenever its body is loaded through a tool (its own or `load_skill`), for usage
+   * analytics; it must not throw.
    */
   onSkillLoaded?: (skillName: string) => void;
   /**
-   * Register a listener fired whenever the served skill set changes on disk, and
-   * return an unsubscribe fn (called when the server closes). When present, the
-   * server advertises `listChanged` for resources and prompts plus resource
-   * `subscribe`, and pushes notifications. Only wire this on a long-lived transport (stdio) — the
-   * stateless HTTP path cannot push and must omit it.
+   * Registers a listener fired whenever the served skill set changes on disk, and returns its unsubscribe function.
+   *
+   * @remarks
+   * When present, the server advertises `listChanged` for resources and prompts plus resource `subscribe`, and
+   * pushes notifications. Wire it only on a long-lived transport: the stateless HTTP path cannot push.
    */
   onSkillsChanged?: (listener: () => void) => () => void;
 }
 
 /**
- * Build an MCP Server that serves a set of skills. Each skill is exposed BOTH
- * as a tool (calling it returns the skill's Markdown so an agent can load it on
- * demand) and as a resource (`skill://<name>`), so clients using either
- * mechanism can reach every skill. A skill's `prompts/*.md` files are served as
- * MCP prompts.
+ * Builds an MCP server that serves a set of skills.
+ *
  * @param deps - The endpoint's skill source, label and optional capabilities.
  * @returns The configured server, not yet connected to a transport.
+ *
+ * @remarks
+ * Each skill is reachable both through a tool (its own, or `load_skill` in loader mode) and as a
+ * `skill://<name>` resource, so a client using either mechanism reaches every skill. A skill's `prompts/*.md`
+ * files are served as MCP prompts when the endpoint can read files.
  */
 export function createSkillServer(deps: SkillServerDeps): Server {
   const liveUpdates = Boolean(deps.onSkillsChanged);
@@ -159,7 +171,8 @@ export function createSkillServer(deps: SkillServerDeps): Server {
 }
 
 /**
- * Find a skill by its exact name.
+ * Finds a skill by its exact name.
+ *
  * @param skills - The skills this endpoint serves.
  * @param name - The skill name (slug) to look for.
  * @returns The matching skill, or `undefined` when none is served under that name.
@@ -168,21 +181,50 @@ function findByName(skills: Skill[], name: string): Skill | undefined {
   return skills.find((s) => s.name === name);
 }
 
+/** What `search_skills` takes: both are optional, and neither given lists everything. */
+const searchArgsSchema = z.strictObject({ query: z.string().default(''), tags: z.array(z.string()).default([]) });
+
+/** What `load_skill` takes. */
+const loadArgsSchema = z.strictObject({ name: z.string() });
+
 /**
- * Register `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
+ * Checks a meta-tool's arguments, so a wrong-typed one is refused rather than read as absent.
+ *
+ * @typeParam T - The parsed arguments.
+ * @param toolName - The tool being called, named in the error.
+ * @param schema - What the tool takes.
+ * @param args - What the caller sent.
+ * @returns The arguments, with defaults filled in.
+ * @throws McpError naming each argument that does not fit.
+ */
+function parseToolArgs<T>(toolName: string, schema: z.ZodType<T>, args: unknown): T {
+  const result = schema.safeParse(args ?? {});
+  if (result.success === false) {
+    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for ${toolName}: ${issueSummary(result.error)}`);
+  }
+  return result.data;
+}
+
+/**
+ * Registers `tools/list` and `tools/call`: the meta-tools, the authoring tools, and the skills themselves.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param deps - The endpoint's skill source and optional authoring access.
  */
 function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
-  const findByToolName = (name: string): Skill | undefined =>
-    deps.getSkills().find((s) => skillToolName(s.name) === name);
+  const findByToolName = (name: string): Skill | undefined => {
+    const skills = deps.getSkills();
+    const toolNames = skillToolNames(skills);
+    return skills.find((skill) => toolNames.get(skill.name) === name);
+  };
 
   // Authoring tools are built once (closures over the store); which of them are actually served is
   // decided live per request, from `authoringEnabled` and `disabledAuthoringTools`.
   const authoringTools: AuthoringTool[] = deps.authoring ? buildAuthoringTools(deps.authoring) : [];
   const activeAuthoringTools = (): AuthoringTool[] => {
     const store = deps.authoring?.store;
-    if (!store?.isAuthoringEnabled()) {
+    const isAuthoringOn = store?.isAuthoringEnabled() === true;
+    if (!store || isAuthoringOn === false) {
       return [];
     }
     const disabled = store.getDisabledAuthoringTools();
@@ -215,10 +257,12 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 
     // per-skill mode: one no-arg tool per skill.
     const reserved = reservedNames();
+    const toolNames = skillToolNames(skills);
     const skillTools = skills
-      .filter((skill) => !reserved.has(skillToolName(skill.name)))
-      .map((skill) => ({
-        name: skillToolName(skill.name),
+      .map((skill) => ({ skill, name: toolNames.get(skill.name) ?? skill.name }))
+      .filter(({ name }) => reserved.has(name) === false)
+      .map(({ skill, name }) => ({
+        name,
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: NO_ARGS_SCHEMA,
       }));
@@ -233,23 +277,24 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === INDEX_TOOL_NAME) {
-      return textResult(renderIndex(deps.getSkills(), skillToolMode()));
+      const skills = deps.getSkills();
+      return textResult(renderIndex(skills, skillToolMode(), skillToolNames(skills)));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
-      const args = req.params.arguments ?? {};
-      const query = typeof args.query === 'string' ? args.query : '';
-      const tags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : [];
-      return textResult(renderIndex(searchSkills(deps.getSkills(), query, tags), skillToolMode()));
+      const { query, tags } = parseToolArgs(SEARCH_TOOL_NAME, searchArgsSchema, req.params.arguments);
+      const skills = deps.getSkills();
+      return textResult(renderIndex(searchSkills(skills, query, tags), skillToolMode(), skillToolNames(skills)));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
-      const raw = req.params.arguments?.name;
-      const wanted = typeof raw === 'string' ? raw : '';
-      // Resolve by the skill's real name only — the exact field `list_skills`
-      // advertises. A sanitized-tool-name fallback would be ambiguous (distinct
-      // slugs like `commit.messages` and `commit_messages` collide).
+      const { name: wanted } = parseToolArgs(LOAD_TOOL_NAME, loadArgsSchema, req.params.arguments);
+      // Resolved by the skill's real name only, the field `list_skills` advertises: a sanitized tool name
+      // would be ambiguous (`commit.messages` and `commit_messages` collide).
       const skill = findByName(deps.getSkills(), wanted);
       if (!skill) {
-        throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Unknown skill "${wanted}": call ${INDEX_TOOL_NAME} for the names served here`,
+        );
       }
       return loadSkill(skill);
     }
@@ -263,7 +308,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
         return { ...textResult(errorMessage(err)), isError: true };
       }
     }
-    const skill = findByToolName(req.params.name);
+    // Loader mode advertises no per-skill tools, so it answers none.
+    const skill = skillToolMode() === 'loader' ? undefined : findByToolName(req.params.name);
     if (!skill) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown skill tool "${req.params.name}"`);
     }
@@ -272,7 +318,8 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
 }
 
 /**
- * Register `resources/list`, `resources/read` and `resources/templates/list` for skills and their bundled files.
+ * Registers `resources/list`, `resources/read` and `resources/templates/list` for skills and their bundled files.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param deps - The endpoint's skill source and optional file reader.
  */
@@ -319,20 +366,10 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const { uri } = req.params;
-    const prefix = `${RESOURCE_SCHEME}://`;
-    if (!uri.startsWith(prefix)) {
-      throw resourceNotFound(uri);
-    }
-    // Drop any URI query/fragment before parsing the path — a raw `?`/`#`
-    // delimits them (a literal `?`/`#` in a filename would be percent-encoded).
-    const rest = uri.slice(prefix.length).replace(/[?#].*$/, '');
-    // Skill names never contain "/", so the first slash cleanly separates the
-    // skill name from a bundled-file path: skill://<name> vs skill://<name>/<path>.
-    const slash = rest.indexOf('/');
+    const { skill: skillName, path: relPath } = parseResourceUri(uri);
 
-    if (slash === -1) {
-      const name = decodeResourcePart(rest, uri);
-      const skill = name ? findByName(deps.getSkills(), name) : undefined;
+    if (relPath === undefined) {
+      const skill = skillName ? findByName(deps.getSkills(), skillName) : undefined;
       if (!skill) {
         throw resourceNotFound(uri);
       }
@@ -340,12 +377,10 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
     }
 
     // Bundled supporting file.
-    const skillName = decodeResourcePart(rest.slice(0, slash), uri);
-    const relPath = decodeResourcePart(rest.slice(slash + 1), uri);
     // Guard visibility: only skills served by *this* endpoint (root/workspace) are reachable.
     const readSupportingFile = deps.readSupportingFile;
     const canReadFile = findByName(deps.getSkills(), skillName) !== undefined && readSupportingFile !== undefined;
-    if (!canReadFile) {
+    if (canReadFile === false) {
       throw resourceNotFound(uri);
     }
     let file: SkillFileRead;
@@ -391,8 +426,11 @@ function registerResourceHandlers(server: Server, deps: SkillServerDeps): void {
   });
 }
 
+/** A prompt file as read: the prompt, or why it cannot be served. */
+type ReadPrompt = { prompt: ReturnType<typeof parsePrompt> } | { unreadable: string };
+
 /**
- * Register `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
+ * Registers `prompts/list` and `prompts/get`: every `prompts/<name>.md` of a served skill, as the prompt `<name>`.
  *
  * @param server - The MCP server to register the handlers on.
  * @param getSkills - Returns the skills this endpoint serves, so a prompt is only as visible as its skill.
@@ -403,13 +441,13 @@ function registerPromptHandlers(
   getSkills: SkillServerDeps['getSkills'],
   readSupportingFile: NonNullable<SkillServerDeps['readSupportingFile']>,
 ): void {
-  // Resolves to `undefined` for a file that cannot be served as a prompt: unreadable, or not text.
-  const readPrompt = async (ref: SkillPromptRef) => {
+  // A file that cannot be served as a prompt, unreadable or not text, comes back as the reason why.
+  const readPrompt = async (ref: SkillPromptRef): Promise<ReadPrompt> => {
     try {
       const file = await readSupportingFile(ref.skillName, ref.path);
-      return file.binary ? undefined : parsePrompt(file.content);
-    } catch {
-      return undefined;
+      return file.binary ? { unreadable: 'not a text file' } : { prompt: parsePrompt(file.content) };
+    } catch (err) {
+      return { unreadable: errorMessage(err) };
     }
   };
 
@@ -418,14 +456,19 @@ function registerPromptHandlers(
     const parsed = await Promise.all(refs.map(readPrompt));
     const prompts = [];
     for (const [index, ref] of refs.entries()) {
-      const prompt = parsed[index];
-      if (prompt) {
-        prompts.push({
-          name: ref.name,
-          description: prompt.description ?? `Prompt from the "${ref.skillName}" skill.`,
-          arguments: prompt.arguments,
-        });
+      const read = parsed[index];
+      if (read === undefined) {
+        continue;
       }
+      if ('unreadable' in read) {
+        console.warn(`Skipping prompt "${ref.name}" of skill "${ref.skillName}": ${read.unreadable}`);
+        continue;
+      }
+      prompts.push({
+        name: ref.name,
+        description: read.prompt.description ?? `Prompt from the "${ref.skillName}" skill.`,
+        arguments: read.prompt.arguments,
+      });
     }
     return { prompts };
   });
@@ -433,10 +476,14 @@ function registerPromptHandlers(
   server.setRequestHandler(GetPromptRequestSchema, async (req) => {
     const { name } = req.params;
     const ref = listPromptRefs(getSkills()).find((candidate) => candidate.name === name);
-    const prompt = ref ? await readPrompt(ref) : undefined;
-    if (!prompt) {
+    if (!ref) {
       throw new McpError(ErrorCode.InvalidParams, `Unknown prompt "${name}"`);
     }
+    const read = await readPrompt(ref);
+    if ('unreadable' in read) {
+      throw new McpError(ErrorCode.InvalidParams, `Cannot read prompt "${name}": ${read.unreadable}`);
+    }
+    const { prompt } = read;
     const given = req.params.arguments ?? {};
     const missing = missingArguments(prompt.arguments, given);
     if (missing.length > 0) {
@@ -458,8 +505,9 @@ function registerPromptHandlers(
 }
 
 /**
- * Register argument autocompletion for the resource templates: skill names for `{name}`, and a
- * skill's bundled-file paths for `{+path}` (scoped by the `name` already chosen).
+ * Registers argument autocompletion for the resource templates: skill names for `{name}`, and for `{+path}`
+ * the bundled-file paths of the skill already chosen as `name`.
+ *
  * @param server - The MCP server to register the handler on.
  * @param deps - The endpoint's skill source.
  */
@@ -491,11 +539,26 @@ function registerCompletionHandler(server: Server, deps: SkillServerDeps): void 
 }
 
 /**
- * Register resource subscriptions and push notifications when the served skill set changes on
- * disk. Only for a long-lived transport (stdio).
+ * Sends a notification without waiting on it; a client that has gone only costs a warning.
+ *
+ * @param method - The notification's method, for the log line.
+ * @param sent - The send in flight.
+ */
+function notifyQuietly(method: string, sent: Promise<void>): void {
+  sent.catch((err: unknown) => {
+    console.warn(`${method} notify failed: ${errorMessage(err)}`);
+  });
+}
+
+/**
+ * Registers resource subscriptions, and pushes notifications when the served skill set changes on disk.
+ *
  * @param server - The MCP server to register the handlers on.
  * @param onSkillsChanged - Registers a change listener and returns its unsubscribe function.
  * @param servesPrompts - Whether the server advertises prompts, and so may announce that their list changed.
+ *
+ * @remarks
+ * It is only for a long-lived transport, and unsubscribes from the changes when the server closes.
  */
 function registerLiveUpdates(
   server: Server,
@@ -513,22 +576,15 @@ function registerLiveUpdates(
     return {};
   });
 
-  // A disk change may add/remove/edit any skill, so tell clients the list moved
-  // and nudge every subscribed URI to re-read. We over-notify rather than diff —
-  // the client simply re-reads and the content is authoritative either way.
+  // A disk change may touch any skill, so say the list moved and nudge every subscribed URI. Over-notifying
+  // beats diffing: the client re-reads, and the content is authoritative either way.
   const unsubscribe = onSkillsChanged(() => {
-    server.sendResourceListChanged().catch((err: unknown) => {
-      console.warn(`resources/list_changed notify failed: ${errorMessage(err)}`);
-    });
+    notifyQuietly('resources/list_changed', server.sendResourceListChanged());
     if (servesPrompts) {
-      server.sendPromptListChanged().catch((err: unknown) => {
-        console.warn(`prompts/list_changed notify failed: ${errorMessage(err)}`);
-      });
+      notifyQuietly('prompts/list_changed', server.sendPromptListChanged());
     }
     for (const uri of subscriptions) {
-      server.sendResourceUpdated({ uri }).catch((err: unknown) => {
-        console.warn(`resources/updated notify failed: ${errorMessage(err)}`);
-      });
+      notifyQuietly('resources/updated', server.sendResourceUpdated({ uri }));
     }
   });
 

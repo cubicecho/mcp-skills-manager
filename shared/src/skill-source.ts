@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LENGTH_LIMITS } from './defaults.ts';
 
 /**
  * Schemas for a skill's git source: the folder in a git repo a skill is linked
@@ -10,10 +11,13 @@ import { z } from 'zod';
 const SCP_LIKE_REPO = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:\S+$/;
 
 /**
- * Tells whether a repo URL is one the server will clone: https or SSH only, and
- * no credentials in an https URL — the URL is written into SKILL.md and served to agents.
- * @param repo Repo URL to test.
- * @returns True when the URL is acceptable.
+ * Tells whether a repo URL is one the server will clone.
+ *
+ * @param repo - Repo URL to test.
+ * @returns True for an scp-like or `ssh://` URL without a password, or an `https://` URL without credentials.
+ *
+ * @remarks
+ * Credentials are refused because the URL is written into SKILL.md and served to agents.
  */
 function isAllowedRepo(repo: string): boolean {
   if (SCP_LIKE_REPO.test(repo)) {
@@ -33,11 +37,14 @@ function isAllowedRepo(repo: string): boolean {
 
 /**
  * Tells whether a folder path stays inside the repo.
- * @param folder Folder path to test.
- * @returns True for a relative path with no `..` segment or backslash.
+ *
+ * @param folder - Folder path to test.
+ * @returns True when the path has no `..` segment and no backslash.
  */
 function isRepoRelative(folder: string): boolean {
-  return !folder.includes('\\') && !folder.split('/').includes('..');
+  const hasBackslash = folder.includes('\\');
+  const climbsOut = folder.split('/').includes('..');
+  return hasBackslash === false && climbsOut === false;
 }
 
 /** Where to fetch a skill from: a repo, plus an optional ref and folder. Body of PUT /api/skills/:name/source. */
@@ -47,26 +54,27 @@ export const gitSourceSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .max(2048)
+    .max(LENGTH_LIMITS.repoUrl)
     .refine(isAllowedRepo, 'must be an https:// or SSH git URL without embedded credentials'),
   /** Branch or tag to track; the repo's default branch when absent. */
   ref: z
     .string()
     .trim()
     .min(1)
-    .max(255)
+    .max(LENGTH_LIMITS.gitRef)
     .regex(/^[^\s-]\S*$/, 'must be a branch or tag name')
     .optional(),
   /** Folder inside the repo holding the SKILL.md; the repo root when absent. */
   path: z
     .string()
     .trim()
-    .max(1024)
+    .max(LENGTH_LIMITS.sourcePath)
     .refine(isRepoRelative, 'must be a folder path inside the repo')
     .transform((folder) => folder.replace(/^\/+|\/+$/g, ''))
     .pipe(z.string().min(1))
     .optional(),
 });
+/** A repo, plus an optional ref and folder, to fetch a skill from. */
 export type GitSource = z.infer<typeof gitSourceSchema>;
 
 /** A skill's stored link: the source plus what the last sync fetched. */
@@ -76,6 +84,7 @@ export const skillSourceSchema = gitSourceSchema.extend({
   /** ISO 8601 time of the last sync. */
   syncedAt: z.string().optional(),
 });
+/** A skill's git link as stored in its frontmatter. */
 export type SkillSource = z.infer<typeof skillSourceSchema>;
 
 /** Path segments that separate the repo from the ref in a forge's folder URL. */
@@ -83,11 +92,13 @@ const TREE_MARKERS = ['tree', 'blob'];
 
 /**
  * Splits a pasted forge folder URL into the parts of a source, so
- * `https://github.com/<owner>/<repo>/tree/<ref>/<folder>` (or GitLab's `/-/tree/`)
- * fills repo, ref and folder at once. The first segment after `tree/` is taken as
- * the ref, so a ref containing `/` needs correcting by hand.
- * @param input Whatever was pasted into the repo field.
- * @returns The parts found; anything that is not a folder URL comes back as the repo alone.
+ * `https://github.com/<owner>/<repo>/tree/<ref>/<folder>` (or GitLab's `/-/tree/`) fills repo, ref and folder at once.
+ *
+ * @param input - Whatever was pasted into the repo field.
+ * @returns The parts found; anything that is not an https folder URL comes back as the repo alone.
+ *
+ * @remarks
+ * The first segment after `tree/` or `blob/` is taken as the ref, so a ref containing `/` needs correcting by hand.
  */
 export function parseGitSourceUrl(input: string): { repo: string; ref?: string; path?: string } {
   const trimmed = input.trim();

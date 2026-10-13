@@ -7,10 +7,11 @@ import { cn } from '@/lib/utils';
 export function ServerStats() {
   const status = useServerStatus();
   const { data: skills } = useSkills();
-  const { data } = status;
+  // A poll that fails keeps the last figures it fetched; they are not what the server is serving now.
+  const data = status.isError ? undefined : status.data;
 
   if (status.isPending) {
-    return <Skeleton className="mx-2 my-1.5 h-12" />;
+    return <Skeleton role="status" aria-label="Loading the server status" className="mx-2 my-1.5 h-12" />;
   }
 
   // How often any skill has been loaded over MCP; left off until the skill list has arrived.

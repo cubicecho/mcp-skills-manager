@@ -1,24 +1,28 @@
 import { normalizeTags, type SkillDetail } from '@mcp-skills/shared';
-import { useStore } from '@tanstack/react-form';
-import { useEffect, useMemo } from 'react';
+import { type Ref, useImperativeHandle, useMemo } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
-import { EditorFrame } from '@/components/domain/skill/editor/editor-frame';
+import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { MarkdownEditor } from '@/components/markdown-editor';
 import { MultiSelectField } from '@/components/multi-select-field';
 import { Code } from '@/components/ui/code';
+import { useFormStore } from '@/lib/form-store';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
+import { skillMarkdownPath } from '@/lib/skill';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
-/** Edit the skill's own Markdown: its frontmatter description plus its body. */
+/** The editor for the skill's own Markdown: its description, tags and body, with its local settings between. */
 export function SkillBodyEditor({
   skill,
-  onDirtyChange,
+  ref,
   onClose,
 }: {
+  /** The skill as last loaded: what the editor starts from, and what unsaved edits are measured against. */
   skill: SkillDetail;
-  onDirtyChange: (dirty: boolean) => void;
+  /** Lets the pane holding the editor ask whether it has unsaved edits. */
+  ref?: Ref<EditorHandle>;
+  /** Called when the reader leaves the editor for the preview. */
   onClose: () => void;
 }) {
   const toast = useToasts();
@@ -31,7 +35,7 @@ export function SkillBodyEditor({
       update.mutate(value, { onSuccess: () => toast.success('Skill saved'), onError: toast.apiError });
     },
   });
-  const { description, body, tags } = useStore(form.store, (state) => state.values);
+  const { description, body, tags } = useFormStore(form.store, (state) => state.values);
 
   // Every tag already in use, so an existing one is picked rather than retyped with a new spelling.
   const tagOptions = useMemo(
@@ -46,22 +50,20 @@ export function SkillBodyEditor({
   // Measured against the skill as last loaded, not the form's defaults: a save refetches the skill, and the
   // editor is clean again once what it holds is what was saved.
   const dirty = description !== skill.description || body !== skill.body || tagsDirty;
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useImperativeHandle(ref, () => ({ hasUnsavedChanges: () => dirty }), [dirty]);
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && !update.isPending);
-
-  const path = skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`;
+  useSaveShortcut(save, dirty && update.isPending === false);
 
   return (
     <EditorFrame
-      path={path}
+      path={skillMarkdownPath(skill)}
       onSave={save}
       onClose={onClose}
       saving={update.isPending}
       dirty={dirty}
-      content={
+      contentSlot={
         <>
           <InputField
             form={form}
@@ -97,7 +99,7 @@ export function SkillBodyEditor({
                 onValueChange={field.handleChange}
                 onBlur={field.handleBlur}
                 placeholder="# My skill…"
-                empty="Nothing to preview yet."
+                emptySlot={<p className="text-foreground/60">Nothing to preview yet.</p>}
               />
             )}
           </form.AppField>

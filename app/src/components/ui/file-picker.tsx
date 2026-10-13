@@ -1,15 +1,18 @@
-import { type DragEvent, type ReactNode, useRef, useState } from 'react';
-import { buttonTextVariants, buttonVariants } from '@/components/ui/button';
+import { type DragEvent, type ReactNode, useRef, useState } from "react";
+import { buttonTextVariants, buttonVariants } from "@/components/ui/button";
 import {
   acceptsFile,
   type FilePickerButtonProps,
   type FilePickerProps,
   type PickedFile,
-} from '@/components/ui/file-picker-base';
-import { Upload } from '@/components/ui/icons';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/file-picker-base";
+import { Upload } from "@/components/ui/icons";
+import { cn } from "@/lib/utils";
 
-type PickOptions = Pick<FilePickerProps, 'onPick' | 'onPickMany' | 'accept' | 'multiple' | 'read' | 'directory'>;
+type PickOptions = Pick<
+  FilePickerProps,
+  "onPick" | "onPickMany" | "accept" | "multiple" | "read" | "directory"
+>;
 
 /** A file and where it sat in the folder it came from. */
 type Found = { file: File; path: string };
@@ -19,7 +22,7 @@ type Found = { file: File; path: string };
  * written as a prop because React's typings do not know the attribute, and as a
  * string because React drops an unknown attribute whose value is `true`.
  */
-const DIRECTORY_INPUT: Record<string, string> = { webkitdirectory: '' };
+const DIRECTORY_INPUT: Record<string, string> = { webkitdirectory: "" };
 
 /**
  * A pick from the dialog. In a folder pick the browser fills
@@ -41,15 +44,21 @@ async function walk(entries: FileSystemEntry[]): Promise<Found[]> {
   const found: Found[] = [];
   for (const entry of entries) {
     if (entry.isFile) {
-      const file = await new Promise<File>((resolve, reject) => (entry as FileSystemFileEntry).file(resolve, reject));
-      found.push({ file, path: entry.fullPath.replace(/^\//, '') });
+      const file = await new Promise<File>((resolve, reject) =>
+        (entry as FileSystemFileEntry).file(resolve, reject),
+      );
+      found.push({ file, path: entry.fullPath.replace(/^\//, "") });
     } else if (entry.isDirectory) {
       const reader = (entry as FileSystemDirectoryEntry).createReader();
       // `readEntries` hands back a batch at a time — a hundred, in Chrome — and
       // an empty one when it is done, so one call would cut a big folder short.
       for (;;) {
-        const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
-        if (batch.length === 0) break;
+        const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+          reader.readEntries(resolve, reject),
+        );
+        if (batch.length === 0) {
+          break;
+        }
         found.push(...(await walk(batch)));
       }
     }
@@ -72,23 +81,34 @@ function useFilePick({ onPick, onPickMany, accept, multiple, read, directory }: 
     const allowed = found.filter(({ file }) => acceptsFile(accept, file));
     // A folder is every file in it; `multiple` is about picking files.
     const files = multiple || directory ? allowed : allowed.slice(0, 1);
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      return;
+    }
     const picked = await Promise.all(
       files.map(async ({ file, path }): Promise<PickedFile> => {
-        const base = { name: file.name, path, type: file.type };
+        const base = { name: file.name, path, type: file.type, size: file.size };
+        // The file itself, unread: the browser streams it from disk when it is sent.
+        if (read === "none") {
+          return { ...base, text: "", blob: file };
+        }
         // One or the other: decoding a `.zip` to hand back a string nobody
         // reads would cost its whole size again.
-        return read === 'bytes'
-          ? { ...base, text: '', bytes: new Uint8Array(await file.arrayBuffer()) }
+        return read === "bytes"
+          ? { ...base, text: "", bytes: new Uint8Array(await file.arrayBuffer()) }
           : { ...base, text: await file.text() };
       }),
     );
-    if (onPickMany) onPickMany(picked);
-    else for (const file of picked) onPick?.(file.text, file.name);
+    if (onPickMany) {
+      onPickMany(picked);
+    } else {
+      for (const file of picked) {
+        onPick?.(file.text, file.name);
+      }
+    }
   }
 
   const trigger = {
-    type: 'button' as const,
+    type: "button" as const,
     onClick: () => inputRef.current?.click(),
     onDragOver: (e: DragEvent) => {
       e.preventDefault();
@@ -121,7 +141,7 @@ function useFilePick({ onPick, onPickMany, accept, multiple, read, directory }: 
         // Copied before the value is reset, which empties the input's `FileList`.
         void take(fromList(e.target.files));
         // Allow re-selecting the same file after a reset.
-        e.target.value = '';
+        e.target.value = "";
       }}
     />
   );
@@ -129,6 +149,7 @@ function useFilePick({ onPick, onPickMany, accept, multiple, read, directory }: 
   return { trigger, input, dragging };
 }
 
+/** A drop zone that picks a file and hands its contents to the caller. */
 export function FilePicker({ label, hint, ...options }: FilePickerProps) {
   const { trigger, input, dragging } = useFilePick(options);
 
@@ -137,22 +158,25 @@ export function FilePicker({ label, hint, ...options }: FilePickerProps) {
       <button
         {...trigger}
         className={cn(
-          'flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors',
-          dragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-muted-foreground/50',
+          "flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors",
+          dragging
+            ? "border-active bg-active/40"
+            : "border-foreground/15 hover:border-foreground/60",
         )}
       >
-        <Upload className="h-8 w-8 text-muted-foreground" />
+        <Upload className="h-8 w-8 text-foreground/60" />
         <span className="cube-rn-text font-medium text-sm">{label}</span>
-        {hint ? <span className="cube-rn-text text-xs text-muted-foreground">{hint}</span> : null}
+        {hint ? <span className="cube-rn-text text-xs text-foreground/60">{hint}</span> : null}
       </button>
       {input}
     </>
   );
 }
 
+/** A button that picks a file and hands its contents to the caller. */
 export function FilePickerButton({
   label,
-  icon = <Upload />,
+  iconSlot = <Upload />,
   variant,
   size,
   className,
@@ -160,13 +184,13 @@ export function FilePickerButton({
 }: FilePickerButtonProps) {
   const { trigger, input, dragging } = useFilePick(options);
   // At an icon size the square has no room for words, so `label` is the name alone.
-  const iconOnly = typeof size === 'string' && size.startsWith('icon');
-  let content: ReactNode = icon;
-  if (!iconOnly) {
+  const iconOnly = typeof size === "string" && size.startsWith("icon");
+  let content: ReactNode = iconSlot;
+  if (iconOnly === false) {
     content = (
       <>
-        {icon}
-        <span className={cn('cube-rn-text', buttonTextVariants({ variant, size }))}>{label}</span>
+        {iconSlot}
+        <span className={cn("cube-rn-text", buttonTextVariants({ variant, size }))}>{label}</span>
       </>
     );
   }
@@ -180,7 +204,7 @@ export function FilePickerButton({
         aria-label={label}
         className={cn(
           buttonVariants({ variant, size }),
-          dragging && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+          dragging && "ring-2 ring-active ring-offset-2 ring-offset-background",
           className,
         )}
       >
