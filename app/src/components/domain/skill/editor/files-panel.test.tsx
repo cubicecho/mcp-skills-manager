@@ -47,9 +47,12 @@ const LINKED = aSkill({ ...SKILL, source: A_SOURCE });
 const FILE_SKILL = aSkill({ ...SKILL, format: 'file', path: 'pdf-forms.md', files: [] });
 
 const onSelect = vi.fn();
+const onMove = vi.fn();
 
 function renderPanel(skill: SkillDetail = SKILL, selected: string = SKILL_MD_KEY) {
-  return render(<FilesPanel skill={skill} selected={selected} onSelect={onSelect} onRenamed={() => {}} />);
+  return render(
+    <FilesPanel skill={skill} selected={selected} onSelect={onSelect} onMove={onMove} onRenamed={() => {}} />,
+  );
 }
 
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
@@ -222,6 +225,7 @@ describe('FilesPanel', () => {
 
     await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Renamed to reference/notes.md'));
     expect(movePath).toHaveBeenCalledWith({ from: 'docs/notes.md', to: 'reference/notes.md' });
+    expect(onMove).toHaveBeenCalledWith('docs/notes.md', 'reference/notes.md');
   });
 
   it('moves a file dragged onto a folder into it, keeping its name', async () => {
@@ -231,6 +235,7 @@ describe('FilesPanel', () => {
 
     await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Moved to docs/logo.png'));
     expect(movePath).toHaveBeenCalledWith({ from: 'logo.png', to: 'docs/logo.png' });
+    expect(onMove).toHaveBeenCalledWith('logo.png', 'docs/logo.png');
   });
 
   it('moves a file dragged out of its folder to the skill root', async () => {

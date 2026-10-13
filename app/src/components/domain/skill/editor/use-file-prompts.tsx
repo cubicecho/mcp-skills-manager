@@ -31,9 +31,14 @@ function pathHint(base: string): ReactNode {
  *
  * @param skillName - The skill whose files are changed.
  * @param onSelect - Called with a file just created, to open it; `edit` asks for it in the editor.
+ * @param onMove - Called with the old and new paths of a rename as it is asked for, before it has happened.
  * @returns The question now open (`null` for none), `close` to dismiss it, and one opener per question.
  */
-export function useFilePrompts(skillName: string, onSelect: (path: string, options?: { edit?: boolean }) => void) {
+export function useFilePrompts(
+  skillName: string,
+  onSelect: (path: string, options?: { edit?: boolean }) => void,
+  onMove: (from: string, to: string) => void,
+) {
   const toast = useToasts();
   const writeFile = useWriteSkillFile(skillName);
   const createFolder = useCreateSkillFolder(skillName);
@@ -72,6 +77,7 @@ export function useFilePrompts(skillName: string, onSelect: (path: string, optio
       initial: entry.path,
       submitLabel: 'Rename',
       onSubmit: async (next) => {
+        onMove(entry.path, next);
         await reported(movePath.mutateAsync({ from: entry.path, to: next }), toast.apiError);
         toast.success(`Renamed to ${next}`);
       },

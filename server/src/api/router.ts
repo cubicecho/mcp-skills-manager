@@ -200,18 +200,15 @@ export function createApiRouter(deps: ApiDeps): Router {
     if (editsContent) {
       requireUnlinked(name);
     }
-    let skill = await store.updateSkill(name, {
+    // The rename goes first: it is the step that can be refused (the name is taken), and then nothing has changed.
+    const renamed = update.name === undefined ? name : (await store.renameSkill(name, update.name)).name;
+    const skill = await store.updateSkill(renamed, {
       description: update.description,
       body: update.body,
       global: update.global,
       readOnly: update.readOnly,
       tags: update.tags,
     });
-    const newName = update.name;
-    const isRename = newName !== undefined && newName !== name;
-    if (isRename) {
-      skill = await store.renameSkill(name, newName);
-    }
     res.json(toDetail(store, skill));
   });
 

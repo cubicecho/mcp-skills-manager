@@ -12,7 +12,7 @@ import type {
   UpdateWorkspaceRequest,
   WriteSkillFileRequest,
 } from '@mcp-skills/shared';
-import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, type QueryKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './api';
 import { POLLING_DEFAULTS } from './defaults';
 
@@ -22,6 +22,7 @@ export const queryKeys = {
   settings: ['settings'] as const,
   skills: ['skills'] as const,
   skill: (name: string) => ['skills', name] as const,
+  skillFile: (name: string, filePath: string | null) => ['skills', name, 'file', filePath] as const,
   workspaces: ['workspaces'] as const,
   workspace: (slug: string) => ['workspaces', slug] as const,
 };
@@ -39,7 +40,24 @@ function cacheNewSkill(queryClient: QueryClient, skill: SkillDetail): void {
 }
 
 /**
- * Caches a skill whose supporting files changed and refreshes the skill list, which shows file counts.
+ * Tells whether a query holds a file the skill no longer has, which the server would answer with a 404.
+ *
+ * @param key - The query's key.
+ * @param name - The slug the skill is cached under.
+ * @param skill - The skill as the server last returned it.
+ * @returns True for a file-content query of this skill whose path is not among the skill's files.
+ */
+function isGoneFile(key: QueryKey, name: string, skill: SkillDetail): boolean {
+  const [, owner, kind, filePath] = key;
+  return owner === name && kind === 'file' && skill.files.some((file) => file.path === filePath) === false;
+}
+
+/**
+ * Caches a skill whose supporting files changed, and refreshes its open files and the skill list, which
+ * shows file counts.
+ *
+ * @remarks
+ * A file the change moved or deleted may still be on screen for a moment; it is left alone, not refetched.
  *
  * @param queryClient - The query client holding the cache.
  * @param name - The slug the skill is cached under.
@@ -47,7 +65,10 @@ function cacheNewSkill(queryClient: QueryClient, skill: SkillDetail): void {
  */
 function cacheSkillAfterFileChange(queryClient: QueryClient, name: string, skill: SkillDetail): void {
   queryClient.setQueryData(queryKeys.skill(name), skill);
-  queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.skills,
+    predicate: (query) => isGoneFile(query.queryKey, name, skill) === false,
+  });
 }
 
 /**
@@ -124,7 +145,7 @@ export function useSkill(name: string) {
  */
 export function useSkillFileContent(name: string, filePath: string | null) {
   return useQuery({
-    queryKey: [...queryKeys.skill(name), 'file', filePath],
+    queryKey: queryKeys.skillFile(name, filePath),
     // Only runs once a path is selected (`enabled`).
     queryFn: () => api.readSkillFile(name, filePath ?? ''),
     enabled: filePath != null,
@@ -317,6 +338,10 @@ export function useDeleteSkillFile(name: string) {
 /**
  * Patches a skill; a rename moves its cache entry to the new name.
  *
+ * @remarks
+ * After a rename the old name is still on screen until the page moves to the new one. Its entries are
+ * marked stale but not refetched: the server no longer knows the name.
+ *
  * @param name - Current skill slug.
  * @returns The mutation.
  */
@@ -325,9 +350,17 @@ export function useUpdateSkill(name: string) {
   return useMutation({
     mutationFn: (body: UpdateSkillRequest) => api.updateSkill(name, body),
     onSuccess: (skill) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-      queryClient.invalidateQueries({ queryKey: queryKeys.skill(name) });
       queryClient.setQueryData(queryKeys.skill(skill.name), skill);
+      if (skill.name === name) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+        return;
+      }
+      const [, renamed] = queryKeys.skill(name);
+      queryClient.invalidateQueries({ queryKey: queryKeys.skill(name), refetchType: 'none' });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.skills,
+        predicate: (query) => query.queryKey[1] !== renamed,
+      });
     },
   });
 }

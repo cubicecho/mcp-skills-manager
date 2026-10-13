@@ -45,7 +45,11 @@ const BarLink = createLink(BarNavItem);
  * Skills owns the skill route too, so its button stays lit while a skill is open.
  */
 function isActive(to: NavTo, pathname: string): boolean {
-  return to === '/' ? pathname === '/' || pathname.startsWith('/skills/') : pathname.startsWith(to);
+  if (to === '/') {
+    return pathname === '/' || pathname.startsWith('/skills/');
+  }
+  // A whole segment, so `/settings-old` does not light Settings.
+  return pathname === to || pathname.startsWith(`${to}/`);
 }
 
 /** Clears the stored bearer token and brings the token gate back — for shared machines. */

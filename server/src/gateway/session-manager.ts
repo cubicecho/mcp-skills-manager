@@ -47,10 +47,13 @@ export class McpSessionManager {
         return;
       }
       // The standalone GET is the session's SSE push channel, and its `close` is the only sign the client has
-      // gone, so reap there. Never on POST/DELETE: their JSON responses close at once.
+      // gone, so reap there. Never on POST/DELETE: their JSON responses close at once, and so does a GET the
+      // transport refuses (not an event stream, or a second stream), which must not take the session with it.
       if (req.method === 'GET') {
         res.on('close', () => {
-          void closeQuietly(existing.transport, 'MCP session');
+          if (res.statusCode === HttpStatus.Ok) {
+            void closeQuietly(existing.transport, 'MCP session');
+          }
         });
       }
       await existing.transport.handleRequest(req, res, req.body);

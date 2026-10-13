@@ -624,6 +624,22 @@ describe('ConfigStore usage analytics', () => {
     expect(temp.store.getUsage('after')).toEqual({ count: 0, lastUsedAt: null });
   });
 
+  it('fires a change event for a file added deep inside a skill', async () => {
+    await temp.store.createSkill({ name: 'deep', description: 'd', body: '# deep', format: 'dir' });
+    const folder = path.join(temp.dir, 'skills', 'deep', 'a', 'b', 'c');
+    await mkdir(folder, { recursive: true });
+    await temp.store.reload();
+    const onChange = vi.fn();
+    temp.store.on('change', onChange);
+    temp.store.startWatching();
+    await settle();
+
+    await writeFile(path.join(folder, 'notes.md'), 'x');
+
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled(), { timeout: 3000 });
+    expect(filePaths(temp.store.requireSkill('deep'))).toContain('a/b/c/notes.md');
+  });
+
   it('fires no change event when usage is recorded', async () => {
     await temp.store.createSkill({ name: 'watched', description: 'd', body: '# watched' });
     const onChange = vi.fn();
