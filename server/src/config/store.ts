@@ -214,12 +214,17 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     return this.snapshot();
   }
 
-  /** Watches the config and skills dirs: a burst of changes reloads the store, then emits `change`. */
+  /**
+   * Watches the config and skills dirs: a burst of changes reloads the store, then emits `change`.
+   *
+   * @remarks
+   * The watch has no depth limit, since a skill lists its files however deep they are.
+   */
   startWatching(): void {
     if (this.watcher) {
       return;
     }
-    this.watcher = watch([this.configDir, this.skillsDir], { ignoreInitial: true, depth: 3 });
+    this.watcher = watch([this.configDir, this.skillsDir], { ignoreInitial: true });
     this.watcher.on('all', () => {
       if (this.watchDebounce) {
         clearTimeout(this.watchDebounce);
