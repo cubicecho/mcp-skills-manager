@@ -53,9 +53,11 @@ function readFrontmatter(parsed: unknown): SkillFrontmatter {
 }
 
 /**
- * Serialize frontmatter + body back into a Markdown document. `name` and
- * `description` are written first (merged over any preserved unknown keys) so
- * the file round-trips losslessly. An entirely empty frontmatter is omitted.
+ * Serializes frontmatter and a body back into a Markdown document.
+ *
+ * @param frontmatter - The keys to write, in the order given; an `undefined` value is left out.
+ * @param body - The Markdown under the frontmatter; surrounding blank space is trimmed.
+ * @returns The document, ending in one newline; no frontmatter block when no key is left.
  */
 export function serializeMarkdown(frontmatter: SkillFrontmatter, body: string): string {
   const entries = Object.entries(frontmatter).filter(([, value]) => value !== undefined);

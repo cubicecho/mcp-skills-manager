@@ -41,7 +41,7 @@ export const createSkillRequestSchema = z.object({
   description: z.string().default(''),
   /** Markdown body (frontmatter is generated from name/description). */
   body: z.string().default(''),
-  /** On-disk layout: `file` → `<name>.md`, `dir` → `<name>/SKILL.md`. Defaults to `file`. */
+  /** On-disk layout: `file` → `<name>.md`, `dir` → `<name>/SKILL.md`. Left out, REST writes `file` and MCP `dir`. */
   format: skillFormatSchema.optional(),
   /** Serve on the root `/mcp` aggregate. Omit for the default (true); false → workspace-scoped only. */
   global: z.boolean().optional(),

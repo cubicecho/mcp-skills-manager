@@ -67,7 +67,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     },
   });
 
-  // The dialog stays mounted between openings, so a closed one starts over on the create tab.
+  // For a caller that keeps the dialog mounted while closed: the next opening starts over on the create tab.
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       form.reset();

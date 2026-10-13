@@ -31,7 +31,8 @@ export function isBinary(buffer: Buffer): boolean {
 }
 
 /**
- * Resolve a caller-supplied path within a skill's directory, rejecting absolute paths and `..` traversal.
+ * Resolve a caller-supplied path within a skill's directory, reading a leading slash as the skill root
+ * and rejecting `..` traversal.
  * @param relPath - The caller-supplied path, relative to the skill's directory.
  * @returns The safe POSIX-style relative path.
  * @throws HttpError 400 when the path is empty or leaves the skill's directory.

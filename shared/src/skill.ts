@@ -37,14 +37,12 @@ export const skillFrontmatterSchema = z
      * Whether the skill is served on the root `/mcp` aggregate. Absent or `true`
      * → global (the default; every hand-authored skill stays visible). Set to
      * `false` to hide it from root while still serving it on any workspace that
-     * lists it — this is how agent-authored, workspace-scoped skills stay
-     * private to their workspace.
+     * lists it, which is what a skill authored through a workspace endpoint gets.
      */
     global: z.boolean().optional(),
     /**
-     * Standard Agent Skills metadata (agentskills.io spec), surfaced to agents
-     * in the `list_skills` catalogue and the loaded-skill footer. Typed here so
-     * they round-trip cleanly; still optional and otherwise free-form.
+     * The skill's license, from the Agent Skills spec (agentskills.io). Shown to agents on the
+     * skill's `list_skills` line and in the loaded skill's footer.
      */
     license: z.string().optional(),
     /** Tools the skill expects/permits — a comma-separated string or a list, per the spec. */
