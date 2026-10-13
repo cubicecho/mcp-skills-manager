@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 
   const workspaceSlug = values.workspace;
   if (workspaceSlug && !store.getWorkspace(workspaceSlug)) {
-    console.error(`Unknown workspace "${workspaceSlug}" (data dir: ${dataDir})`);
+    console.error(`Unknown workspace "${workspaceSlug}" in data dir ${dataDir}: ${store.knownWorkspaces()}`);
     process.exit(1);
   }
 

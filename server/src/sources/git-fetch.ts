@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { GitSource } from '@mcp-skills/shared';
-import { HttpStatus, MAX_SKILL_FILES } from '@mcp-skills/shared';
+import { HttpStatus, MAX_SKILL_FILES, MS_PER_SECOND } from '@mcp-skills/shared';
 import { EnvVar, GIT_MAX_BUFFER_BYTES, GIT_STDERR_TAIL_LENGTH, GIT_TIMEOUT_MS } from '../core/defaults.ts';
 import { HttpError } from '../errors.ts';
 
@@ -54,15 +54,24 @@ async function git(args: string[], options: GitFetchOptions): Promise<string> {
  * @param err - Whatever `execFile` rejected with.
  * @param status - HTTP status to answer with when git itself ran and failed.
  * @param message - Error message for that case.
- * @returns The error to throw; a 500 saying git is not installed when the binary was not found.
+ * @returns The error to throw; a 500 when git is not installed, a 504 when it ran out of time.
  */
 function gitError(err: unknown, status: number, message: string): HttpError {
-  const failure = err as { code?: unknown; stderr?: unknown };
+  const failure = err as { code?: unknown; stderr?: unknown; killed?: unknown };
   if (failure.code === 'ENOENT') {
     return new HttpError(
       HttpStatus.InternalServerError,
       'git is not installed on the server',
       'install git to sync skills from a repo',
+    );
+  }
+  // execFile kills a git that outlives the timeout; the caller's message would blame the repo or the folder.
+  if (failure.killed === true) {
+    return new HttpError(
+      HttpStatus.GatewayTimeout,
+      `${message}: git gave no answer within ${GIT_TIMEOUT_MS / MS_PER_SECOND} seconds`,
+      'check that the server can reach the repo, then try again',
+      { cause: err },
     );
   }
   const stderr = typeof failure.stderr === 'string' ? failure.stderr.trim() : '';

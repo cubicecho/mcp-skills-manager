@@ -65,12 +65,15 @@ export interface ConfigStoreOptions {
  * Refuses a path that names the skill's own document, which is not a supporting file.
  *
  * @param rel - Safe path relative to the skill's folder.
- * @param message - What to tell the caller.
  * @throws HttpError 400 when the path is SKILL.md.
  */
-function requireNotSkillFile(rel: string, message: string): void {
+function requireNotSkillFile(rel: string): void {
   if (rel === SKILL_FILE) {
-    throw new HttpError(HttpStatus.BadRequest, message);
+    throw new HttpError(
+      HttpStatus.BadRequest,
+      `${SKILL_FILE} is the skill's own document, not a supporting file`,
+      'change it by editing the skill body (update_skill or edit_skill over MCP)',
+    );
   }
 }
 
@@ -115,14 +118,12 @@ function declaringName(content: Buffer, name: string): Buffer {
  * Once watching, it emits `change` with the new state after a debounced reload of either tree.
  */
 export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
-  /** Root of everything the store reads and writes. */
-  readonly dataDir: string;
   /** `<dataDir>/config`, holding settings.json and the workspaces dir. */
-  readonly configDir: string;
+  private readonly configDir: string;
   /** `<configDir>/workspaces`, one `<slug>.json` per workspace. */
-  readonly workspacesDir: string;
+  private readonly workspacesDir: string;
   /** `<dataDir>/skills`, holding every skill's file or folder. */
-  readonly skillsDir: string;
+  private readonly skillsDir: string;
   /** Absolute path to settings.json. */
   private readonly settingsFile: string;
 
@@ -141,7 +142,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   /** Usage stats, authoritative in memory once loaded; flushed to usage.json (unwatched) after each record. */
   private readonly usage: UsageTracker;
   /** Absolute path to usage.json, at the dataDir root and outside the watched dirs so a write triggers no reload. */
-  readonly usageFile: string;
+  private readonly usageFile: string;
   /** Fetches linked skills from git and swaps them in; it stages under `.sync`, outside the watched dirs. */
   private readonly sync: SkillSync;
 
@@ -156,7 +157,6 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     // Each live stateful-HTTP MCP session holds a `change` listener until it disconnects, so the count
     // tracks concurrent clients and is no leak signal: turn the 10-listener warning off.
     this.setMaxListeners(0);
-    this.dataDir = dataDir;
     this.configDir = path.join(dataDir, 'config');
     this.workspacesDir = path.join(this.configDir, 'workspaces');
     this.skillsDir = path.join(dataDir, 'skills');
@@ -713,7 +713,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async writeSupportingFile(name: string, relPath: string, content: Buffer): Promise<Skill> {
     const existing = this.requireSkill(name);
     const rel = safeRelPath(relPath);
-    requireNotSkillFile(rel, 'Edit SKILL.md through the skill body, not as a supporting file');
+    requireNotSkillFile(rel);
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     await mkdir(path.dirname(full), { recursive: true });
@@ -760,7 +760,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   async createSupportingFolder(name: string, relPath: string): Promise<Skill> {
     const existing = this.requireSkill(name);
     const rel = safeRelPath(relPath);
-    requireNotSkillFile(rel, 'A folder cannot be named SKILL.md');
+    requireNotSkillFile(rel);
     await this.ensureDirSkill(existing);
     const full = path.join(this.skillRoot(existing), rel);
     if (existsSync(full)) {
@@ -785,7 +785,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     const existing = this.requireSkill(name);
     const from = this.requireDirRelPath(existing, fromPath);
     const to = safeRelPath(toPath);
-    requireNotSkillFile(to, 'A supporting file cannot be named SKILL.md');
+    requireNotSkillFile(to);
     if (from === to) {
       return existing;
     }
@@ -855,10 +855,14 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    */
   private requireDirRelPath(skill: Skill, relPath: string): string {
     if (skill.format !== 'dir') {
-      throw new HttpError(HttpStatus.BadRequest, `Skill "${skill.name}" has no supporting files`);
+      throw new HttpError(
+        HttpStatus.BadRequest,
+        `Skill "${skill.name}" is a single file, so it has no supporting files`,
+        'writing a supporting file to it turns it into a folder skill',
+      );
     }
     const rel = safeRelPath(relPath);
-    requireNotSkillFile(rel, 'Edit SKILL.md through the skill body, not as a supporting file');
+    requireNotSkillFile(rel);
     return rel;
   }
 
@@ -872,7 +876,11 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   requireSkill(name: string): Skill {
     const skill = this.skills.get(name);
     if (!skill) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown skill "${name}"`);
+      throw new HttpError(
+        HttpStatus.NotFound,
+        `Unknown skill "${name}"`,
+        'no skill has that name; list the skills to see the names that exist',
+      );
     }
     return skill;
   }
@@ -957,7 +965,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   requireWorkspace(slug: string): WorkspaceConfig {
     const workspace = this.workspaces.get(slug);
     if (!workspace) {
-      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`);
+      throw new HttpError(HttpStatus.NotFound, `Unknown workspace "${slug}"`, this.knownWorkspaces());
     }
     return workspace;
   }
@@ -988,11 +996,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   }
 
   /**
-   * Removes a workspace and its config file; a no-op for an unknown slug.
+   * Removes a workspace and its config file.
    *
    * @param slug - Workspace slug.
+   * @throws HttpError 404 when no workspace has the slug.
    */
   async deleteWorkspace(slug: string): Promise<void> {
+    this.requireWorkspace(slug);
     this.workspaces.delete(slug);
     await rm(this.workspaceFile(slug), { force: true });
     this.workspaceFileNames.delete(slug);
@@ -1011,6 +1021,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       return workspace;
     }
     return this.saveWorkspace({ ...workspace, skills: [...workspace.skills, name] });
+  }
+
+  /**
+   * Names the workspaces there are, for the error about one there is not.
+   *
+   * @returns One clause listing every slug, or saying there are none.
+   */
+  knownWorkspaces(): string {
+    const slugs = this.getWorkspaces().map((workspace) => workspace.slug);
+    return slugs.length > 0 ? `the workspaces are ${slugs.join(', ')}` : 'there are no workspaces yet';
   }
 
   /**

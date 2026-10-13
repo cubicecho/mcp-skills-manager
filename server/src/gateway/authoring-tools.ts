@@ -64,13 +64,13 @@ export interface AuthoringDeps {
 }
 
 /**
- * Joins a validation error's issue messages into one line an agent can read.
+ * Joins a validation error's issues into one line an agent can read.
  *
  * @param error - The zod error to summarize.
- * @returns The issue messages, separated by `; `.
+ * @returns Each issue as `argument: message`, separated by `; `.
  */
-function issueSummary(error: z.ZodError): string {
-  return error.issues.map((i) => i.message).join('; ');
+export function issueSummary(error: z.ZodError): string {
+  return error.issues.map((issue) => `${issue.path.join('.') || '(arguments)'}: ${issue.message}`).join('; ');
 }
 
 /**

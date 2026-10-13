@@ -103,14 +103,18 @@ describe('MCP HTTP router', () => {
     it('answers 404 for an unknown workspace and for a disabled one', async () => {
       await temp.store.saveWorkspace({ name: 'Off', slug: 'off', enabled: false, skills: [] });
       server = await boot(temp.store);
-      for (const slug of ['nope', 'off']) {
+      const answers = {
+        nope: 'Unknown workspace "nope": the workspaces are examples, off',
+        off: 'Workspace "off" is disabled: enable it to serve its endpoint',
+      };
+      for (const [slug, error] of Object.entries(answers)) {
         const res = await fetch(workspaceUrl(slug), {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
         });
         expect(res.status).toBe(404);
-        expect(await res.json()).toEqual({ error: `Unknown workspace "${slug}"` });
+        expect(await res.json()).toEqual({ error });
       }
     });
   });

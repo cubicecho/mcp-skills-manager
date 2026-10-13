@@ -367,7 +367,6 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.delete('/workspaces/:slug', async (req, res) => {
-    store.requireWorkspace(req.params.slug);
     await store.deleteWorkspace(req.params.slug);
     res.status(HttpStatus.NoContent).end();
   });

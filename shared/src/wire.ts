@@ -9,6 +9,7 @@ export const HttpStatus = {
   Conflict: 409,
   InternalServerError: 500,
   BadGateway: 502,
+  GatewayTimeout: 504,
 } as const;
 /** One of the {@link HttpStatus} codes. */
 export type HttpStatus = (typeof HttpStatus)[keyof typeof HttpStatus];

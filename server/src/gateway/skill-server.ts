@@ -19,7 +19,7 @@ import { errorMessage } from '../errors.ts';
 import { bundledFiles, skillToolNames } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
-import { buildAuthoringTools } from './authoring-tools.ts';
+import { buildAuthoringTools, issueSummary } from './authoring-tools.ts';
 import {
   INDEX_TOOL_NAME,
   indexToolDefinition,
@@ -200,8 +200,7 @@ const loadArgsSchema = z.strictObject({ name: z.string() });
 function parseToolArgs<T>(toolName: string, schema: z.ZodType<T>, args: unknown): T {
   const result = schema.safeParse(args ?? {});
   if (result.success === false) {
-    const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '(arguments)'}: ${issue.message}`);
-    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for ${toolName}: ${issues.join('; ')}`);
+    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for ${toolName}: ${issueSummary(result.error)}`);
   }
   return result.data;
 }
@@ -292,7 +291,10 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
       // would be ambiguous (`commit.messages` and `commit_messages` collide).
       const skill = findByName(deps.getSkills(), wanted);
       if (!skill) {
-        throw new McpError(ErrorCode.InvalidParams, `Unknown skill "${wanted}"`);
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Unknown skill "${wanted}": call ${INDEX_TOOL_NAME} for the names served here`,
+        );
       }
       return loadSkill(skill);
     }

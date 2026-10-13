@@ -95,6 +95,28 @@ describe('ConfigStore supporting files & import', () => {
     await expect(temp.store.deleteSupportingFile('guard', 'SKILL.md')).rejects.toMatchObject({ status: 400 });
   });
 
+  it('says the same thing wherever SKILL.md is named as a supporting file', async () => {
+    await temp.store.createSkill({ name: 'guard', description: 'd', body: '# Guard', format: 'dir' });
+    await temp.store.writeSupportingFile('guard', 'notes.md', Buffer.from('x'));
+    const reserved = {
+      status: 400,
+      message: "SKILL.md is the skill's own document, not a supporting file",
+      detail: 'change it by editing the skill body (update_skill or edit_skill over MCP)',
+    };
+    await expect(temp.store.writeSupportingFile('guard', 'SKILL.md', Buffer.from('x'))).rejects.toMatchObject(reserved);
+    await expect(temp.store.createSupportingFolder('guard', 'SKILL.md')).rejects.toMatchObject(reserved);
+    await expect(temp.store.moveSupportingPath('guard', 'notes.md', 'SKILL.md')).rejects.toMatchObject(reserved);
+  });
+
+  it('tells a reader that a single-file skill has no supporting files, and how it gets them', async () => {
+    await temp.store.createSkill({ name: 'flat', description: 'd', body: '# Flat', format: 'file' });
+    await expect(temp.store.readSupportingFile('flat', 'notes.md')).rejects.toMatchObject({
+      status: 400,
+      message: 'Skill "flat" is a single file, so it has no supporting files',
+      detail: 'writing a supporting file to it turns it into a folder skill',
+    });
+  });
+
   it('deletes a supporting file and prunes the directory it empties', async () => {
     await temp.store.importSkill({
       name: 'prune',
@@ -495,6 +517,14 @@ describe('ConfigStore workspace membership integrity', () => {
     vi.restoreAllMocks();
   });
 
+  it('refuses to delete a workspace that is not there, naming the ones that are', async () => {
+    await expect(temp.store.deleteWorkspace('nope')).rejects.toMatchObject({
+      status: 404,
+      message: 'Unknown workspace "nope"',
+      detail: 'the workspaces are examples',
+    });
+  });
+
   it('silently prunes members that no longer exist when a workspace is saved', async () => {
     await temp.store.createSkill({ name: 'real', description: 'r', body: '# real' });
     const saved = await temp.store.saveWorkspace({
@@ -602,7 +632,7 @@ describe('ConfigStore usage analytics', () => {
     await settle();
 
     temp.store.recordSkillUse('watched');
-    await vi.waitFor(() => expect(existsSync(temp.store.usageFile)).toBe(true), { timeout: 2000 });
+    await vi.waitFor(() => expect(existsSync(path.join(temp.dir, 'usage.json'))).toBe(true), { timeout: 2000 });
     await settle();
     expect(onChange).not.toHaveBeenCalled();
   });

@@ -342,7 +342,7 @@ describe('MCP authoring tools', () => {
     const invalid = await client.callTool({ name: 'create_skill', arguments: { name: 'Not A Slug' } });
     expect((invalid as { isError?: boolean }).isError).toBe(true);
     expect(firstText(invalid)).toMatchInlineSnapshot(
-      `"lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric"`,
+      `"name: lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric"`,
     );
     const derived = await client.callTool({ name: 'create_skill', arguments: { title: 'My First Skill!' } });
     expect(firstText(derived)).toContain('Created skill "my-first-skill"');

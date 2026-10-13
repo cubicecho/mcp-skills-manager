@@ -84,7 +84,7 @@ export function resolveAuth(
  * @param b - The other.
  * @returns True when the tokens are the same string.
  */
-export function tokensEqual(a: string, b: string): boolean {
+function tokensEqual(a: string, b: string): boolean {
   const digestA = createHash('sha256').update(a).digest();
   const digestB = createHash('sha256').update(b).digest();
   return timingSafeEqual(digestA, digestB);

@@ -246,13 +246,19 @@ describe('management REST API', () => {
     it('answers 404 for an unknown skill', async () => {
       const res = await request(api).get('/api/skills/nope');
       expect(res.status).toBe(404);
-      expect(res.body).toEqual({ error: 'Unknown skill "nope"' });
+      expect(res.body).toEqual({
+        error: 'Unknown skill "nope"',
+        detail: 'no skill has that name; list the skills to see the names that exist',
+      });
     });
 
     it('lets an unknown skill win over an invalid body on PATCH', async () => {
       const res = await request(api).patch('/api/skills/nope').send({ description: 42 });
       expect(res.status).toBe(404);
-      expect(res.body).toEqual({ error: 'Unknown skill "nope"' });
+      expect(res.body).toEqual({
+        error: 'Unknown skill "nope"',
+        detail: 'no skill has that name; list the skills to see the names that exist',
+      });
     });
 
     it('updates fields and renames in one PATCH', async () => {
@@ -270,7 +276,10 @@ describe('management REST API', () => {
       expect((await request(api).delete('/api/skills/getting-started')).status).toBe(204);
       const again = await request(api).delete('/api/skills/getting-started');
       expect(again.status).toBe(404);
-      expect(again.body).toEqual({ error: 'Unknown skill "getting-started"' });
+      expect(again.body).toEqual({
+        error: 'Unknown skill "getting-started"',
+        detail: 'no skill has that name; list the skills to see the names that exist',
+      });
     });
 
     it('exports a skill as a zip download', async () => {
@@ -323,7 +332,10 @@ describe('management REST API', () => {
     });
 
     it('lets an unknown skill win over a missing path or an invalid body', async () => {
-      const unknown = { error: 'Unknown skill "nope"' };
+      const unknown = {
+        error: 'Unknown skill "nope"',
+        detail: 'no skill has that name; list the skills to see the names that exist',
+      };
       const read = await request(api).get('/api/skills/nope/files/content');
       expect([read.status, read.body]).toEqual([404, unknown]);
       const deleted = await request(api).delete('/api/skills/nope/files');
@@ -471,7 +483,7 @@ describe('management REST API', () => {
     });
 
     it('answers 404 for an unknown workspace on GET, PATCH and DELETE', async () => {
-      const unknown = { error: 'Unknown workspace "nope"' };
+      const unknown = { error: 'Unknown workspace "nope"', detail: 'the workspaces are examples' };
       const read = await request(api).get('/api/workspaces/nope');
       expect([read.status, read.body]).toEqual([404, unknown]);
       const patched = await request(api).patch('/api/workspaces/nope').send({});
