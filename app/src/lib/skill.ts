@@ -16,8 +16,8 @@ export function skillFileCount(skill: Pick<SkillSummary, 'files'>): number {
  * @param skill - The skill to locate.
  * @returns The path from the data directory.
  */
-export function skillMarkdownPath(skill: Pick<SkillSummary, 'format' | 'name' | 'path'>): string {
-  return skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`;
+export function skillMarkdownPath(skill: Pick<SkillSummary, 'path'>): string {
+  return `skills/${skill.path}`;
 }
 
 /**
@@ -25,7 +25,11 @@ export function skillMarkdownPath(skill: Pick<SkillSummary, 'format' | 'name' | 
  *
  * @param skill - The skill to locate.
  * @returns The path from the data directory.
+ *
+ * @remarks
+ * The folder is read from the stored path, since a folder need not be named after its skill.
  */
-export function skillFilesPath(skill: Pick<SkillSummary, 'format' | 'name' | 'path'>): string {
-  return skill.format === 'dir' ? `skills/${skill.name}/` : `skills/${skill.path}`;
+export function skillFilesPath(skill: Pick<SkillSummary, 'format' | 'path'>): string {
+  const markdown = skillMarkdownPath(skill);
+  return skill.format === 'dir' ? markdown.slice(0, markdown.lastIndexOf('/') + 1) : markdown;
 }

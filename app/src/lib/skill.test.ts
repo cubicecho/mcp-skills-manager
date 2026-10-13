@@ -26,6 +26,12 @@ describe('skill paths', () => {
     expect(skillFilesPath(skill)).toBe('skills/deploy/');
   });
 
+  it('places a directory skill under the folder it is stored in, whatever the skill is called', () => {
+    const skill = aSkill({ name: 'deploy', format: 'dir', path: 'Deploy Notes/SKILL.md' });
+    expect(skillMarkdownPath(skill)).toBe('skills/Deploy Notes/SKILL.md');
+    expect(skillFilesPath(skill)).toBe('skills/Deploy Notes/');
+  });
+
   it('places a file skill at its one file', () => {
     const skill = aSkill({ name: 'deploy', format: 'file', path: 'deploy.md' });
     expect(skillMarkdownPath(skill)).toBe('skills/deploy.md');
