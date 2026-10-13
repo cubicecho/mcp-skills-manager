@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import type { Skill } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -9,8 +6,8 @@ import {
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConfigStore } from '../config/store.ts';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useTempStore } from '../test/temp-store.ts';
 import { firstText } from '../test/tool-result.ts';
 import { createSkillServer } from './skill-server.ts';
 
@@ -787,32 +784,20 @@ describe('skill-server live updates (stdio)', () => {
 });
 
 describe('skill-server advertised tools with authoring on', () => {
-  let dir: string;
-  let store: ConfigStore;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-tools-'));
-    store = new ConfigStore(dir);
-    await store.init();
-  });
-
-  afterEach(async () => {
-    await store.close();
-    await rm(dir, { recursive: true, force: true });
-  });
+  const temp = useTempStore();
 
   it('pins every tool definition in per-skill mode', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store } });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store } });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 
   it('pins every tool definition in loader mode', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store }, getSkillToolMode: () => 'loader' });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store }, getSkillToolMode: () => 'loader' });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 
   it('pins the authoring tools of a workspace endpoint', async () => {
-    const client = await connect(() => SKILLS, { authoring: { store, workspaceSlug: 'examples' } });
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store, workspaceSlug: 'examples' } });
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 });

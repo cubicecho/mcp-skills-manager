@@ -1,11 +1,11 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConfigStore } from '../config/store.ts';
+import type { ConfigStore } from '../config/store.ts';
 import type { SkillSourceFetcher } from '../sources/git-fetch.ts';
+import { useTempStore } from '../test/temp-store.ts';
 import { errorMiddleware } from './error-middleware.ts';
 import { createApiRouter } from './router.ts';
 
@@ -34,8 +34,6 @@ function expectValidationFailure(res: request.Response, detail: string): void {
 }
 
 describe('management REST API', () => {
-  let dir: string;
-  let store: ConfigStore;
   let api: express.Express;
   /** Commit the fake git source reports; bump it to simulate an upstream change. */
   let upstreamCommit: string;
@@ -49,21 +47,23 @@ describe('management REST API', () => {
     return { commit: upstreamCommit };
   };
 
-  beforeEach(async () => {
+  // Registered before the store's hooks, so the env and the quiet log are in place when it starts.
+  beforeEach(() => {
     vi.stubEnv('SECURE_LOCAL_NET', '');
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    dir = await mkdtemp(path.join(tmpdir(), 'mcp-skills-api-'));
     upstreamCommit = 'c1';
-    store = new ConfigStore(dir, { fetchSource });
-    await store.init(); // seeds getting-started + examples workspace
-    api = buildApi(store);
   });
 
-  afterEach(async () => {
-    await store.close();
-    await rm(dir, { recursive: true, force: true });
+  afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+  });
+
+  // The store seeds getting-started and the examples workspace.
+  const temp = useTempStore({ fetchSource });
+
+  beforeEach(() => {
+    api = buildApi(temp.store);
   });
 
   describe('status, settings and reload', () => {
@@ -113,13 +113,13 @@ describe('management REST API', () => {
         .patch('/api/settings')
         .send({ disabledAuthoringTools: ['delete_skil'] });
       expectValidationFailure(typo, 'disabledAuthoringTools.0');
-      expect(store.getDisabledAuthoringTools()).toEqual(['delete_skill']);
+      expect(temp.store.getDisabledAuthoringTools()).toEqual(['delete_skill']);
     });
 
     it('rejects an unknown settings key and leaves settings alone', async () => {
       const res = await request(api).patch('/api/settings').send({ authEnabled: false });
       expectValidationFailure(res, 'authEnabled');
-      expect(store.getSettings().authEnabled).toBe(true);
+      expect(temp.store.getSettings().authEnabled).toBe(true);
     });
 
     it('reloads from disk and reports the counts', async () => {
@@ -169,7 +169,7 @@ describe('management REST API', () => {
     it('rejects an invalid explicit name at the request boundary', async () => {
       const res = await request(api).post('/api/skills').send({ name: 'Not A Slug' });
       expectValidationFailure(res, 'lowercase alphanumerics, dots, dashes, underscores; must start alphanumeric');
-      expect(store.getSkills()).toHaveLength(1);
+      expect(temp.store.getSkills()).toHaveLength(1);
     });
 
     it('answers 409 for a duplicate name', async () => {
