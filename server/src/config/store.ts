@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { type Dirent, existsSync, type Stats } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   GitSource,
@@ -126,6 +126,13 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
   private readonly skillsDir: string;
   /** Absolute path to settings.json. */
   private readonly settingsFile: string;
+  /**
+   * `<dataDir>/.sync`, where a folder is built before it goes live and parked on its way out.
+   *
+   * @remarks
+   * It is outside the watched dirs and on the skills dir's filesystem, so a move either way is one rename.
+   */
+  private readonly stagingDir: string;
 
   /** Settings in force; the schema defaults until the first load. */
   private settings: SettingsFile = settingsFileSchema.parse({});
@@ -163,8 +170,9 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     this.settingsFile = path.join(this.configDir, 'settings.json');
     this.usageFile = path.join(dataDir, 'usage.json');
     this.usage = new UsageTracker(this.usageFile);
+    this.stagingDir = path.join(dataDir, '.sync');
     this.sync = new SkillSync(
-      { skillsDir: this.skillsDir, syncDir: path.join(dataDir, '.sync') },
+      { skillsDir: this.skillsDir, syncDir: this.stagingDir },
       options.fetchSource ?? fetchGitFolder,
     );
   }
@@ -498,26 +506,85 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
       return existing;
     }
     this.requireFreeName(target, existing);
-    const isDir = existing.format === 'dir';
     const relPath = skillPath(existing.format, target);
-    if (isDir) {
-      // Rename aligns the on-disk folder to the new identity, even if it previously differed.
-      await rename(this.skillRoot(existing), path.join(this.skillsDir, target));
-    }
     // The frontmatter still carries the old name — rewrite it.
-    await writeTextAtomic(
-      path.join(this.skillsDir, relPath),
-      serializeMarkdown({ ...existing.frontmatter, name: target, description: existing.description }, existing.body),
+    const renamed = serializeMarkdown(
+      { ...existing.frontmatter, name: target, description: existing.description },
+      existing.body,
     );
-    const leavesOldFile = isDir === false && existing.path !== relPath;
-    if (leavesOldFile) {
-      await rm(path.join(this.skillsDir, existing.path), { force: true });
+    if (existing.format === 'dir') {
+      await this.renameDirSkill(existing, target, renamed);
+    } else {
+      await this.renameFileSkill(existing, relPath, renamed);
     }
     this.skills.delete(name);
     const reloaded = await this.reloadSkill(relPath, existing.format);
     this.usage.retarget(name, target);
     await this.retargetWorkspaceSkill(name, target);
     return reloaded;
+  }
+
+  /**
+   * Moves a `dir` skill's folder to its new name and rewrites its SKILL.md there.
+   *
+   * @param skill - The skill being renamed.
+   * @param target - The new slug, which names the folder too, even when the old folder was named otherwise.
+   * @param content - The SKILL.md to write, declaring the new name.
+   *
+   * @remarks
+   * The folder is moved back when the SKILL.md cannot be written, so a failed rename changes nothing.
+   */
+  private async renameDirSkill(skill: Skill, target: string, content: string): Promise<void> {
+    const from = this.skillRoot(skill);
+    const to = path.join(this.skillsDir, target);
+    await rename(from, to);
+    try {
+      await writeTextAtomic(path.join(to, SKILL_FILE), content);
+    } catch (err) {
+      await rename(to, from);
+      throw err;
+    }
+  }
+
+  /**
+   * Writes a `file` skill under its new file name and removes the old file.
+   *
+   * @param skill - The skill being renamed.
+   * @param relPath - The new file, relative to the skills dir; it may be the file the skill already has.
+   * @param content - The document to write, declaring the new name.
+   *
+   * @remarks
+   * The new file is removed again when the old one cannot be, so a failed rename leaves one skill, not two.
+   */
+  private async renameFileSkill(skill: Skill, relPath: string, content: string): Promise<void> {
+    const next = path.join(this.skillsDir, relPath);
+    await writeTextAtomic(next, content);
+    if (skill.path === relPath) {
+      return;
+    }
+    try {
+      await rm(path.join(this.skillsDir, skill.path), { force: true });
+    } catch (err) {
+      await rm(next, { force: true });
+      throw err;
+    }
+  }
+
+  /**
+   * Runs `use` with a fresh folder in the staging area, and removes the folder afterwards.
+   *
+   * @typeParam T - What `use` resolves to.
+   * @param use - Given the folder's absolute path; whatever is still in it afterwards is deleted.
+   * @returns What `use` resolved to.
+   */
+  private async withStagingFolder<T>(use: (work: string) => Promise<T>): Promise<T> {
+    await mkdir(this.stagingDir, { recursive: true });
+    const work = await mkdtemp(path.join(this.stagingDir, 'stage-'));
+    try {
+      return await use(work);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
   }
 
   /**
@@ -536,16 +603,19 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
    * Deletes a skill, its supporting files, its usage stats and its workspace memberships.
    *
    * @param name - Skill slug.
+   *
+   * @remarks
+   * The skill's folder or file leaves the skills dir in one move, and is only then forgotten: a delete the
+   * disk refuses leaves the skill whole, on disk and in the catalogue.
    */
   async deleteSkill(name: string): Promise<void> {
     const existing = this.requireSkill(name);
-    this.skills.delete(name);
-    this.usage.forget(name);
-    if (existing.format === 'dir') {
-      await rm(this.skillRoot(existing), { recursive: true, force: true });
-    } else {
-      await rm(path.join(this.skillsDir, existing.path), { force: true });
-    }
+    const stored = existing.format === 'dir' ? this.skillRoot(existing) : path.join(this.skillsDir, existing.path);
+    await this.withStagingFolder(async (work) => {
+      await rename(stored, path.join(work, 'deleted'));
+      this.skills.delete(name);
+      this.usage.forget(name);
+    });
     // Drop the deleted skill from any workspace that referenced it (saveWorkspace prunes it now that it is gone).
     for (const workspace of this.workspacesListing(name)) {
       await this.saveWorkspace(workspace);
@@ -575,7 +645,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     }
     const [only] = input.files;
     if (input.format === 'file') {
-      if (input.files.length !== 1 || !only) {
+      if (input.files.length !== 1 || !only || only.path.toLowerCase().endsWith('.md') === false) {
         throw new HttpError(HttpStatus.BadRequest, 'A file-format skill must contain exactly one Markdown file');
       }
       const relPath = fileSkillPath(name);
@@ -591,13 +661,16 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
     if (hasSkillFile === false) {
       throw new HttpError(HttpStatus.BadRequest, 'A directory skill must include a SKILL.md at its root');
     }
-    const dir = path.join(this.skillsDir, name);
-    await mkdir(dir, { recursive: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.rel);
-      await mkdir(path.dirname(full), { recursive: true });
-      await writeBufferAtomic(full, entry.rel === SKILL_FILE ? declaringName(entry.content, name) : entry.content);
-    }
+    // Built in the staging area and moved in whole, so a write that fails leaves no half-made skill behind.
+    await this.withStagingFolder(async (work) => {
+      const dir = path.join(work, 'skill');
+      for (const entry of entries) {
+        const full = path.join(dir, entry.rel);
+        await mkdir(path.dirname(full), { recursive: true });
+        await writeBufferAtomic(full, entry.rel === SKILL_FILE ? declaringName(entry.content, name) : entry.content);
+      }
+      await rename(dir, path.join(this.skillsDir, name));
+    });
     return this.reloadSkill(dirSkillPath(name), 'dir');
   }
 
