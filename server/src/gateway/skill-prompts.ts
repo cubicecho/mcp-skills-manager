@@ -1,6 +1,7 @@
 import type { PromptArgument, Skill } from '@mcp-skills/shared';
 import { promptFrontmatterSchema, promptNameSchema, SKILL_PROMPTS_DIR } from '@mcp-skills/shared';
 import { parseMarkdown } from '../skills/markdown.ts';
+import { byName } from '../skills/skill-name.ts';
 import { bundledFiles } from '../skills/skill-view.ts';
 
 /**
@@ -63,7 +64,7 @@ export function promptFileName(filePath: string): string | undefined {
  * `<skill>__<name>`.
  */
 export function listPromptRefs(skills: Skill[]): SkillPromptRef[] {
-  const sorted = [...skills].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const sorted = [...skills].sort(byName);
   const refs = new Map<string, SkillPromptRef>();
   for (const skill of sorted) {
     for (const file of bundledFiles(skill)) {

@@ -1,4 +1,5 @@
 import type { Skill, SkillFile } from '@mcp-skills/shared';
+import { byName } from './skill-name.ts';
 
 /**
  * Derives the MCP tool name a skill is served under. Tool names are conventionally `[A-Za-z0-9_-]`, but a skill
@@ -24,7 +25,7 @@ const FIRST_TOOL_NUMBER = 2;
  * @returns Tool name by skill name, in sorted skill order.
  */
 export function skillToolNames(skills: ReadonlyArray<Pick<Skill, 'name'>>): Map<string, string> {
-  const names = skills.map((skill) => skill.name).sort();
+  const names = [...skills].sort(byName).map((skill) => skill.name);
   const taken = new Set(names.filter((name) => skillToolName(name) === name));
   const toolNames = new Map<string, string>();
   for (const name of names) {

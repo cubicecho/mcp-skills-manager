@@ -32,6 +32,7 @@ import { resolveAuth } from '../auth.ts';
 import { AUTH_TOKEN_BYTES, WATCH_DEBOUNCE_MS } from '../core/defaults.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { localFlags, parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
+import { byName } from '../skills/skill-name.ts';
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { SkillSync, type StagedSource, type SyncTarget } from '../sources/skill-sync.ts';
 import { parseJsonFile, writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
@@ -63,16 +64,6 @@ function requireNotSkillFile(rel: string, message: string): void {
   if (rel === SKILL_FILE) {
     throw new HttpError(HttpStatus.BadRequest, message);
   }
-}
-
-/**
- * Order two named things by name, the one order the store lists and loads in.
- * @param a - The first.
- * @param b - The second.
- * @returns Negative, zero or positive, as `Array.prototype.sort` wants.
- */
-function byName(a: { name: string }, b: { name: string }): number {
-  return a.name.localeCompare(b.name);
 }
 
 /**

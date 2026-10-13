@@ -16,3 +16,14 @@ export function resolveSkillName(name: string | undefined, title: string | undef
   }
   return slugify(title) || undefined;
 }
+
+/**
+ * Order two named things by name: the one order skills are listed and loaded in, and so the order
+ * that decides which of two skills keeps a shared tool or prompt name.
+ * @param a - The first.
+ * @param b - The second.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` wants.
+ */
+export function byName(a: { name: string }, b: { name: string }): number {
+  return a.name.localeCompare(b.name);
+}
