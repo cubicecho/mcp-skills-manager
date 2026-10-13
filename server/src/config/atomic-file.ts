@@ -1,4 +1,5 @@
-import { chmod, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { errorMessage } from '../errors.ts';
 
 /** File mode for config files, which can hold the auth token: owner read/write only. */
@@ -12,12 +13,21 @@ const DEFAULT_FILE_MODE = 0o644;
  * @param file - Absolute path of the file to write.
  * @param content - The bytes to write.
  * @param [mode] - Permission bits for the file (octal).
+ *
+ * @remarks
+ * The temp file's name is random, so two writes of one file never share it, and it is removed when the
+ * write fails.
  */
 export async function writeBufferAtomic(file: string, content: Buffer, mode = DEFAULT_FILE_MODE): Promise<void> {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmp, content, { mode });
-  await chmod(tmp, mode);
-  await rename(tmp, file);
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmp, content, { mode });
+    await chmod(tmp, mode);
+    await rename(tmp, file);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 /**
