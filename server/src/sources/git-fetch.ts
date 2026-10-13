@@ -148,7 +148,12 @@ export async function fetchGitFolder(
     } catch (err) {
       throw gitError(err, HttpStatus.BadRequest, `Folder "${folder}" was not found in ${source.repo}`);
     }
-    const commit = await git(['-C', clone, 'rev-parse', 'HEAD'], options);
+    let commit: string;
+    try {
+      commit = await git(['-C', clone, 'rev-parse', 'HEAD'], options);
+    } catch (err) {
+      throw gitError(err, HttpStatus.BadGateway, `Could not read the fetched commit of ${source.repo}`);
+    }
     const root = path.join(clone, folder);
     // lstat, not stat: a symlink standing in for the folder must not be followed out of the clone.
     const isFolder = (await lstat(root)).isDirectory();
