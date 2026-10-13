@@ -1,4 +1,3 @@
-import { useStore } from '@tanstack/react-form';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useAppForm } from '@/components/app-form';
@@ -31,7 +30,6 @@ export function TokenGate({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries();
     },
   });
-  const isBlank = useStore(form.store, (state) => state.values.token.trim() === '');
 
   if (!needsAuth) {
     return children;
@@ -54,7 +52,11 @@ export function TokenGate({ children }: { children: ReactNode }) {
           </FormElement>
         }
         footerActionsSlot={
-          <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…" content="Unlock" />
+          <form.Subscribe selector={(state) => state.values.token.trim() === ''}>
+            {(isBlank) => (
+              <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…" content="Unlock" />
+            )}
+          </form.Subscribe>
         }
       />
     </form.AppForm>

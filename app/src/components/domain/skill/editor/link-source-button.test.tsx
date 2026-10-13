@@ -7,7 +7,7 @@ import { LinkSourceButton } from './link-source-button';
 
 const mutate = vi.fn();
 
-vi.mock('@/lib/queries', () => ({ useLinkSkillSource: () => ({ mutate, isPending: false }) }));
+vi.mock('@/lib/queries', () => ({ useLinkSkillSource: () => ({ mutateAsync: mutate, isPending: false }) }));
 vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts());
 
 const skill = aSkill({ name: 'my-skill' });
@@ -35,7 +35,7 @@ describe('LinkSourceButton', () => {
   });
 
   it('links the pasted folder and closes', async () => {
-    mutate.mockImplementation((_source, options) => options.onSuccess());
+    mutate.mockResolvedValue({});
     await renderOpenDialog();
 
     await userEvent.click(screen.getByLabelText(/^Repository URL/));

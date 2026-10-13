@@ -1,6 +1,5 @@
 import type { SkillFormat } from '@mcp-skills/shared';
 import { slugify } from '@mcp-skills/shared';
-import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { InputField, TextareaField, useAppForm } from '@/components/app-form';
@@ -67,7 +66,6 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       }
     },
   });
-  const isDirty = useStore(form.store, (state) => state.isDirty);
 
   // The dialog stays mounted between openings, so a closed one starts over on the create tab.
   const handleOpenChange = (next: boolean) => {
@@ -85,7 +83,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         onOpenChange={handleOpenChange}
         title="New skill"
         description="A skill is a Markdown document agents can load over MCP. Create one from scratch, upload an existing one, or link one to a git repo."
-        hasUnsavedChanges={isDirty || upload.dirty || git.dirty}
+        hasUnsavedChanges={() => form.state.isDefaultValue === false || upload.dirty || git.dirty}
         contentSlot={
           <Tabs
             value={tab}

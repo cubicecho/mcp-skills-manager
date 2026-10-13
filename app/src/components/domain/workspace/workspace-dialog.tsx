@@ -1,5 +1,4 @@
 import type { WorkspaceStatus } from '@mcp-skills/shared';
-import { useStore } from '@tanstack/react-form';
 import { InputField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { MultiSelectField } from '@/components/multi-select-field';
@@ -67,7 +66,6 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
       }
     },
   });
-  const isDirty = useStore(form.store, (state) => state.isDirty);
 
   return (
     <form.AppForm>
@@ -80,7 +78,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
             A workspace serves a chosen subset of skills at its own endpoint <Code>/mcp/w/&lt;slug&gt;</Code>.
           </>
         }
-        hasUnsavedChanges={isDirty}
+        hasUnsavedChanges={() => form.state.isDefaultValue === false}
         contentSlot={
           <FormElement id={WORKSPACE_FORM_ID} className="min-w-0 gap-4 py-1" onSubmit={() => void form.handleSubmit()}>
             <InputField

@@ -1,5 +1,4 @@
 import type { SkillDetail } from '@mcp-skills/shared';
-import { useStore } from '@tanstack/react-form';
 import { useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { useAppForm } from '@/components/app-form';
@@ -24,22 +23,20 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
   const [open, setOpen] = useState(false);
   const form = useAppForm({
     defaultValues: { source: EMPTY_GIT_SOURCE },
-    onSubmit: ({ value }) => {
+    onSubmit: async ({ value }) => {
       const { source } = readGitSourceDraft(value.source);
-      if (!source || link.isPending) {
+      if (!source) {
         return;
       }
-      link.mutate(source, {
-        onSuccess: () => {
-          toast.success('Linked — content replaced from the repo');
-          handleOpenChange(false);
-        },
-        onError: toast.apiError,
-      });
+      try {
+        await link.mutateAsync(source);
+        toast.success('Linked — content replaced from the repo');
+        handleOpenChange(false);
+      } catch (error) {
+        toast.apiError(error);
+      }
     },
   });
-  const hasNoSource = useStore(form.store, (state) => readGitSourceDraft(state.values.source).source === undefined);
-  const isUnchanged = useStore(form.store, (state) => state.isDefaultValue);
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -62,7 +59,7 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
         onOpenChange={handleOpenChange}
         title="Link to Git source"
         description="Point this skill at a folder in a git repo and keep it in step by syncing."
-        hasUnsavedChanges={isUnchanged === false}
+        hasUnsavedChanges={() => form.state.isDefaultValue === false}
         contentSlot={
           <FormElement id={LINK_SOURCE_FORM_ID} className="gap-4 py-1" onSubmit={() => void form.handleSubmit()}>
             <Alert
@@ -76,12 +73,17 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
         footerActionsSlot={(close) => (
           <>
             <Button type="button" variant="outline" onClick={close} content="Cancel" />
-            <form.SubmitButton
-              form={LINK_SOURCE_FORM_ID}
-              disabled={hasNoSource || link.isPending}
-              content={link.isPending ? 'Fetching…' : 'Link & replace'}
-              iconSlot={<GitBranch />}
-            />
+            <form.Subscribe selector={(state) => readGitSourceDraft(state.values.source).source === undefined}>
+              {(hasNoSource) => (
+                <form.SubmitButton
+                  form={LINK_SOURCE_FORM_ID}
+                  disabled={hasNoSource}
+                  pendingLabel="Fetching…"
+                  content="Link & replace"
+                  iconSlot={<GitBranch />}
+                />
+              )}
+            </form.Subscribe>
           </>
         )}
       />

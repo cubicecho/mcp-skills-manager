@@ -1,4 +1,3 @@
-import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
@@ -8,6 +7,7 @@ import { Code } from '@/components/ui/code';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import { FormElement } from '@/components/ui/form-element';
 import { FileText, Folder } from '@/components/ui/icons';
+import { useFormStore } from '@/lib/form-store';
 import { formatCount, joinStats } from '@/lib/format';
 import { useImportSkill } from '@/lib/queries';
 import { type NormalizedUpload, normalizeUploadFile, normalizeUploadFolder } from '@/lib/skill-upload';
@@ -51,7 +51,7 @@ export function UploadSkillForm({
       );
     },
   });
-  const name = useStore(form.store, (state) => state.values.name);
+  const name = useFormStore(form.store, (state) => state.values.name);
 
   const nameValid = validateSkillId({ value: name }) === undefined;
   const ready = upload !== null && !upload.error && nameValid;

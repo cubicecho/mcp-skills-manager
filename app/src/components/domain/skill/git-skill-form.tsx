@@ -1,9 +1,9 @@
-import { useStore } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
 import { Code } from '@/components/ui/code';
 import { FormElement } from '@/components/ui/form-element';
+import { useFormStore } from '@/lib/form-store';
 import { useImportGitSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from './git-source-fields';
@@ -53,8 +53,8 @@ export function GitSkillForm({
       );
     },
   });
-  const values = useStore(form.store, (state) => state.values);
-  const isUnchanged = useStore(form.store, (state) => state.isDefaultValue);
+  const values = useFormStore(form.store, (state) => state.values);
+  const isUnchanged = useFormStore(form.store, (state) => state.isDefaultValue);
 
   const { source } = readGitSourceDraft(values.source);
   const nameValid = validateOptionalSkillId({ value: values.name }) === undefined;

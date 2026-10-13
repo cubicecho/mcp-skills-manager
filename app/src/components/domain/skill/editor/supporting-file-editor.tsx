@@ -1,9 +1,9 @@
-import { useStore } from '@tanstack/react-form';
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useAppForm } from '@/components/app-form';
 import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { MarkdownEditor } from '@/components/markdown-editor';
+import { useFormStore } from '@/lib/form-store';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
@@ -61,7 +61,7 @@ export function SupportingFileEditor({
     }
   }, [text, form]);
 
-  const content = useStore(form.store, (state) => state.values.content);
+  const content = useFormStore(form.store, (state) => state.values.content);
   const dirty = saved !== undefined && content !== saved;
   useImperativeHandle(ref, () => ({ hasUnsavedChanges: () => dirty }), [dirty]);
 

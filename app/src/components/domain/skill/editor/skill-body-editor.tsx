@@ -1,5 +1,4 @@
 import { normalizeTags, type SkillDetail } from '@mcp-skills/shared';
-import { useStore } from '@tanstack/react-form';
 import { type Ref, useImperativeHandle, useMemo } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
 import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
@@ -7,6 +6,7 @@ import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { MarkdownEditor } from '@/components/markdown-editor';
 import { MultiSelectField } from '@/components/multi-select-field';
 import { Code } from '@/components/ui/code';
+import { useFormStore } from '@/lib/form-store';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
 import { skillMarkdownPath } from '@/lib/skill';
 import { useToasts } from '@/lib/toast';
@@ -32,7 +32,7 @@ export function SkillBodyEditor({
       update.mutate(value, { onSuccess: () => toast.success('Skill saved'), onError: toast.apiError });
     },
   });
-  const { description, body, tags } = useStore(form.store, (state) => state.values);
+  const { description, body, tags } = useFormStore(form.store, (state) => state.values);
 
   // Every tag already in use, so an existing one is picked rather than retyped with a new spelling.
   const tagOptions = useMemo(
