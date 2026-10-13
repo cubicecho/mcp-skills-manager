@@ -103,6 +103,13 @@ describe('normalizeUploadFile', () => {
   });
 
   it('refuses an empty zip', () => {
+    expect(normalizeUploadFile(picked('broken.zip', 'not a zip'))).toEqual({
+      format: 'dir',
+      defaultName: '',
+      files: [],
+      paths: ['broken.zip'],
+      error: 'The archive could not be read. Choose a valid .zip file.',
+    });
     expect(normalizeUploadFile(pickedZip('empty.zip', {}))).toEqual({
       format: 'dir',
       defaultName: '',

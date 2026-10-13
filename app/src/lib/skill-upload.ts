@@ -149,12 +149,23 @@ function normalizeDirectory(rawFiles: RawFile[], fallbackName: string): Normaliz
  * Normalizes a single picked file: `.md` or `.markdown` into a file skill, `.zip` into a directory skill.
  *
  * @param file - The picked file, read as bytes.
- * @returns The upload, with `error` set for an empty archive or any other kind of file.
+ * @returns The upload, with `error` set for an empty or unreadable archive or any other kind of file.
  */
 export function normalizeUploadFile(file: PickedFile): NormalizedUpload {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.zip')) {
-    const entries = unzipSync(toRawFile(file).bytes);
+    let entries: ReturnType<typeof unzipSync>;
+    try {
+      entries = unzipSync(toRawFile(file).bytes);
+    } catch {
+      return {
+        format: 'dir',
+        defaultName: '',
+        files: [],
+        paths: [file.name],
+        error: 'The archive could not be read. Choose a valid .zip file.',
+      };
+    }
     const rawFiles: RawFile[] = Object.entries(entries)
       .filter(([name]) => name.endsWith('/') === false)
       .map(([name, data]) => ({ path: name, bytes: data }));
