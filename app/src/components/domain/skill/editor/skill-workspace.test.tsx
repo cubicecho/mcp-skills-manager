@@ -36,8 +36,19 @@ vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts())
 
 // The file list is pinned by its own tests; here it is the two rows this flow presses.
 vi.mock('@/components/domain/skill/editor/files-panel', () => ({
-  FilesPanel: ({ selected, onSelect: select }: { selected: string; onSelect: (path: string) => void }) => (
+  FilesPanel: ({
+    selected,
+    onSelect: select,
+    onMove,
+  }: {
+    selected: string;
+    onSelect: (path: string) => void;
+    onMove: (from: string, to: string) => void;
+  }) => (
     <div>
+      <button type="button" onClick={() => onMove('docs', 'reference')}>
+        Ask to move docs
+      </button>
       <p>{`Open file: ${selected}`}</p>
       <button type="button" onClick={() => select('docs/notes.md')}>
         Open notes
@@ -58,17 +69,33 @@ const SKILL = aSkill({
   ],
 });
 
+/** The skill once its `docs` folder has been renamed `reference`. */
+const MOVED = aSkill({
+  ...SKILL,
+  files: [
+    { path: 'reference/notes.md', type: 'file', size: 7 },
+    { path: 'logo.png', type: 'file', size: 12 },
+  ],
+});
+
 const LINKED = aSkill({ ...SKILL, source: A_SOURCE });
 
 /** The workspace as its route holds it: the open file in state, and a way to another page. */
-function Harness({ skill, initial }: { skill: SkillDetail; initial: string | undefined }) {
+function Harness({ skill: first, initial }: { skill: SkillDetail; initial: string | undefined }) {
   const [selected, setSelected] = useState(initial);
+  const [skill, setSkill] = useState(first);
   const router = useRouter();
   return (
     <>
       {/* Through the history, as a link goes: the test router is not the app's typed one. */}
       <button type="button" onClick={() => router.history.push('/elsewhere')}>
         Go elsewhere
+      </button>
+      <button type="button" onClick={() => setSkill(MOVED)}>
+        Docs moved
+      </button>
+      <button type="button" onClick={() => setSkill(aSkill({ ...first, files: [] }))}>
+        Files deleted
       </button>
       <SkillWorkspace
         skill={skill}
@@ -229,5 +256,24 @@ describe('SkillWorkspace', () => {
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(undefined));
     expect(screen.getByText(`Open file: ${SKILL_MD_KEY}`)).toBeInTheDocument();
+  });
+
+  it('keeps the open file open when it, or a folder above it, is moved', async () => {
+    await renderWorkspace(SKILL, 'docs/notes.md');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ask to move docs' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Docs moved' }));
+
+    await waitFor(() => expect(screen.getByText('Open file: reference/notes.md')).toBeInTheDocument());
+    expect(onSelect).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it("falls back to the skill's Markdown when a move that was asked for did not happen", async () => {
+    await renderWorkspace(SKILL, 'docs/notes.md');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ask to move docs' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Files deleted' }));
+
+    await waitFor(() => expect(screen.getByText(`Open file: ${SKILL_MD_KEY}`)).toBeInTheDocument());
   });
 });

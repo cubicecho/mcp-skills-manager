@@ -5,7 +5,12 @@ import type { EditorHandle } from '@/components/domain/skill/editor/editor-frame
 import { FilePreview } from '@/components/domain/skill/editor/file-preview';
 import { FilesPanel } from '@/components/domain/skill/editor/files-panel';
 import { SkillBodyEditor } from '@/components/domain/skill/editor/skill-body-editor';
-import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
+import {
+  isMarkdownPath,
+  type PathMove,
+  pathAfterMove,
+  SKILL_MD_KEY,
+} from '@/components/domain/skill/editor/skill-file-key';
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { SidebarLayout } from '@/components/split-layout';
@@ -39,15 +44,21 @@ export function SkillWorkspace({
   /** Called with the skill's new name once a rename has been saved. */
   onRenamed: (name: string) => void;
 }) {
-  const exists = selected !== undefined && skill.files.some((f) => f.type === 'file' && f.path === selected);
+  const isFile = (candidate: string) => skill.files.some((f) => f.type === 'file' && f.path === candidate);
+  const exists = selected !== undefined && isFile(selected);
   const path = exists ? selected : SKILL_MD_KEY;
+  // The move last asked of the file list, kept until the open file is found gone.
+  const lastMove = useRef<PathMove | null>(null);
 
-  // If the open file is renamed or deleted out from under us, fall back to the skill's Markdown.
+  // If the open file is no longer there, follow it to where it was moved, or fall back to the skill's Markdown.
   useEffect(() => {
-    if (selected !== undefined && !exists) {
-      onSelect(undefined);
+    if (selected === undefined || exists) {
+      return;
     }
-  }, [selected, exists, onSelect]);
+    const moved = lastMove.current ? pathAfterMove(selected, lastMove.current) : undefined;
+    lastMove.current = null;
+    onSelect(moved !== undefined && isFile(moved) ? moved : undefined);
+  });
 
   return (
     <SidebarLayout
@@ -61,6 +72,9 @@ export function SkillWorkspace({
           skill={skill}
           selected={path}
           onSelect={(next, options) => onSelect(next === SKILL_MD_KEY ? undefined : next, options)}
+          onMove={(from, to) => {
+            lastMove.current = { from, to };
+          }}
           onRenamed={onRenamed}
         />
       }

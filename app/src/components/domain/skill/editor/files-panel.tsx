@@ -35,6 +35,7 @@ export function FilesPanel({
   skill,
   selected,
   onSelect,
+  onMove,
   onRenamed,
 }: {
   /** The skill whose files are listed. */
@@ -43,13 +44,15 @@ export function FilesPanel({
   selected: string;
   /** Called with the file to open; `edit` asks for it in the editor, as a new file is. */
   onSelect: (path: string, options?: { edit?: boolean }) => void;
+  /** Called with a file's or folder's old and new paths as its move is asked for, before it has happened. */
+  onMove: (from: string, to: string) => void;
   /** Called with the skill's new name once a rename has been saved. */
   onRenamed: (name: string) => void;
 }) {
   const toast = useToasts();
   const movePath = useMoveSkillPath(skill.name);
   const deleteEntry = useDeleteSkillFile(skill.name);
-  const prompts = useFilePrompts(skill.name, onSelect);
+  const prompts = useFilePrompts(skill.name, onSelect, onMove);
   // The file or folder whose Delete was chosen, until the question about it is answered.
   const [deleting, setDeleting] = useState<TreeNode<FileEntry> | null>(null);
 
@@ -68,6 +71,7 @@ export function FilesPanel({
   const moveInto = async (from: string, into: string) => {
     const name = from.slice(from.lastIndexOf('/') + 1);
     const to = into ? `${into}/${name}` : name;
+    onMove(from, to);
     await reported(movePath.mutateAsync({ from, to }), toast.apiError);
     toast.success(`Moved to ${to}`);
   };
