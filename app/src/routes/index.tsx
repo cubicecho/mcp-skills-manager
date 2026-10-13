@@ -3,23 +3,24 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { BookMarked, GitBranch } from '@/components/app-icons';
-import { ConfirmButton } from '@/components/confirm-button';
 import { ConnectCard } from '@/components/domain/connect-card';
+import { DeleteButton } from '@/components/domain/delete-button';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
+import { useSkillFlags } from '@/components/domain/skill/use-skill-flags';
 import { OptionSelect, type SelectEntry } from '@/components/option-select';
 import { EmptyState } from '@/components/page';
 import { PageLayout } from '@/components/page-layout';
 import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Folder, Lock, Pencil, Plus, Search, Trash2 } from '@/components/ui/icons';
+import { FileText, Folder, Lock, Pencil, Plus, Search } from '@/components/ui/icons';
 import { SearchInput } from '@/components/ui/search-input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCount, formatDate, joinStats } from '@/lib/format';
 import { isKeyOf } from '@/lib/is-key-of';
 import { mcpOrigin } from '@/lib/mcp';
-import { useDeleteSkill, useServerStatus, useSkills, useUpdateSkill } from '@/lib/queries';
+import { useDeleteSkill, useServerStatus, useSkills } from '@/lib/queries';
 import {
   collectTags,
   FORMAT_LABELS,
@@ -50,48 +51,34 @@ const SCOPE_OPTIONS = toOptions(SCOPE_LABELS);
 const FORMAT_OPTIONS = toOptions(FORMAT_LABELS);
 const SORT_OPTIONS = toOptions(SORT_LABELS);
 
+/** Deletes the row's skill, once the reader has confirmed it. */
 function DeleteSkillButton({ skill }: { skill: SkillSummary }) {
   const toast = useToasts();
   const remove = useDeleteSkill();
   return (
-    <ConfirmButton
-      variant="ghost"
-      size="icon-sm"
-      label={`Delete ${skill.name}`}
+    <DeleteButton
+      name={skill.name}
       title={`Delete skill "${skill.name}"?`}
       description={`This permanently removes the skill file${skill.format === 'dir' ? ' and its directory' : ''}. It will also be dropped from any workspace that references it.`}
       onConfirm={() => remove.mutate(skill.name, { onError: toast.apiError })}
-      iconSlot={<Trash2 />}
     />
   );
 }
 
 /** Toggle whether a skill is served on the root /mcp endpoint (global) or hidden to its workspaces (scoped). */
 function GlobalToggle({ skill }: { skill: SkillSummary }) {
-  const toast = useToasts();
-  const update = useUpdateSkill(skill.name);
+  const flags = useSkillFlags(skill.name);
   return (
     <Switch
       checked={skill.global}
-      disabled={update.isPending}
+      disabled={flags.isPending}
       aria-label={`Serve "${skill.name}" on the root /mcp endpoint`}
       title={
         skill.global
           ? 'Served on the root /mcp endpoint. Turn off to make it workspace-scoped.'
           : 'Hidden from the root /mcp endpoint; served only on workspaces that list it. Turn on to serve globally.'
       }
-      onCheckedChange={(next) =>
-        update.mutate(
-          { global: next },
-          {
-            onSuccess: () =>
-              toast.success(
-                next ? 'Now served on the root /mcp endpoint' : 'Now workspace-scoped — hidden from root /mcp',
-              ),
-            onError: toast.apiError,
-          },
-        )
-      }
+      onCheckedChange={flags.setGlobal}
     />
   );
 }

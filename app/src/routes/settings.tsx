@@ -1,13 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
 import { CardLayout } from '@/components/card-layout';
 import { DescriptionList, PropertyRow } from '@/components/description-list';
+import { ToggleRow } from '@/components/domain/toggle-row';
 import { PageLayout } from '@/components/page-layout';
-import { SettingRow } from '@/components/setting-row';
 import { Button } from '@/components/ui/button';
 import { Code, CodeBlock } from '@/components/ui/code';
 import { RefreshCw } from '@/components/ui/icons';
-import { Switch } from '@/components/ui/switch';
 import { formatDuration } from '@/lib/format';
 import { useReloadConfig, useServerStatus, useSettings, useUpdateSettings } from '@/lib/queries';
 import { SKILL_TOOL_MODE_HINTS, SKILL_TOOL_MODE_LABELS } from '@/lib/skill-tool-mode';
@@ -16,37 +14,6 @@ import { useToasts } from '@/lib/toast';
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 });
-
-/** One toggle option — the shared row used by every switch on this page. */
-function ToggleRow({
-  label,
-  description,
-  checked,
-  disabled,
-  onCheckedChange,
-}: {
-  label: string;
-  description: ReactNode;
-  checked: boolean;
-  disabled?: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  return (
-    <SettingRow
-      title={label}
-      description={description}
-      actionSlot={({ titleId, descriptionId }) => (
-        <Switch
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={onCheckedChange}
-          aria-labelledby={titleId}
-          aria-describedby={descriptionId}
-        />
-      )}
-    />
-  );
-}
 
 function McpOptionsCard() {
   const toast = useToasts();
@@ -68,7 +35,7 @@ function McpOptionsCard() {
         settings && (
           <>
             <ToggleRow
-              label={SKILL_TOOL_MODE_LABELS['per-skill']}
+              title={SKILL_TOOL_MODE_LABELS['per-skill']}
               description={SKILL_TOOL_MODE_HINTS[settings.skillToolMode]}
               checked={settings.skillToolMode === 'per-skill'}
               disabled={updateSettings.isPending}
@@ -80,7 +47,7 @@ function McpOptionsCard() {
               }
             />
             <ToggleRow
-              label="Allow agents to author skills"
+              title="Allow agents to author skills"
               description={
                 settings.authoringEnabled
                   ? 'Authoring tools (create_skill, update_skill, …) are exposed on every endpoint.'
@@ -102,7 +69,7 @@ function McpOptionsCard() {
               }
             />
             <ToggleRow
-              label="Push live updates over HTTP"
+              title="Push live updates over HTTP"
               description={
                 settings.httpLiveUpdates
                   ? 'Stateful sessions push resources/list_changed and resources/updated over SSE.'

@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { Layers } from '@/components/app-icons';
-import { ConfirmButton } from '@/components/confirm-button';
+import { DeleteButton } from '@/components/domain/delete-button';
 import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
 import { EmptyState } from '@/components/page';
 import { PageLayout } from '@/components/page-layout';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { CopyButton } from '@/components/ui/copy-button';
-import { Pencil, Plus, Trash2 } from '@/components/ui/icons';
+import { Pencil, Plus } from '@/components/ui/icons';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteWorkspace, useServerStatus, useWorkspaces } from '@/lib/queries';
@@ -25,18 +25,16 @@ export const Route = createFileRoute('/workspaces')({
 /** create → the New button; edit → a specific workspace; null → closed. */
 type DialogState = { mode: 'create' } | { mode: 'edit'; workspace: WorkspaceStatus } | null;
 
+/** Deletes the row's workspace, once the reader has confirmed it. */
 function DeleteWorkspaceButton({ workspace }: { workspace: WorkspaceStatus }) {
   const toast = useToasts();
   const remove = useDeleteWorkspace();
   return (
-    <ConfirmButton
-      variant="ghost"
-      size="icon-sm"
-      label={`Delete ${workspace.name}`}
+    <DeleteButton
+      name={workspace.name}
       title={`Delete workspace "${workspace.name}"?`}
       description="This removes the workspace and its endpoint. The skills themselves are not deleted."
       onConfirm={() => remove.mutate(workspace.slug, { onError: toast.apiError })}
-      iconSlot={<Trash2 />}
     />
   );
 }
