@@ -18,6 +18,8 @@ export class UsageTracker {
   private usage = new Map<string, SkillUsage>();
   /** The scheduled write; null when nothing is waiting to be written. */
   private flushTimer: NodeJS.Timeout | null = null;
+  /** The write a fired timer started, settled once it has finished or failed. */
+  private writing: Promise<void> = Promise.resolve();
   /** Absolute path of usage.json. */
   private readonly file: string;
 
@@ -82,8 +84,10 @@ export class UsageTracker {
     }
   }
 
-  /** Writes a change still waiting on its timer now, so counts survive a graceful shutdown; a failure is ignored. */
+  /** Finishes the writes owed, so counts survive a graceful shutdown; a failure is ignored. */
   async close(): Promise<void> {
+    // A write already under way is waited for first, so the two never race for the file.
+    await this.writing;
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
@@ -98,7 +102,7 @@ export class UsageTracker {
     }
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      this.flush().catch((err: unknown) => {
+      this.writing = this.flush().catch((err: unknown) => {
         console.error(`Persisting skill usage failed: ${errorMessage(err)}`);
       });
     }, USAGE_FLUSH_MS);
