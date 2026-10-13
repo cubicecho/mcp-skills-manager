@@ -17,7 +17,6 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
     return;
   }
   console.error('Unhandled API error:', err);
-  res
-    .status(HttpStatus.InternalServerError)
-    .json({ error: err instanceof Error ? err.message : 'Internal server error' });
+  // The cause stays in the log: its message can name paths and internals the caller has no use for.
+  res.status(HttpStatus.InternalServerError).json({ error: 'Internal server error' });
 }
