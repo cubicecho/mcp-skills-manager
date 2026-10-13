@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     } else if (auth.tokenSource === 'env') {
       console.log('Auth: bearer token from MCP_SKILLS_TOKEN env var (overrides settings.json)');
     } else {
-      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}:\n  ${auth.token}`);
+      console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}`);
     }
   });
 
