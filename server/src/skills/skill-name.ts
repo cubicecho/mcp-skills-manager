@@ -21,6 +21,9 @@ export function resolveSkillName(name: string | undefined, title: string | undef
   return slugify(title) || undefined;
 }
 
+/** The locale names and paths are compared in, fixed so the order is the same on every machine. */
+export const ORDER_LOCALE = 'en';
+
 /**
  * Orders two named things by name.
  *
@@ -33,5 +36,5 @@ export function resolveSkillName(name: string | undefined, title: string | undef
  * a shared tool or prompt name.
  */
 export function byName(a: { name: string }, b: { name: string }): number {
-  return a.name.localeCompare(b.name);
+  return a.name.localeCompare(b.name, ORDER_LOCALE);
 }

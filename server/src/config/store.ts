@@ -32,7 +32,7 @@ import { resolveAuth } from '../auth.ts';
 import { AUTH_TOKEN_BYTES, WATCH_DEBOUNCE_MS } from '../core/defaults.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import { localFlags, parseMarkdown, serializeMarkdown } from '../skills/markdown.ts';
-import { byName } from '../skills/skill-name.ts';
+import { byName, ORDER_LOCALE } from '../skills/skill-name.ts';
 import { fetchGitFolder, type SkillSourceFetcher } from '../sources/git-fetch.ts';
 import { SkillSync, type StagedSource, type SyncTarget } from '../sources/skill-sync.ts';
 import { parseJsonFile, writeBufferAtomic, writeJsonAtomic, writeTextAtomic } from './atomic-file.ts';
@@ -1212,7 +1212,7 @@ export class ConfigStore extends EventEmitter<{ change: [ConfigState] }> {
         out.push({ path: rel, type: 'file', size: stats.size });
       }
     }
-    return out.sort((a, b) => a.path.localeCompare(b.path));
+    return out.sort((a, b) => a.path.localeCompare(b.path, ORDER_LOCALE));
   }
 
   /**
