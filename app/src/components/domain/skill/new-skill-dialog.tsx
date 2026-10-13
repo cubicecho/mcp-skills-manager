@@ -9,6 +9,7 @@ import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField } from '@/components/radio-group-field';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
+import { FormElement } from '@/components/ui/form-element';
 import { FileText, Folder, Upload } from '@/components/ui/icons';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isKeyOf } from '@/lib/is-key-of';
@@ -101,14 +102,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <TabsTrigger value="git">{TAB_LABELS.git}</TabsTrigger>
             </TabsList>
             <TabsContent value="create">
-              <form
-                id={CREATE_SKILL_FORM_ID}
-                className="flex flex-col gap-4 py-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void form.handleSubmit();
-                }}
-              >
+              <FormElement id={CREATE_SKILL_FORM_ID} className="gap-4 py-4" onSubmit={() => void form.handleSubmit()}>
                 <form.Subscribe selector={(state) => slugify(state.values.title)}>
                   {(name) => (
                     <>
@@ -163,7 +157,7 @@ export function NewSkillDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                     </>
                   )}
                 </form.Subscribe>
-              </form>
+              </FormElement>
             </TabsContent>
             <TabsContent value="upload">
               <UploadSkillForm onStatusChange={setUpload} onImported={() => handleOpenChange(false)} />

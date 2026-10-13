@@ -7,6 +7,7 @@ import { FileArchive } from '@/components/app-icons';
 import { Alert } from '@/components/ui/alert';
 import { Code } from '@/components/ui/code';
 import { FilePickerButton } from '@/components/ui/file-picker';
+import { FormElement } from '@/components/ui/form-element';
 import { FileText, Folder } from '@/components/ui/icons';
 import { formatCount, joinStats } from '@/lib/format';
 import { useImportSkill } from '@/lib/queries';
@@ -91,14 +92,7 @@ export function UploadSkillForm({
   };
 
   return (
-    <form
-      id={UPLOAD_SKILL_FORM_ID}
-      className="flex flex-col gap-4 py-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
+    <FormElement id={UPLOAD_SKILL_FORM_ID} className="gap-4 py-4" onSubmit={() => void form.handleSubmit()}>
       <p className="text-sm text-muted-foreground">
         Import a single <Code>.md</Code> file, a folder (its <Code>SKILL.md</Code> plus supporting files), or a{' '}
         <Code>.zip</Code> archive that is unpacked into a directory skill.
@@ -154,6 +148,6 @@ export function UploadSkillForm({
           </div>
         </>
       )}
-    </form>
+    </FormElement>
   );
 }

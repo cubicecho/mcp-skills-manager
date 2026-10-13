@@ -8,6 +8,7 @@ import { DialogLayout } from '@/components/dialog-layout';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from '@/components/domain/skill/git-source-fields';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { FormElement } from '@/components/ui/form-element';
 import { useLinkSkillSource } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 
@@ -63,21 +64,14 @@ export function LinkSourceButton({ skill }: { skill: SkillDetail }) {
         description="Point this skill at a folder in a git repo and keep it in step by syncing."
         hasUnsavedChanges={isUnchanged === false}
         contentSlot={
-          <form
-            id={LINK_SOURCE_FORM_ID}
-            className="flex flex-col gap-4 py-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit();
-            }}
-          >
+          <FormElement id={LINK_SOURCE_FORM_ID} className="gap-4 py-1" onSubmit={() => void form.handleSubmit()}>
             <Alert
               variant="warning"
               title={`The content of "${skill.name}" is replaced`}
               description="Its Markdown and every supporting file are swapped for the folder in the repo, and it can no longer be edited here or by agents while linked. Its id, workspaces and settings are kept. Export a .zip first to keep a copy."
             />
             <GitSourceFields form={form} autoFocus />
-          </form>
+          </FormElement>
         }
         footerActionsSlot={(close) => (
           <>

@@ -5,6 +5,7 @@ import { useAppForm } from '@/components/app-form';
 import { CenteredLayout } from '@/components/centered-layout';
 import { PasswordField } from '@/components/password-field';
 import { Code } from '@/components/ui/code';
+import { FormElement } from '@/components/ui/form-element';
 import { KeyRound } from '@/components/ui/icons';
 import { setToken, useNeedsAuth } from '@/lib/auth';
 
@@ -48,15 +49,9 @@ export function TokenGate({ children }: { children: ReactNode }) {
           </>
         }
         contentSlot={
-          <form
-            id={TOKEN_FORM_ID}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit();
-            }}
-          >
+          <FormElement id={TOKEN_FORM_ID} onSubmit={() => void form.handleSubmit()}>
             <PasswordField form={form} name="token" label="Token" autoFocus placeholder="Bearer token" />
-          </form>
+          </FormElement>
         }
         footerActionsSlot={
           <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…" content="Unlock" />

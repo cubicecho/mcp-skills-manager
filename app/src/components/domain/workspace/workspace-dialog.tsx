@@ -6,6 +6,7 @@ import { MultiSelectField } from '@/components/multi-select-field';
 import type { SelectEntry } from '@/components/option-select';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
+import { FormElement } from '@/components/ui/form-element';
 import { useCreateWorkspace, useSkills, useUpdateWorkspace } from '@/lib/queries';
 import { SKILL_TOOL_MODE_LABELS, SKILL_TOOL_MODES } from '@/lib/skill-tool-mode';
 import { useToasts } from '@/lib/toast';
@@ -81,14 +82,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
         }
         hasUnsavedChanges={isDirty}
         contentSlot={
-          <form
-            id={WORKSPACE_FORM_ID}
-            className="flex min-w-0 flex-col gap-4 py-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit();
-            }}
-          >
+          <FormElement id={WORKSPACE_FORM_ID} className="min-w-0 gap-4 py-1" onSubmit={() => void form.handleSubmit()}>
             <InputField
               form={form}
               name="name"
@@ -141,7 +135,7 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
                 hint: skill.description || undefined,
               }))}
             />
-          </form>
+          </FormElement>
         }
         footerActionsSlot={(close) => (
           <>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Button } from '@/components/ui/button';
+import { FormElement } from '@/components/ui/form-element';
 
 const PATH_PROMPT_FORM_ID = 'path-prompt-form';
 
@@ -68,14 +69,7 @@ export function PathPromptDialog({ prompt, onClose }: { prompt: PathPrompt; onCl
         title={prompt.title}
         description={prompt.description}
         contentSlot={
-          <form
-            id={PATH_PROMPT_FORM_ID}
-            className="py-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit();
-            }}
-          >
+          <FormElement id={PATH_PROMPT_FORM_ID} className="py-1" onSubmit={() => void form.handleSubmit()}>
             <InputField
               form={form}
               name="value"
@@ -85,7 +79,7 @@ export function PathPromptDialog({ prompt, onClose }: { prompt: PathPrompt; onCl
               placeholder={prompt.placeholder}
               validators={{ onChange: validate, onSubmit: validate }}
             />
-          </form>
+          </FormElement>
         }
         footerActionsSlot={(close) => (
           <>

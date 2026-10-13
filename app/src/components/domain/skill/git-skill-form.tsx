@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
 import { Code } from '@/components/ui/code';
+import { FormElement } from '@/components/ui/form-element';
 import { useImportGitSkill } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from './git-source-fields';
@@ -66,14 +67,7 @@ export function GitSkillForm({
   useEffect(() => () => onStatusChange({ ready: false, pending: false, dirty: false }), [onStatusChange]);
 
   return (
-    <form
-      id={GIT_SKILL_FORM_ID}
-      className="flex flex-col gap-4 py-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
+    <FormElement id={GIT_SKILL_FORM_ID} className="gap-4 py-4" onSubmit={() => void form.handleSubmit()}>
       <p className="text-sm text-muted-foreground">
         Link a skill to a folder in a git repo. Its content comes from the repo, so it is not edited here; sync it to
         pull the newest version.
@@ -90,6 +84,6 @@ export function GitSkillForm({
         }
         validators={{ onChange: validateOptionalSkillId }}
       />
-    </form>
+    </FormElement>
   );
 }
