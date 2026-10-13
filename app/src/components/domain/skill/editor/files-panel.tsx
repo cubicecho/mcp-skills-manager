@@ -24,6 +24,7 @@ import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
 import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
 import { reported } from '@/lib/reported';
+import { skillFileCount, skillFilesPath } from '@/lib/skill';
 import { pickedToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
 import type { TreeNode } from '@/lib/tree';
@@ -158,7 +159,6 @@ export function FilesPanel({
     });
   };
 
-  const fileCount = skill.files.filter((file) => file.type === 'file').length + 1;
   const toolbar = { variant: 'ghost', size: 'icon-sm' } as const;
 
   return (
@@ -173,8 +173,7 @@ export function FilesPanel({
           iconSlot={skill.format === 'dir' ? <Folder /> : <FileText />}
           description={
             <>
-              {formatCount(fileCount, 'file')} under{' '}
-              <Code>{skill.format === 'dir' ? `skills/${skill.name}/` : `skills/${skill.path}`}</Code>
+              {formatCount(skillFileCount(skill), 'file')} under <Code>{skillFilesPath(skill)}</Code>
             </>
           }
           actionSlot={

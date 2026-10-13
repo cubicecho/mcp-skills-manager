@@ -13,6 +13,7 @@ import { CodeBlock } from '@/components/ui/code';
 import { Lock, Pencil } from '@/components/ui/icons';
 import { formatBytes, formatCount, formatDate, joinStats } from '@/lib/format';
 import { useSkillFileContent } from '@/lib/queries';
+import { skillMarkdownPath } from '@/lib/skill';
 import type { SlotNode } from '@/lib/utils';
 
 /** The pane a file is read in: its name, path and facts pinned over a body that scrolls. */
@@ -62,7 +63,7 @@ function SkillPreview({ skill, onEdit }: { skill: SkillDetail; onEdit: () => voi
   return (
     <PreviewFrame
       title={skill.name}
-      path={skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`}
+      path={skillMarkdownPath(skill)}
       description={skill.description || undefined}
       actionSlot={skill.source ? undefined : <EditButton onEdit={onEdit} />}
       badgesSlot={

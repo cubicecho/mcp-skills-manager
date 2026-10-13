@@ -8,6 +8,7 @@ import { MarkdownEditor } from '@/components/markdown-editor';
 import { MultiSelectField } from '@/components/multi-select-field';
 import { Code } from '@/components/ui/code';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
+import { skillMarkdownPath } from '@/lib/skill';
 import { useToasts } from '@/lib/toast';
 import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
@@ -52,11 +53,9 @@ export function SkillBodyEditor({
 
   useSaveShortcut(save, dirty && update.isPending === false);
 
-  const path = skill.format === 'dir' ? `skills/${skill.name}/SKILL.md` : `skills/${skill.path}`;
-
   return (
     <EditorFrame
-      path={path}
+      path={skillMarkdownPath(skill)}
       onSave={save}
       onClose={onClose}
       saving={update.isPending}

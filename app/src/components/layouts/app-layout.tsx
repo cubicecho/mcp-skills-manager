@@ -13,6 +13,7 @@ import { FileText, Folder, Lock, Plus, Settings } from '@/components/ui/icons';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus, useSkills } from '@/lib/queries';
+import { skillFileCount } from '@/lib/skill';
 
 /** The places the phone bar links to; on a wide screen the sidebar lists the skills themselves instead. */
 const NAV_ITEMS = [
@@ -105,8 +106,7 @@ function SkillNav() {
           />
         }
         contentSlot={list.map((skill) => {
-          // The skill's own Markdown counts, so a number here always means more than one file.
-          const files = skill.files.filter((file) => file.type === 'file').length + 1;
+          const files = skillFileCount(skill);
           return (
             <SidebarLink
               key={skill.name}
