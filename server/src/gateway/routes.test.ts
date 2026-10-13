@@ -201,6 +201,24 @@ describe('MCP HTTP router', () => {
       await waitFor(() => temp.store.listenerCount('change') === 0);
     });
 
+    it('keeps a session whose client is refused a second stream', async () => {
+      const sessions = new McpSessionManager();
+      server = await boot(temp.store, sessions);
+      const { client, transport } = await connect(server.url);
+      await waitFor(() => temp.store.listenerCount('change') === 1);
+
+      // Not an event stream, so the transport refuses it and the response closes at once.
+      const refused = await fetch(server.url, {
+        headers: { accept: 'application/json', 'mcp-session-id': transport.sessionId ?? '' },
+      });
+      await refused.text();
+      expect(refused.status).toBe(406);
+
+      expect((await client.listTools()).tools.length).toBeGreaterThan(0);
+      expect(sessions.size).toBe(1);
+      await client.close();
+    });
+
     it('rejects a request carrying an unknown session id with 404', async () => {
       server = await boot(temp.store);
       const res = await fetch(server.url, {
