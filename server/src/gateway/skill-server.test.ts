@@ -280,6 +280,14 @@ describe('skill-server metadata surfacing', () => {
     expect(csvTools).toContain('(allowed tools: Read, Write, Edit; changed ');
   });
 
+  it('lists a repeated allowed tool once and drops a blank one', async () => {
+    const client = await connect(() => [
+      skill({ name: 'odd', description: 'd', frontmatter: { 'allowed-tools': ['Read', 'Bash', 'Read', ' '] } }),
+    ]);
+    const [, odd] = firstText(await client.callTool({ name: 'list_skills' })).split('\n');
+    expect(odd).toContain('(allowed tools: Read, Bash; changed ');
+  });
+
   it('appends a metadata footer to the rendered skill body', async () => {
     const client = await connect(() => META_SKILLS);
     const text = firstText(await client.callTool({ name: 'licensed' }));
@@ -357,9 +365,10 @@ describe('skill-server resources', () => {
     const client = await connect(() => SKILLS, {
       readSupportingFile: async () => ({ path: '', content: '', encoding: 'utf8', size: 0, binary: false }),
     });
-    // A lone `%` is an invalid escape — must surface as InvalidParams, not a raw URIError.
-    await expect(client.readResource({ uri: 'skill://%' })).rejects.toThrow(/Unknown skill resource/);
-    await expect(client.readResource({ uri: 'skill://pdf-forms/%E0%A4%A' })).rejects.toThrow(/Unknown skill resource/);
+    // A lone `%` is an invalid escape: it names no resource, so it is answered like any other unknown one.
+    const unknown = { code: -32002, message: expect.stringContaining('Unknown skill resource') };
+    await expect(client.readResource({ uri: 'skill://%' })).rejects.toMatchObject(unknown);
+    await expect(client.readResource({ uri: 'skill://pdf-forms/%E0%A4%A' })).rejects.toMatchObject(unknown);
   });
 
   it('ignores a URI query/fragment when resolving the bundled-file path', async () => {

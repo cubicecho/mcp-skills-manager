@@ -11,7 +11,7 @@ export type EditorHandle = {
 };
 
 /** A file path as a `Section` title: the path as written, not the uppercase overline. */
-export const FILE_TITLE = 'font-mono text-sm normal-case tracking-normal text-foreground';
+const FILE_TITLE = 'font-mono text-sm normal-case tracking-normal text-foreground';
 
 /** The card an editor sits on: the file path as its heading, Close and Save at the far end. */
 export function EditorFrame({

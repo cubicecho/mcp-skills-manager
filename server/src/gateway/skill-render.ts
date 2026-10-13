@@ -1,4 +1,5 @@
 import type { Skill, SkillToolMode } from '@mcp-skills/shared';
+import { normalizeTags } from '@mcp-skills/shared';
 import { bundledFiles } from '../skills/skill-view.ts';
 import { fileResourceUri } from './resource-uri.ts';
 import { promptFileName } from './skill-prompts.ts';
@@ -7,12 +8,10 @@ import { promptFileName } from './skill-prompts.ts';
  * Reads the `allowed-tools` frontmatter, which is a comma-separated string or a list.
  *
  * @param skill - The skill whose frontmatter to read.
- * @returns The tool names, trimmed and without empty ones; empty when the key is absent or another type.
+ * @returns The tool names, cleaned as tags are; empty when the key is absent or another type.
  */
 function allowedTools(skill: Skill): string[] {
-  const raw = skill.frontmatter['allowed-tools'];
-  const parts = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [];
-  return parts.map((t) => t.trim()).filter((t) => t.length > 0);
+  return normalizeTags(skill.frontmatter['allowed-tools']);
 }
 
 /**

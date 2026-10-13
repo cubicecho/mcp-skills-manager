@@ -103,14 +103,14 @@ export function decodeCursor(cursor: string | undefined): number {
  * @returns The decoded part.
  *
  * @remarks
- * A malformed percent-escape, such as a lone `%`, is thrown as an `InvalidParams` McpError rather than the raw
- * `URIError`, which would escape as a transport-level exception.
+ * A malformed percent-escape, such as a lone `%`, names no resource, so it is thrown as the resource-not-found
+ * McpError rather than the raw `URIError`, which would escape as a transport-level exception.
  */
 export function decodeResourcePart(part: string, uri: string): string {
   try {
     return decodeURIComponent(part);
   } catch {
-    throw new McpError(ErrorCode.InvalidParams, `Unknown skill resource "${uri}"`);
+    throw resourceNotFound(uri);
   }
 }
 
