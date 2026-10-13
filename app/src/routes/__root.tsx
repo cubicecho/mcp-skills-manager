@@ -15,11 +15,7 @@ function RootComponent() {
   return (
     <TooltipProvider>
       <ToastProvider>
-        <TokenGate>
-          <AppLayout>
-            <Outlet />
-          </AppLayout>
-        </TokenGate>
+        <TokenGate contentSlot={<AppLayout contentSlot={<Outlet />} />} />
       </ToastProvider>
     </TooltipProvider>
   );

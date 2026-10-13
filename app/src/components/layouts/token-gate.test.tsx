@@ -12,15 +12,13 @@ vi.mock('@/lib/auth', () => ({
   useNeedsAuth: () => auth.needsAuth,
 }));
 
-/** The gate around a marker child, with the query client it refetches through. */
+/** The gate around a marker for the app, with the query client it refetches through. */
 function renderGate() {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
   render(
     <QueryClientProvider client={queryClient}>
-      <TokenGate>
-        <p>the app</p>
-      </TokenGate>
+      <TokenGate contentSlot={<p>the app</p>} />
     </QueryClientProvider>,
   );
   return { invalidate };
@@ -32,7 +30,7 @@ describe('TokenGate', () => {
     auth.needsAuth = true;
   });
 
-  it('renders its children when no call has been refused', () => {
+  it('renders the app when no call has been refused', () => {
     auth.needsAuth = false;
     renderGate();
 

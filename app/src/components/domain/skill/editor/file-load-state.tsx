@@ -21,7 +21,7 @@ export function FileLoadState({
   const { data, isPending, error, refetch } = file;
   return (
     <>
-      {isPending && <Skeleton className="h-[50vh] w-full" />}
+      {isPending && <Skeleton role="status" aria-label="Loading the file" className="h-[50vh] w-full" />}
       {error && <QueryError error={error} onRetry={() => void refetch()} what="this file" />}
       {data?.binary && (
         <EmptyState icon={File} title="Binary file" description={describeBinary(formatBytes(data.size))} />

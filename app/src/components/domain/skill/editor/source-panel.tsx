@@ -6,7 +6,6 @@ import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { shortCommit, useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
 import { Section } from '@/components/section';
 import { Button } from '@/components/ui/button';
-import { Code } from '@/components/ui/code';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RefreshCw } from '@/components/ui/icons';
 import { formatDateTime } from '@/lib/format';
@@ -68,19 +67,22 @@ export function SourcePanel({ skill, source }: { skill: SkillDetail; source: Ski
               <PropertyRow
                 key="repo"
                 label="Repository"
-                value={<Code className="break-all">{source.repo}</Code>}
+                value={source.repo}
+                valueClassName="break-all font-mono"
                 actionSlot={<CopyButton value={source.repo} label="Copy repository URL" />}
               />,
               <PropertyRow key="ref" label="Branch or tag" value={source.ref ?? 'Default branch'} />,
               <PropertyRow
                 key="path"
                 label="Folder"
-                value={source.path ? <Code className="break-all">{source.path}</Code> : 'Repo root'}
+                value={source.path || 'Repo root'}
+                valueClassName={source.path ? 'break-all font-mono' : undefined}
               />,
               <PropertyRow
                 key="commit"
                 label="Synced commit"
-                value={source.commit ? <Code>{shortCommit(source.commit)}</Code> : 'Not synced yet'}
+                value={source.commit ? shortCommit(source.commit) : 'Not synced yet'}
+                valueClassName={source.commit ? 'font-mono' : undefined}
                 hint={syncedAt ? `Synced ${syncedAt}` : undefined}
                 actionSlot={
                   source.commit ? <CopyButton value={source.commit} label="Copy full commit SHA" /> : undefined

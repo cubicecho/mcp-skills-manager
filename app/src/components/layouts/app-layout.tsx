@@ -1,6 +1,6 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { ActionButton } from '@/components/action-button';
 import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
@@ -15,13 +15,16 @@ import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus, useSkills } from '@/lib/queries';
 import { skillFileCount } from '@/lib/skill';
 import { SKILL_STATUS, skillStatuses } from '@/lib/skill-status';
+import type { SlotNode } from '@/lib/utils';
 
-/** The places the phone bar links to; on a wide screen the sidebar lists the skills themselves instead. */
-const NAV_ITEMS = [
-  { to: '/', label: 'Skills', icon: BookMarked },
+/** The pages beside the skills, which the phone bar links to and the sidebar keeps in its footer. */
+const OTHER_PLACES = [
   { to: '/workspaces', label: 'Workspaces', icon: Layers },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const;
+
+/** The places the phone bar links to; on a wide screen the sidebar lists the skills themselves instead. */
+const NAV_ITEMS = [{ to: '/', label: 'Skills', icon: BookMarked }, ...OTHER_PLACES] as const;
 
 type NavTo = (typeof NAV_ITEMS)[number]['to'];
 
@@ -127,7 +130,13 @@ function SkillNav() {
   );
 }
 
-export function AppLayout({ children }: { children: ReactNode }) {
+/** The app's frame: the sidebar of skills on a wide screen, a bar of places on a phone, and the page between. */
+export function AppLayout({
+  contentSlot,
+}: {
+  /** The page the current route draws. */
+  contentSlot: SlotNode;
+}) {
   const { data: status } = useServerStatus();
   const pathname = useLocation({ select: (location) => location.pathname });
 
@@ -146,19 +155,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
           footerSlot={
             <>
               <ServerStats />
-              <SidebarLink
-                to="/workspaces"
-                label="Workspaces"
-                iconSlot={<Layers />}
-                count={status?.workspaceCount}
-                active={isActive('/workspaces', pathname)}
-              />
-              <SidebarLink
-                to="/settings"
-                label="Settings"
-                iconSlot={<Settings />}
-                active={isActive('/settings', pathname)}
-              />
+              {OTHER_PLACES.map(({ to, label, icon: Icon }) => (
+                <SidebarLink
+                  key={to}
+                  to={to}
+                  label={label}
+                  iconSlot={<Icon />}
+                  count={to === '/workspaces' ? status?.workspaceCount : undefined}
+                  active={isActive(to, pathname)}
+                />
+              ))}
               {status?.authEnabled && <SidebarNavItem label="Lock" iconSlot={<Lock />} onClick={lock} />}
               <ThemePicker variant="compact" />
             </>
@@ -187,7 +193,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       }
       // Pages bring their own inset and scroll their own body (PageLayout). Under `md` a skill's file
       // list stacks over its preview, taller than the screen, so there main scrolls instead.
-      contentSlot={<main className="h-full min-h-0 overflow-y-auto md:overflow-hidden">{children}</main>}
+      contentSlot={<main className="h-full min-h-0 overflow-y-auto md:overflow-hidden">{contentSlot}</main>}
     />
   );
 }

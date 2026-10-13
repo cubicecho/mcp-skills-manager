@@ -1,5 +1,4 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { useAppForm } from '@/components/app-form';
 import { CenteredLayout } from '@/components/centered-layout';
 import { PasswordField } from '@/components/password-field';
@@ -7,15 +6,21 @@ import { Code } from '@/components/ui/code';
 import { FormElement } from '@/components/ui/form-element';
 import { KeyRound } from '@/components/ui/icons';
 import { setToken, useNeedsAuth } from '@/lib/auth';
+import type { SlotNode } from '@/lib/utils';
 
 const TOKEN_FORM_ID = 'token-gate-form';
 
 /**
- * Renders its children normally; when any API call has come back 401 it swaps
+ * Renders the app normally; when any API call has come back 401 it swaps
  * in a token-entry screen. Submitting stores the token in localStorage and
  * refetches everything.
  */
-export function TokenGate({ children }: { children: ReactNode }) {
+export function TokenGate({
+  contentSlot,
+}: {
+  /** The app, shown while no call has been refused. */
+  contentSlot: SlotNode;
+}) {
   const needsAuth = useNeedsAuth();
   const queryClient = useQueryClient();
   const form = useAppForm({
@@ -32,7 +37,7 @@ export function TokenGate({ children }: { children: ReactNode }) {
   });
 
   if (!needsAuth) {
-    return children;
+    return contentSlot;
   }
 
   return (
