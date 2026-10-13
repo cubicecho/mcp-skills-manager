@@ -46,7 +46,8 @@ export function safeRelPath(relPath: string): string {
   const skillDir = path.resolve('skill');
   const full = path.resolve(skillDir, cleaned);
   const rel = path.relative(skillDir, full);
-  const escapesSkillDir = rel === '' || rel.startsWith('..') || path.isAbsolute(rel);
+  const leavesSkillDir = rel === '..' || rel.startsWith(`..${path.sep}`);
+  const escapesSkillDir = rel === '' || leavesSkillDir || path.isAbsolute(rel);
   if (escapesSkillDir) {
     throw new HttpError(
       HttpStatus.BadRequest,
