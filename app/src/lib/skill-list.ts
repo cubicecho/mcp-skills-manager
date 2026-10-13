@@ -12,15 +12,28 @@ export type FormatFilter = keyof typeof FORMAT_LABELS;
 export const SORT_LABELS = { name: 'Name (A–Z)', updated: 'Recently updated', used: 'Most used' } as const;
 export type SortKey = keyof typeof SORT_LABELS;
 
-/** Apply the search query, scope/format/tag filters and sort to the raw skill list. */
-export function filterAndSort(
-  skills: SkillSummary[],
-  query: string,
-  scope: ScopeFilter,
-  format: FormatFilter,
-  tag: string | undefined,
-  sort: SortKey,
-): SkillSummary[] {
+/** What the skills page narrows its list by, and the order it shows the rest in. */
+export interface SkillListFilters {
+  /** Text looked for in a skill's name, description and tags, whatever its case. */
+  query: string;
+  scope: ScopeFilter;
+  format: FormatFilter;
+  /** The tag a skill must carry; `undefined` for any. */
+  tag: string | undefined;
+  sort: SortKey;
+}
+
+/** Every skill, by name: the list as the page first shows it. */
+export const NO_FILTERS: SkillListFilters = { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'name' };
+
+/**
+ * Narrows the skill list to what the filters allow and orders it.
+ * @param skills - The full list; left as it is.
+ * @param filters - The search text, scope, format, tag and sort order to apply.
+ * @returns The matching skills, sorted.
+ */
+export function filterAndSort(skills: SkillSummary[], filters: SkillListFilters): SkillSummary[] {
+  const { query, scope, format, tag, sort } = filters;
   const q = query.trim().toLowerCase();
   const matched = skills.filter((skill) => {
     if (scope === 'global' && !skill.global) {

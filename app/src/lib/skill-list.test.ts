@@ -25,49 +25,71 @@ const SKILLS = [
 
 describe('filterAndSort', () => {
   it('lists every skill by name when nothing is filtered', () => {
-    expect(names(filterAndSort(SKILLS, '', 'all', 'all', undefined, 'name'))).toEqual(['alpha', 'commits', 'review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['alpha', 'commits', 'review']);
   });
 
   it('leaves the list it was given in its own order', () => {
-    filterAndSort(SKILLS, '', 'all', 'all', undefined, 'name');
+    filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'name' });
     expect(names(SKILLS)).toEqual(['commits', 'alpha', 'review']);
   });
 
   it('keeps global or workspace-scoped skills by scope', () => {
-    expect(names(filterAndSort(SKILLS, '', 'global', 'all', undefined, 'name'))).toEqual(['alpha', 'commits']);
-    expect(names(filterAndSort(SKILLS, '', 'scoped', 'all', undefined, 'name'))).toEqual(['review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'global', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['alpha', 'commits']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'scoped', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['review']);
   });
 
   it('keeps one format', () => {
-    expect(names(filterAndSort(SKILLS, '', 'all', 'file', undefined, 'name'))).toEqual(['alpha']);
-    expect(names(filterAndSort(SKILLS, '', 'all', 'dir', undefined, 'name'))).toEqual(['commits', 'review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'file', tag: undefined, sort: 'name' })),
+    ).toEqual(['alpha']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'dir', tag: undefined, sort: 'name' })),
+    ).toEqual(['commits', 'review']);
   });
 
   it('keeps the skills carrying a tag', () => {
-    expect(names(filterAndSort(SKILLS, '', 'all', 'all', 'style', 'name'))).toEqual(['review']);
-    expect(names(filterAndSort(SKILLS, '', 'all', 'all', 'missing', 'name'))).toEqual([]);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: 'style', sort: 'name' })),
+    ).toEqual(['review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: 'missing', sort: 'name' })),
+    ).toEqual([]);
   });
 
   it('searches the name, description and tags, ignoring case and outer spaces', () => {
-    expect(names(filterAndSort(SKILLS, '  COMMIT ', 'all', 'all', undefined, 'name'))).toEqual(['commits']);
-    expect(names(filterAndSort(SKILLS, 'messages', 'all', 'all', undefined, 'name'))).toEqual(['commits']);
-    expect(names(filterAndSort(SKILLS, 'style', 'all', 'all', undefined, 'name'))).toEqual(['review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '  COMMIT ', scope: 'all', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['commits']);
+    expect(
+      names(filterAndSort(SKILLS, { query: 'messages', scope: 'all', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['commits']);
+    expect(
+      names(filterAndSort(SKILLS, { query: 'style', scope: 'all', format: 'all', tag: undefined, sort: 'name' })),
+    ).toEqual(['review']);
   });
 
   it('applies every filter at once', () => {
-    expect(names(filterAndSort(SKILLS, 'git', 'global', 'dir', 'git', 'name'))).toEqual(['commits']);
+    expect(
+      names(filterAndSort(SKILLS, { query: 'git', scope: 'global', format: 'dir', tag: 'git', sort: 'name' })),
+    ).toEqual(['commits']);
   });
 
   it('sorts the most recently updated first', () => {
-    expect(names(filterAndSort(SKILLS, '', 'all', 'all', undefined, 'updated'))).toEqual([
-      'alpha',
-      'review',
-      'commits',
-    ]);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'updated' })),
+    ).toEqual(['alpha', 'review', 'commits']);
   });
 
   it('sorts the most used first, and equally used skills by name', () => {
-    expect(names(filterAndSort(SKILLS, '', 'all', 'all', undefined, 'used'))).toEqual(['alpha', 'commits', 'review']);
+    expect(
+      names(filterAndSort(SKILLS, { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'used' })),
+    ).toEqual(['alpha', 'commits', 'review']);
   });
 });
 

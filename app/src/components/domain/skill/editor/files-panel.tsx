@@ -1,12 +1,10 @@
 import type { SkillDetail, SkillFile } from '@mcp-skills/shared';
-import { type ReactNode, useState } from 'react';
-import { ActionButton } from '@/components/action-button';
-import { FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
-import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
-import { LinkSourceButton } from '@/components/domain/skill/editor/link-source-button';
-import { RenameButton } from '@/components/domain/skill/editor/rename-button';
-import { useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
-import { type PathPrompt, PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
+import { useState } from 'react';
+import { FilePlus, FolderPlus } from '@/components/app-icons';
+import { SKILL_MD_KEY } from '@/components/domain/skill/editor/file-tree';
+import { SkillToolbar } from '@/components/domain/skill/editor/skill-toolbar';
+import { useFilePrompts } from '@/components/domain/skill/editor/use-file-prompts';
+import { PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
 import { FileTree } from '@/components/file-tree';
 import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
@@ -14,39 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { DownloadButton } from '@/components/ui/download-button';
-import { FilePickerButton } from '@/components/ui/file-picker';
-import type { PickedFile } from '@/components/ui/file-picker-base';
-import { Ellipsis, FileText, Folder, Pencil, RefreshCw, Trash2 } from '@/components/ui/icons';
+import { Ellipsis, FileText, Folder, Pencil, Trash2 } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
-import { Spinner } from '@/components/ui/spinner';
-import { exportSkill } from '@/lib/api';
 import { formatBytes, formatCount } from '@/lib/format';
-import { useCreateSkillFolder, useDeleteSkillFile, useMoveSkillPath, useWriteSkillFile } from '@/lib/queries';
+import { useDeleteSkillFile, useMoveSkillPath } from '@/lib/queries';
 import { reported } from '@/lib/reported';
 import { skillFileCount, skillFilesPath } from '@/lib/skill';
-import { pickedToSkillFileContent } from '@/lib/skill-upload';
 import { useToasts } from '@/lib/toast';
 import type { TreeNode } from '@/lib/tree';
 
 /** A row of the file tree: a supporting file or folder, or the skill's own Markdown pinned above them. */
 type FileEntry = SkillFile & { main?: boolean };
-
-/**
- * Describe where a new file or folder will be created.
- * @param base - The folder it is created under, relative to the skill root; empty for the root itself.
- * @returns The description shown in the path prompt.
- */
-function pathHint(base: string): ReactNode {
-  if (!base) {
-    return 'A path relative to the skill root.';
-  }
-  return (
-    <>
-      Created under <Code>{base}/</Code>.
-    </>
-  );
-}
 
 /**
  * The skill's file list and its toolbar: the skill's own Markdown (first, un-renamable) plus every
@@ -69,13 +45,9 @@ export function FilesPanel({
   onRenamed: (name: string) => void;
 }) {
   const toast = useToasts();
-  const writeFile = useWriteSkillFile(skill.name);
-  const createFolder = useCreateSkillFolder(skill.name);
   const movePath = useMoveSkillPath(skill.name);
   const deleteEntry = useDeleteSkillFile(skill.name);
-  const syncNow = useSyncNow(skill.name);
-  const [busy, setBusy] = useState(false);
-  const [prompt, setPrompt] = useState<PathPrompt | null>(null);
+  const prompts = useFilePrompts(skill.name, onSelect);
   // The file or folder whose Delete was chosen, until the question about it is answered.
   const [deleting, setDeleting] = useState<TreeNode<FileEntry> | null>(null);
 
@@ -84,61 +56,6 @@ export function FilesPanel({
   const mainLabel = skill.format === 'dir' ? 'SKILL.md' : `${skill.name}.md`;
   // The skill's own Markdown is pinned under its file name; everywhere else it is `SKILL_MD_KEY`.
   const main: FileEntry = { path: mainLabel, type: 'file', size: 0, main: true };
-
-  const upload = async (files: PickedFile[]) => {
-    if (busy) {
-      return;
-    }
-    setBusy(true);
-    try {
-      // Sequential: each write reloads the skill, and the first promotes a file skill to a dir.
-      for (const file of files) {
-        await writeFile.mutateAsync(pickedToSkillFileContent(file));
-      }
-      toast.success(`Added ${formatCount(files.length, 'file')}`);
-    } catch (error) {
-      toast.apiError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const newFile = (base = '') =>
-    setPrompt({
-      title: 'New file',
-      description: pathHint(base),
-      label: 'Path',
-      placeholder: base ? 'intro.md' : 'docs/intro.md',
-      submitLabel: 'Create file',
-      onSubmit: async (rel) => {
-        const path = base ? `${base}/${rel}` : rel;
-        await reported(writeFile.mutateAsync({ path, content: '', encoding: 'utf8' }), toast.apiError);
-        onSelect(path, { edit: isMarkdownPath(path) });
-      },
-    });
-
-  const newFolder = (base = '') =>
-    setPrompt({
-      title: 'New folder',
-      description: pathHint(base),
-      label: base ? 'Name' : 'Path',
-      placeholder: base ? 'examples' : 'reference/examples',
-      submitLabel: 'Create folder',
-      onSubmit: (rel) => reported(createFolder.mutateAsync({ path: base ? `${base}/${rel}` : rel }), toast.apiError),
-    });
-
-  const rename = (node: TreeNode<FileEntry>) =>
-    setPrompt({
-      title: `Rename ${node.type === 'dir' ? 'folder' : 'file'}`,
-      description: 'A path relative to the skill root; changing the folders moves it.',
-      label: 'Path',
-      initial: node.path,
-      submitLabel: 'Rename',
-      onSubmit: async (next) => {
-        await reported(movePath.mutateAsync({ from: node.path, to: next }), toast.apiError);
-        toast.success(`Renamed to ${next}`);
-      },
-    });
 
   /**
    * Move a dragged file or folder into a folder, under the name it has.
@@ -159,8 +76,6 @@ export function FilesPanel({
     });
   };
 
-  const toolbar = { variant: 'ghost', size: 'icon-sm' } as const;
-
   return (
     <StickyHeaderContentFooter
       headerSlot={
@@ -177,54 +92,12 @@ export function FilesPanel({
             </>
           }
           actionSlot={
-            <div className="flex shrink-0 flex-wrap items-center gap-1">
-              {linked ? (
-                <ActionButton
-                  {...toolbar}
-                  label="Sync from Git"
-                  hint={syncNow.pending ? 'Syncing…' : undefined}
-                  disabled={syncNow.pending}
-                  onClick={syncNow.sync}
-                  // Not `loading`, which disables the button outright and takes the hint's tooltip with it.
-                  iconSlot={syncNow.pending ? <Spinner /> : <RefreshCw />}
-                />
-              ) : (
-                <>
-                  <ActionButton
-                    {...toolbar}
-                    label="New file"
-                    disabled={busy}
-                    onClick={() => newFile()}
-                    iconSlot={<FilePlus />}
-                  />
-                  <ActionButton
-                    {...toolbar}
-                    label="New folder"
-                    disabled={busy}
-                    onClick={() => newFolder()}
-                    iconSlot={<FolderPlus />}
-                  />
-                  <FilePickerButton {...toolbar} label="Add files" multiple read="bytes" onPickMany={upload} />
-                  <FilePickerButton
-                    {...toolbar}
-                    label="Add folder"
-                    iconSlot={<FolderUp />}
-                    directory
-                    read="bytes"
-                    onPickMany={upload}
-                  />
-                </>
-              )}
-              <DownloadButton
-                {...toolbar}
-                label="Export .zip"
-                filename={`${skill.name}.zip`}
-                source={() => exportSkill(skill.name)}
-                onError={toast.apiError}
-              />
-              {!linked && <LinkSourceButton skill={skill} />}
-              <RenameButton skill={skill} onRenamed={onRenamed} />
-            </div>
+            <SkillToolbar
+              skill={skill}
+              onNewFile={() => prompts.newFile()}
+              onNewFolder={() => prompts.newFolder()}
+              onRenamed={onRenamed}
+            />
           }
         />
       }
@@ -250,15 +123,15 @@ export function FilesPanel({
               linked || node.entry?.main ? null : (
                 <FileActions
                   node={node}
-                  onNewFile={newFile}
-                  onNewFolder={newFolder}
-                  onRename={rename}
+                  onNewFile={prompts.newFile}
+                  onNewFolder={prompts.newFolder}
+                  onRename={prompts.rename}
                   onDelete={setDeleting}
                 />
               )
             }
           />
-          {prompt && <PathPromptDialog prompt={prompt} onClose={() => setPrompt(null)} />}
+          {prompts.prompt && <PathPromptDialog prompt={prompts.prompt} onClose={prompts.close} />}
           {deleting && (
             <ConfirmDialog
               open
