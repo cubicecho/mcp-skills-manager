@@ -1,10 +1,10 @@
 import { hostname } from 'node:os';
 import path from 'node:path';
+import { createAdvertiser } from '@cubicecho/mcp-discovery/mdns';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
 import { EnvVar } from './core/defaults.ts';
-import { createAdvertiser } from './discovery/advertiser.ts';
 import { McpSessionManager } from './gateway/session-manager.ts';
 import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 import { closeOnSignal } from './shutdown.ts';
@@ -23,8 +23,7 @@ async function main(): Promise<void> {
   const port = resolvePort(store.getSettings().port);
   const advertiser = createAdvertiser({
     isWanted: () => store.getSettings().lanAdvertise,
-    name: `MCP Skills on ${hostname()}`,
-    port,
+    options: () => ({ name: `MCP Skills on ${hostname()}`, port }),
     log: console.log,
   });
 
