@@ -1,5 +1,11 @@
 import { hostname } from 'node:os';
-import { type AdvertisedEndpoint, airIdentifier, createServerCard, type KeyValueInput } from '@cubicecho/mcp-discovery';
+import {
+  type AdvertisedEndpoint,
+  airIdentifier,
+  createServerCard,
+  hostSlug,
+  type KeyValueInput,
+} from '@cubicecho/mcp-discovery';
 import { isAuthEffective } from '../auth.ts';
 import type { ConfigStore } from '../config/store.ts';
 import { SERVER_VERSION } from '../version.ts';
@@ -20,17 +26,6 @@ const AUTH_HEADER: KeyValueInput = {
   isRequired: true,
   isSecret: true,
 };
-
-/**
- * A hostname cut down to what a card name and a `urn:air` id allow: lowercase letters, digits and hyphens.
- *
- * @param name - The machine's hostname.
- * @returns E.g. `nas` for `NAS`, `my-box` for `my_box.lan`.
- */
-export function hostSlug(name: string): string {
-  const [first = ''] = name.toLowerCase().split('.');
-  return first.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'host';
-}
 
 /**
  * The MCP endpoints this server makes discoverable: `/mcp`, and `/mcp/w/<slug>` for each enabled workspace.

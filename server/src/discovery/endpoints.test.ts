@@ -4,7 +4,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
 import { useTempStore } from '../test/temp-store.ts';
-import { discoveryEndpoints, hostSlug } from './endpoints.ts';
+import { discoveryEndpoints } from './endpoints.ts';
 
 describe('discovery documents', () => {
   const temp = useTempStore();
@@ -58,15 +58,5 @@ describe('discovery documents', () => {
   it('names cards after the host, so two servers on one network stay apart', () => {
     const [root] = discoveryEndpoints(temp.store, 'NAS.lan');
     expect(root?.identifier).toBe('urn:air:nas.mcp-skills:mcp:skills');
-  });
-});
-
-describe('hostSlug', () => {
-  it.each([
-    ['NAS', 'nas'],
-    ['my_box.lan', 'my-box'],
-    ['---', 'host'],
-  ])('%s → %s', (input, expected) => {
-    expect(hostSlug(input)).toBe(expected);
   });
 });
