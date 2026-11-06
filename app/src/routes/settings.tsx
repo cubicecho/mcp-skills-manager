@@ -101,7 +101,51 @@ function McpOptionsCard() {
   );
 }
 
-/** Server status, the MCP options, a reload-from-disk button and the stdio command line. */
+/** The switch that announces the server on the local network, so an mcp-router there can find and link it. */
+function LanDiscoveryCard() {
+  const toast = useToasts();
+  const { data: settings, isPending } = useSettings();
+  const updateSettings = useUpdateSettings();
+
+  return (
+    <CardLayout
+      title="Network discovery"
+      description={
+        <>
+          The server always describes its endpoints at <Code>/.well-known/ai-catalog.json</Code>. Advertising also
+          announces it over mDNS (<Code>_mcp._tcp</Code>), so tools on the same network find it without its address.
+        </>
+      }
+      loading={isPending}
+      contentSlot={
+        settings && (
+          <ToggleRow
+            title="Advertise on the local network"
+            description={
+              settings.lanAdvertise
+                ? 'Announced over mDNS. Connecting still needs the bearer token when auth is on.'
+                : 'Not announced. Clients need this server’s address to connect.'
+            }
+            checked={settings.lanAdvertise}
+            disabled={updateSettings.isPending}
+            onCheckedChange={(lanAdvertise) =>
+              updateSettings.mutate(
+                { lanAdvertise },
+                {
+                  onSuccess: () =>
+                    toast.success(lanAdvertise ? 'Advertising on the local network' : 'Stopped advertising'),
+                  onError: toast.apiError,
+                },
+              )
+            }
+          />
+        )
+      }
+    />
+  );
+}
+
+/** Server status, the MCP options, network discovery, a reload-from-disk button and the stdio command line. */
 function SettingsPage() {
   const toast = useToasts();
   const { data, isPending } = useServerStatus();
@@ -144,6 +188,8 @@ function SettingsPage() {
           />
 
           <McpOptionsCard />
+
+          <LanDiscoveryCard />
 
           <CardLayout
             title="Reload from disk"

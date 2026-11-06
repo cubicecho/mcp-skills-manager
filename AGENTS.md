@@ -74,6 +74,17 @@ skill's content is **locked**: the REST content routes answer 409
 over REST. Repo URLs are https/SSH only with no embedded credentials — the URL
 is written into SKILL.md and served to agents.
 
+The server is **discoverable**: `server/src/discovery/endpoints.ts` builds an MCP
+Server Card for `/mcp` and each enabled workspace, and `app.ts` serves them with
+the AI Catalog at `/.well-known/ai-catalog.json` through
+`@cubicecho/mcp-discovery`'s `discoveryMiddleware`. It is mounted **ahead of the
+auth guard**, because the documents are public (they never carry the token; a
+card just says `Authorization` is required when auth is on). The mDNS
+announcement (`_mcp._tcp`) is opt-in: `settings.lanAdvertise`, default false.
+`discovery/advertiser.ts` starts and stops it to match the setting on every store
+`change` event (a toggle in the UI writes settings.json, so it arrives there too),
+and it closes first on shutdown so the goodbye goes out.
+
 Monorepo (npm workspaces): `shared/` (zod schemas + types — the contract),
 `server/` (Express 5 + MCP TS SDK), `app/` (React + Vite + shadcn/ui).
 

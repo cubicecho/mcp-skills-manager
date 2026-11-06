@@ -270,7 +270,7 @@ Everything lives under `DATA_DIR` (default `./data`):
 ```
 data/
 ├── config/
-│   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates
+│   ├── settings.json          # port, auth token, auth/authoring toggles, tool mode, httpLiveUpdates, lanAdvertise
 │   └── workspaces/
 │       └── <slug>.json        # one file per workspace
 └── skills/
@@ -295,6 +295,26 @@ re-read with the **Reload** button on the Settings page or `POST /api/reload`.
 
 If no token is configured and `SECURE_LOCAL_NET` is not set, a random token is
 generated into `settings.json` on first run and logged.
+
+### Network discovery
+
+The server describes its MCP endpoints so other tools, such as
+[mcp-router](https://github.com/cubicecho/mcp-router), can find them without
+being given each URL:
+
+- `GET /.well-known/ai-catalog.json` lists `/mcp` and every enabled workspace.
+- `GET /mcp/server-card` and `GET /mcp/w/<slug>/server-card` describe one endpoint
+  each ([MCP Server Cards](https://modelcontextprotocol.io/seps/2127-mcp-server-cards)).
+
+These are public, with no token needed. They name the endpoints and workspaces
+and say whether a bearer token is required, but never carry the token itself.
+Both come from [`@cubicecho/mcp-discovery`](https://github.com/cubicecho/mcp-discovery).
+
+**Advertise on the local network** (Settings page, or `lanAdvertise: true` in
+`settings.json`; off by default) also announces the server over mDNS as an
+`_mcp._tcp` service, so it can be found without knowing its address. mDNS needs
+multicast, which Docker's default bridge network drops: in a container, use
+`network_mode: host` for the announcement to reach the LAN.
 
 ## HTTP API
 

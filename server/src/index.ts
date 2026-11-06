@@ -1,8 +1,10 @@
+import { hostname } from 'node:os';
 import path from 'node:path';
 import { buildApp } from './app.ts';
 import { authDisabledByEnv, resolveAuth } from './auth.ts';
 import { ConfigStore } from './config/store.ts';
 import { EnvVar } from './core/defaults.ts';
+import { createAdvertiser } from './discovery/advertiser.ts';
 import { McpSessionManager } from './gateway/session-manager.ts';
 import { resolvePort, tuneKeepAlive } from './http-tuning.ts';
 import { closeOnSignal } from './shutdown.ts';
@@ -18,12 +20,21 @@ async function main(): Promise<void> {
   const store = new ConfigStore(dataDir);
   await store.init();
 
+  const port = resolvePort(store.getSettings().port);
+  const advertiser = createAdvertiser({
+    isWanted: () => store.getSettings().lanAdvertise,
+    name: `MCP Skills on ${hostname()}`,
+    port,
+    log: console.log,
+  });
+
   store.on('change', (state) => {
     console.log(`Config changed on disk: ${state.skills.length} skills, ${state.workspaces.length} workspaces`);
+    // A toggle in the UI writes settings.json, so it arrives here like a hand edit.
+    void advertiser.sync();
   });
   store.startWatching();
 
-  const port = resolvePort(store.getSettings().port);
   const sessions = new McpSessionManager();
   const app = buildApp({ store, port, sessions });
   const httpServer = app.listen(port, () => {
@@ -39,6 +50,8 @@ async function main(): Promise<void> {
     } else {
       console.log(`Auth: bearer token from ${path.join(dataDir, 'config/settings.json')}`);
     }
+    // After listen, so a router that finds the announcement can already read the catalog.
+    void advertiser.sync();
   });
 
   tuneKeepAlive(httpServer);
@@ -58,6 +71,8 @@ async function main(): Promise<void> {
 
   closeOnSignal(
     [
+      // First, so the goodbye goes out while the server can still answer.
+      { label: 'LAN advertisement', close: () => advertiser.close() },
       // Not awaited: it only settles once every connection has ended, and the sessions hold theirs open.
       { label: 'HTTP server', close: () => void httpServer.close() },
       { label: 'MCP sessions', close: () => sessions.closeAll() },

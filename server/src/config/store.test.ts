@@ -471,6 +471,7 @@ describe('ConfigStore skillToolMode resolution', () => {
       'authoringEnabled',
       'disabledAuthoringTools',
       'httpLiveUpdates',
+      'lanAdvertise',
       'skillToolMode',
     ]);
   });

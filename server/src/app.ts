@@ -1,11 +1,13 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { discoveryMiddleware } from '@cubicecho/mcp-discovery';
 import express from 'express';
 import { errorMiddleware } from './api/error-middleware.ts';
 import { createApiRouter } from './api/router.ts';
 import { createAuthMiddleware, resolveAuth } from './auth.ts';
 import type { ConfigStore } from './config/store.ts';
 import { BODY_LIMIT } from './core/defaults.ts';
+import { discoveryEndpoints } from './discovery/endpoints.ts';
 import { createMcpRouter } from './gateway/routes.ts';
 import type { McpSessionManager } from './gateway/session-manager.ts';
 
@@ -26,7 +28,7 @@ export interface AppDeps {
 }
 
 /**
- * Builds the Express app: /api and /mcp behind bearer auth, then the built web UI with an SPA fallback.
+ * Builds the Express app: the public discovery documents, /api and /mcp behind bearer auth, then the web UI.
  *
  * @param deps - The store, the listening port, and optionally the session manager and web UI directory.
  * @returns The app, not yet listening, so tests can drive it with supertest.
@@ -38,6 +40,9 @@ export function buildApp(deps: AppDeps): express.Express {
   app.use(express.json({ limit: BODY_LIMIT }));
 
   const auth = createAuthMiddleware(() => resolveAuth(store.getSettings()));
+
+  // Public by design, so ahead of the auth guard: the AI Catalog and each MCP endpoint's Server Card.
+  app.use(discoveryMiddleware(() => discoveryEndpoints(store)));
 
   app.use('/api', auth, createApiRouter({ store, port }));
   app.use('/mcp', auth, createMcpRouter({ store, sessions: deps.sessions }));

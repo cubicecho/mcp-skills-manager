@@ -4,6 +4,10 @@ services:
     image: mcp-skills-manager
     ports:
       - '3000:3000'
+    # To advertise on the LAN over mDNS (Settings → Network discovery), multicast
+    # has to reach the host's network, which the default bridge network drops.
+    # Replace `ports` with:
+    # network_mode: host
     volumes:
       # Skills, workspaces, and settings — hand-editable on the host; edits are
       # picked up automatically (or force a re-read with POST /api/reload).

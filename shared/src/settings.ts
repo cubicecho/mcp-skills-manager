@@ -68,6 +68,12 @@ export const settingsFileSchema = z
      * instead of re-polling. When false, `/mcp` is stateless: a fresh server per request and no push.
      */
     httpLiveUpdates: z.boolean().default(false),
+    /**
+     * Announces the server on the local network over mDNS (`_mcp._tcp`), so an mcp-router there can find and link
+     * it. The discovery documents it points at (`/.well-known/ai-catalog.json` and each endpoint's `/server-card`)
+     * are served either way; this only controls the announcement.
+     */
+    lanAdvertise: z.boolean().default(false),
   })
   .passthrough();
 
@@ -85,6 +91,7 @@ export const settingsViewSchema = settingsFileSchema
     disabledAuthoringTools: true,
     skillToolMode: true,
     httpLiveUpdates: true,
+    lanAdvertise: true,
   })
   .strip();
 /** The settings GET /api/settings returns: no bearer token. */
@@ -101,6 +108,7 @@ export const updateSettingsRequestSchema = z
     disabledAuthoringTools: z.array(authoringToolNameSchema).optional(),
     skillToolMode: skillToolModeSchema.optional(),
     httpLiveUpdates: z.boolean().optional(),
+    lanAdvertise: z.boolean().optional(),
   })
   .strict();
 /** What PATCH /api/settings accepts. */
