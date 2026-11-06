@@ -97,6 +97,7 @@ describe('management REST API', () => {
         disabledAuthoringTools: [],
         skillToolMode: 'per-skill',
         httpLiveUpdates: false,
+        lanAdvertise: false,
       });
       const after = await request(api).patch('/api/settings').send({ skillToolMode: 'loader' });
       expect(after.status).toBe(200);
