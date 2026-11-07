@@ -134,7 +134,6 @@
         "app/src/lib/utils.ts",
         "app/src/components/app-bar.tsx",
         "app/src/components/app-form.tsx",
-        "app/src/components/app-icons.tsx",
         "app/src/components/card-layout.tsx",
         "app/src/components/centered-card-layout.tsx",
         "app/src/components/collapsible.tsx",
