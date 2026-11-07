@@ -1,7 +1,6 @@
 import type { WorkspaceStatus } from '@mcp-skills/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { Layers } from '@/components/app-icons';
 import { DeleteButton } from '@/components/domain/delete-button';
 import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
@@ -129,10 +128,10 @@ function WorkspacesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <ActionButton
+                          <Button
                             variant="ghost"
                             size="icon-sm"
-                            label={`Edit ${workspace.name}`}
+                            aria-label={`Edit ${workspace.name}`}
                             onClick={() => setDialog({ mode: 'edit', workspace })}
                             iconSlot={<Pencil />}
                           />

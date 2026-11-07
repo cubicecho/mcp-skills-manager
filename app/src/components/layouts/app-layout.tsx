@@ -1,7 +1,6 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
@@ -9,6 +8,7 @@ import { EmptyState } from '@/components/page';
 import { QueryState } from '@/components/query-state';
 import { BarNavItem, Sidebar, SidebarNavItem, type SidebarNavItemStatus, SidebarSection } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
+import { Button } from '@/components/ui/button';
 import { FileText, Folder, Lock, Plus, Settings } from '@/components/ui/icons';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
@@ -118,10 +118,10 @@ function SkillNav() {
         as="nav"
         title="Skills"
         actionSlot={
-          <ActionButton
+          <Button
             variant="ghost"
             size="icon-sm"
-            label="New skill"
+            aria-label="New skill"
             side="right"
             onClick={() => setNewOpen(true)}
             iconSlot={<Plus />}
@@ -208,10 +208,10 @@ export function AppLayout({
       actionSlot={
         <>
           {status?.authEnabled && (
-            <ActionButton
+            <Button
               variant="ghost"
               size="icon-sm"
-              label="Lock"
+              aria-label="Lock"
               hint="Forget the stored token"
               onClick={lock}
               iconSlot={<Lock />}

@@ -1,4 +1,5 @@
-import { OptionSelect, type SelectEntry } from '@/components/option-select';
+import type { SelectEntry } from '@/components/app-form';
+import { Combobox } from '@/components/combobox';
 import { SearchInput } from '@/components/ui/search-input';
 import { isKeyOf } from '@/lib/is-key-of';
 import { FORMAT_LABELS, SCOPE_LABELS, type SkillListFilters, SORT_LABELS } from '@/lib/skill-list';
@@ -40,7 +41,7 @@ export function SkillFilters({
         value={filters.query}
         onChangeText={(query) => onChange({ query })}
       />
-      <OptionSelect
+      <Combobox
         className="w-40"
         aria-label="Filter by scope"
         options={SCOPE_OPTIONS}
@@ -51,7 +52,7 @@ export function SkillFilters({
           }
         }}
       />
-      <OptionSelect
+      <Combobox
         className="w-40"
         aria-label="Filter by format"
         options={FORMAT_OPTIONS}
@@ -63,7 +64,7 @@ export function SkillFilters({
         }}
       />
       {tags.length > 0 && (
-        <OptionSelect
+        <Combobox
           className="w-40"
           aria-label="Filter by tag"
           options={[
@@ -74,7 +75,7 @@ export function SkillFilters({
           onValueChange={(option) => onChange({ tag: optionToTag(option) })}
         />
       )}
-      <OptionSelect
+      <Combobox
         className="w-40"
         aria-label="Sort skills"
         options={SORT_OPTIONS}

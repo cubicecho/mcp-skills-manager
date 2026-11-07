@@ -21,7 +21,7 @@ export function DeleteButton({
     <ConfirmButton
       variant="ghost"
       size="icon-sm"
-      label={`Delete ${name}`}
+      aria-label={`Delete ${name}`}
       title={title}
       description={description}
       onConfirm={onConfirm}

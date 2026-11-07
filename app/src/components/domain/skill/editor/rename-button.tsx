@@ -1,7 +1,7 @@
 import { type SkillDetail, slugSchema } from '@mcp-skills/shared';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
+import { Button } from '@/components/ui/button';
 import { Pencil } from '@/components/ui/icons';
 import { useUpdateSkill } from '@/lib/queries';
 import { reported } from '@/lib/reported';
@@ -22,10 +22,10 @@ export function RenameButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ActionButton
+      <Button
         variant="ghost"
         size="icon-sm"
-        label="Rename skill"
+        aria-label="Rename skill"
         onClick={() => setOpen(true)}
         iconSlot={<Pencil />}
       />

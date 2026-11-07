@@ -1,6 +1,5 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import type { ReactNode } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
@@ -8,6 +7,7 @@ import { StickyHeaderContentFooter } from '@/components/header-content-footer';
 import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { CodeBlock } from '@/components/ui/code';
 import { Pencil } from '@/components/ui/icons';
 import { formatBytes, formatCount, formatDate, joinStats } from '@/lib/format';
@@ -58,7 +58,7 @@ function PreviewFrame({
 
 /** The button that opens the previewed file in the editor. */
 function EditButton({ onEdit }: { onEdit: () => void }) {
-  return <ActionButton variant="ghost" size="icon-sm" label="Edit" onClick={onEdit} iconSlot={<Pencil />} />;
+  return <Button variant="ghost" size="icon-sm" aria-label="Edit" onClick={onEdit} iconSlot={<Pencil />} />;
 }
 
 /** One status fact as a badge; its hint is a tooltip for a pointer and hidden text for a screen reader. */

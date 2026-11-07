@@ -51,7 +51,7 @@ export function SourcePanel({
           <ConfirmButton
             variant="ghost"
             size="icon-sm"
-            label="Unlink from Git"
+            aria-label="Unlink from Git"
             disabled={pending || unlink.isPending}
             title={`Unlink "${skill.name}" from its git source?`}
             description="The skill keeps the content it has now and becomes editable here and by agents, but it no longer follows the repo: later changes there are not pulled in."
