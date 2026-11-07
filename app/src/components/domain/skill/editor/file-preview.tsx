@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { isMarkdownPath, SKILL_MD_KEY } from '@/components/domain/skill/editor/skill-file-key';
 import { SourcePanel } from '@/components/domain/skill/editor/source-panel';
-import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { HeaderContentFooter } from '@/components/header-content-footer';
 import { Markdown } from '@/components/markdown';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -39,12 +39,14 @@ function PreviewFrame({
   contentSlot: SlotNode;
 }) {
   return (
-    <StickyHeaderContentFooter
+    <HeaderContentFooter
+      scroll
+      className="h-full"
       width="prose"
       headerSlot={
         <PageHeader
           title={title}
-          breadcrumbsSlot={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
+          backSlot={<p className="break-all font-mono text-muted-foreground text-xs">{path}</p>}
           description={description}
           actionSlot={actionSlot}
           contentSlot={badgesSlot}

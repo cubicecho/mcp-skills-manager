@@ -1,5 +1,5 @@
+import { EmptyState } from '@/components/empty-state';
 import { LoadError } from '@/components/load-state';
-import { EmptyState } from '@/components/page';
 import { File } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatBytes } from '@/lib/format';

@@ -1,10 +1,10 @@
 import type { SkillDetail, SkillSource } from '@mcp-skills/shared';
 import { Unlink } from '@/components/app-icons';
+import { CardLayout } from '@/components/card-layout';
 import { ConfirmButton } from '@/components/confirm-button';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { shortCommit, useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
 import { PropertyList, PropertyRow } from '@/components/property-list';
-import { Section } from '@/components/section';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RefreshCw } from '@/components/ui/icons';
@@ -31,10 +31,10 @@ export function SourcePanel({
   const syncedAt = formatDateTime(source.syncedAt ?? '');
 
   return (
-    <Section
+    <CardLayout
+      level={2}
       title="Git source"
       description="This skill's content comes from a git repo, so it is not edited here. Sync it to pull the newest version."
-      surface="card"
       className="mb-6"
       actionSlot={
         <>

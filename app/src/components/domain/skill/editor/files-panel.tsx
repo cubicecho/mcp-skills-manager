@@ -6,7 +6,7 @@ import { SkillToolbar } from '@/components/domain/skill/editor/skill-toolbar';
 import { useFilePrompts } from '@/components/domain/skill/editor/use-file-prompts';
 import { PathPromptDialog } from '@/components/domain/skill/path-prompt-dialog';
 import { FileTree } from '@/components/file-tree';
-import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { HeaderContentFooter } from '@/components/header-content-footer';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,7 +84,9 @@ export function FilesPanel({
   };
 
   return (
-    <StickyHeaderContentFooter
+    <HeaderContentFooter
+      scroll
+      className="h-full"
       headerSlot={
         <PageHeader
           level={2}
