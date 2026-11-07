@@ -1,9 +1,9 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { Link } from '@tanstack/react-router';
-import { ActionButton } from '@/components/action-button';
 import { DeleteButton } from '@/components/domain/delete-button';
 import { useSkillFlags } from '@/components/domain/skill/use-skill-flags';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { FileText, Folder, Pencil } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -106,10 +106,10 @@ export function SkillsTable({
             </TableCell>
             <TableCell className="text-right">
               <div className="flex justify-end gap-1">
-                <ActionButton
+                <Button
                   variant="ghost"
                   size="icon-sm"
-                  label={`Edit ${skill.name}`}
+                  aria-label={`Edit ${skill.name}`}
                   linkSlot={<Link to="/skills/$name" params={{ name: skill.name }} />}
                   iconSlot={<Pencil />}
                 />

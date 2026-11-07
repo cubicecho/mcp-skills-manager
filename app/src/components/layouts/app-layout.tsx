@@ -1,14 +1,14 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
-import { EmptyState } from '@/components/page';
-import { QueryState } from '@/components/query-state';
-import { BarNavItem, Sidebar, SidebarNavItem, type SidebarNavItemStatus, SidebarSection } from '@/components/sidebar';
+import { EmptyState } from '@/components/empty-state';
+import { LoadState } from '@/components/load-state';
+import { AppBarItem, Sidebar, SidebarItem, type SidebarItemStatus, SidebarSection } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
+import { Button } from '@/components/ui/button';
 import { FileText, Folder, Lock, Plus, Settings } from '@/components/ui/icons';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
@@ -30,9 +30,9 @@ const NAV_ITEMS = [{ to: '/', label: 'Skills', icon: BookMarked }, ...OTHER_PLAC
 type NavTo = (typeof NAV_ITEMS)[number]['to'];
 
 /** A sidebar row that is a router link. */
-const SidebarLink = createLink(SidebarNavItem);
+const SidebarLink = createLink(SidebarItem);
 /** A phone-bar item that is a router link. */
-const BarLink = createLink(BarNavItem);
+const BarLink = createLink(AppBarItem);
 
 /**
  * Tells whether a place's nav item is lit for the current path.
@@ -82,7 +82,7 @@ function Brand({
  * @remarks
  * The fact is that it follows a git repo, that agents cannot change it, or that the root endpoint does not serve it.
  */
-function skillStatus(skill: SkillSummary): SidebarNavItemStatus | undefined {
+function skillStatus(skill: SkillSummary): SidebarItemStatus | undefined {
   const [first] = skillStatuses(skill);
   if (first === undefined) {
     return undefined;
@@ -118,17 +118,17 @@ function SkillNav() {
         as="nav"
         title="Skills"
         actionSlot={
-          <ActionButton
+          <Button
             variant="ghost"
             size="icon-sm"
-            label="New skill"
+            aria-label="New skill"
             side="right"
             onClick={() => setNewOpen(true)}
             iconSlot={<Plus />}
           />
         }
         status={
-          <QueryState
+          <LoadState
             query={skills}
             what="the skills"
             count={list.length}
@@ -194,7 +194,7 @@ export function AppLayout({
                   active={isActive(to, pathname)}
                 />
               ))}
-              {status?.authEnabled && <SidebarNavItem label="Lock" iconSlot={<Lock />} onClick={lock} />}
+              {status?.authEnabled && <SidebarItem label="Lock" iconSlot={<Lock />} onClick={lock} />}
               <ThemePicker variant="compact" />
             </>
           }
@@ -208,10 +208,10 @@ export function AppLayout({
       actionSlot={
         <>
           {status?.authEnabled && (
-            <ActionButton
+            <Button
               variant="ghost"
               size="icon-sm"
-              label="Lock"
+              aria-label="Lock"
               hint="Forget the stored token"
               onClick={lock}
               iconSlot={<Lock />}

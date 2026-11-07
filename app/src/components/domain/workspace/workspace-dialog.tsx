@@ -1,8 +1,14 @@
 import type { WorkspaceStatus } from '@mcp-skills/shared';
-import { InputField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
+import {
+  ComboboxField,
+  InputField,
+  type SelectEntry,
+  SelectField,
+  SwitchField,
+  TextareaField,
+  useAppForm,
+} from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
-import { MultiSelectField } from '@/components/multi-select-field';
-import type { SelectEntry } from '@/components/option-select';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { FormElement } from '@/components/ui/form-element';
@@ -127,7 +133,8 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
               options={TOOL_MODE_OPTIONS}
               description="How this workspace’s endpoint advertises skills as tools. Inherit uses the global default from Settings."
             />
-            <MultiSelectField
+            <ComboboxField
+              multiple
               form={form}
               name="skills"
               label="Skills"

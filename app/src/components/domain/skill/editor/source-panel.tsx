@@ -1,10 +1,10 @@
 import type { SkillDetail, SkillSource } from '@mcp-skills/shared';
 import { Unlink } from '@/components/app-icons';
+import { CardLayout } from '@/components/card-layout';
 import { ConfirmButton } from '@/components/confirm-button';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { shortCommit, useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
-import { Section } from '@/components/section';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RefreshCw } from '@/components/ui/icons';
@@ -31,10 +31,10 @@ export function SourcePanel({
   const syncedAt = formatDateTime(source.syncedAt ?? '');
 
   return (
-    <Section
+    <CardLayout
+      level={2}
       title="Git source"
       description="This skill's content comes from a git repo, so it is not edited here. Sync it to pull the newest version."
-      surface="card"
       className="mb-6"
       actionSlot={
         <>
@@ -51,7 +51,7 @@ export function SourcePanel({
           <ConfirmButton
             variant="ghost"
             size="icon-sm"
-            label="Unlink from Git"
+            aria-label="Unlink from Git"
             disabled={pending || unlink.isPending}
             title={`Unlink "${skill.name}" from its git source?`}
             description="The skill keeps the content it has now and becomes editable here and by agents, but it no longer follows the repo: later changes there are not pulled in."
@@ -68,7 +68,7 @@ export function SourcePanel({
       }
       contentSlot={
         <>
-          <DescriptionList
+          <PropertyList
             contentSlot={[
               <PropertyRow
                 key="repo"

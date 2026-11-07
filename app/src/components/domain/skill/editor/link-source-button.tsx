@@ -1,6 +1,5 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { useAppForm } from '@/components/app-form';
 import { GitBranch } from '@/components/app-icons';
 import { DialogLayout } from '@/components/dialog-layout';
@@ -49,10 +48,10 @@ export function LinkSourceButton({
 
   return (
     <form.AppForm>
-      <ActionButton
+      <Button
         variant="ghost"
         size="icon-sm"
-        label="Link to Git source"
+        aria-label="Link to Git source"
         onClick={() => setOpen(true)}
         iconSlot={<GitBranch />}
       />

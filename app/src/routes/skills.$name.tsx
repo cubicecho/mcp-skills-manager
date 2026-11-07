@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { SkillWorkspace } from '@/components/domain/skill/editor/skill-workspace';
-import { QueryError } from '@/components/query-state';
+import { LoadError } from '@/components/load-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSkill } from '@/lib/queries';
 
@@ -52,7 +52,7 @@ function SkillPage() {
   if (skill.isError) {
     return (
       <div className="p-6">
-        <QueryError error={skill.error} onRetry={() => void skill.refetch()} what="this skill" />
+        <LoadError error={skill.error} onRetry={() => void skill.refetch()} what="this skill" />
       </div>
     );
   }

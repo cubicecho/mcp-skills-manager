@@ -1,10 +1,10 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { useState } from 'react';
-import { ActionButton } from '@/components/action-button';
 import { FilePlus, FolderPlus, FolderUp } from '@/components/app-icons';
 import { LinkSourceButton } from '@/components/domain/skill/editor/link-source-button';
 import { RenameButton } from '@/components/domain/skill/editor/rename-button';
 import { useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
+import { Button } from '@/components/ui/button';
 import { DownloadButton } from '@/components/ui/download-button';
 import { FilePickerButton } from '@/components/ui/file-picker';
 import type { PickedFile } from '@/components/ui/file-picker-base';
@@ -67,9 +67,9 @@ export function SkillToolbar({
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1">
       {linked ? (
-        <ActionButton
+        <Button
           {...TOOLBAR_BUTTON}
-          label="Sync from Git"
+          aria-label="Sync from Git"
           hint={syncNow.pending ? 'Syncing…' : undefined}
           disabled={syncNow.pending}
           onClick={syncNow.sync}
@@ -78,16 +78,16 @@ export function SkillToolbar({
         />
       ) : (
         <>
-          <ActionButton
+          <Button
             {...TOOLBAR_BUTTON}
-            label="New file"
+            aria-label="New file"
             disabled={busy}
             onClick={onNewFile}
             iconSlot={<FilePlus />}
           />
-          <ActionButton
+          <Button
             {...TOOLBAR_BUTTON}
-            label="New folder"
+            aria-label="New folder"
             disabled={busy}
             onClick={onNewFolder}
             iconSlot={<FolderPlus />}

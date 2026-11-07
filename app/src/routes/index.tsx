@@ -5,9 +5,9 @@ import { ConnectCard } from '@/components/domain/connect-card';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
 import { SkillFilters } from '@/components/domain/skill/skill-filters';
 import { SkillsTable } from '@/components/domain/skill/skills-table';
-import { EmptyState } from '@/components/page';
+import { EmptyState } from '@/components/empty-state';
+import { LoadState } from '@/components/load-state';
 import { PageLayout } from '@/components/page-layout';
-import { QueryState } from '@/components/query-state';
 import { Button } from '@/components/ui/button';
 import { Plus, Search } from '@/components/ui/icons';
 import { mcpOrigin } from '@/lib/mcp';
@@ -55,7 +55,7 @@ function SkillsPage() {
         }
         contentSlot={
           <div className="flex flex-col gap-6 pb-6">
-            <QueryState
+            <LoadState
               query={skills}
               what="skills"
               count={visible.length}

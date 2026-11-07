@@ -12,7 +12,7 @@ import {
   SKILL_MD_KEY,
 } from '@/components/domain/skill/editor/skill-file-key';
 import { SupportingFileEditor } from '@/components/domain/skill/editor/supporting-file-editor';
-import { StickyHeaderContentFooter } from '@/components/header-content-footer';
+import { HeaderContentFooter } from '@/components/header-content-footer';
 import { SidebarLayout } from '@/components/split-layout';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 
@@ -134,7 +134,9 @@ function FilePane({
       {!editing || !editable ? (
         <FilePreview skill={skill} path={path} onEdit={() => setEditing(true)} />
       ) : (
-        <StickyHeaderContentFooter
+        <HeaderContentFooter
+          scroll
+          className="h-full"
           contentClassName="p-4"
           contentSlot={
             path === SKILL_MD_KEY ? (

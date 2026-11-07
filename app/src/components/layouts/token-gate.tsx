@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppForm } from '@/components/app-form';
-import { CenteredLayout } from '@/components/centered-layout';
+import { CenteredCardLayout } from '@/components/centered-card-layout';
 import { PasswordField } from '@/components/password-field';
 import { Alert } from '@/components/ui/alert';
 import { Code } from '@/components/ui/code';
@@ -48,7 +48,7 @@ export function TokenGate({
 
   return (
     <form.AppForm>
-      <CenteredLayout
+      <CenteredCardLayout
         level={1}
         iconSlot={<KeyRound />}
         title="Authentication required"

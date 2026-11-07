@@ -1,14 +1,14 @@
 import type { SkillSummary } from '@mcp-skills/shared';
-import type { LucideIcon } from 'lucide-react';
 import { GitBranch, Layers } from '@/components/app-icons';
 import { Lock } from '@/components/ui/icons';
+import type { IconComponent } from '@/components/ui/icons-base';
 
 /** The facts about a skill that are worth a mark beside its name, most restrictive first. */
 export const SKILL_STATUS = {
   linked: { label: 'Git', hint: 'Synced from a git repo', icon: GitBranch },
   readOnly: { label: 'Read-only', hint: 'Read-only for agents', icon: Lock },
   scoped: { label: 'Workspace-scoped', hint: 'Hidden from the root /mcp endpoint', icon: Layers },
-} as const satisfies Record<string, { label: string; hint: string; icon: LucideIcon }>;
+} as const satisfies Record<string, { label: string; hint: string; icon: IconComponent }>;
 
 /** The key of one status fact in `SKILL_STATUS`. */
 export type SkillStatusKey = keyof typeof SKILL_STATUS;

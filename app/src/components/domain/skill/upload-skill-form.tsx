@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { InputField, useAppForm } from '@/components/app-form';
 import { FileArchive } from '@/components/app-icons';
+import { FileTree } from '@/components/file-tree';
 import { Alert } from '@/components/ui/alert';
 import { Code } from '@/components/ui/code';
 import { FilePickerButton } from '@/components/ui/file-picker';
@@ -126,13 +127,11 @@ export function UploadSkillForm({
                 formatCount(upload.paths.length, 'file'),
               )}
             </span>
-            <ul className="max-h-40 overflow-y-auto rounded-md border bg-muted/40 p-2 font-mono text-xs text-muted-foreground">
-              {upload.paths.map((filePath) => (
-                <li key={filePath} className="truncate">
-                  {filePath}
-                </li>
-              ))}
-            </ul>
+            <FileTree
+              label="Files in the upload"
+              entries={upload.paths.map((path) => ({ path, type: 'file' as const }))}
+              className="max-h-40 overflow-y-auto rounded-md border p-1"
+            />
           </div>
         </>
       )}

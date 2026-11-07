@@ -1,5 +1,5 @@
 import { Save } from '@/components/app-icons';
-import { Section } from '@/components/section';
+import { CardLayout } from '@/components/card-layout';
 import { Button } from '@/components/ui/button';
 import { X } from '@/components/ui/icons';
 import type { SlotNode } from '@/lib/utils';
@@ -10,8 +10,8 @@ export type EditorHandle = {
   hasUnsavedChanges: () => boolean;
 };
 
-/** A file path as a `Section` title: the path as written, not the uppercase overline. */
-const FILE_TITLE = 'font-mono text-sm normal-case tracking-normal text-foreground';
+/** A file path as the card's title: monospaced, at the size of the editor's text. */
+const FILE_TITLE = 'font-mono text-sm';
 
 /** The card an editor sits on: the file path as its heading, Close and Save at the far end. */
 export function EditorFrame({
@@ -36,8 +36,8 @@ export function EditorFrame({
   contentSlot: SlotNode;
 }) {
   return (
-    <Section
-      surface="card"
+    <CardLayout
+      level={2}
       title={path}
       titleClassName={FILE_TITLE}
       actionSlot={

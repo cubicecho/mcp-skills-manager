@@ -1,5 +1,5 @@
-import { EmptyState } from '@/components/page';
-import { QueryError } from '@/components/query-state';
+import { EmptyState } from '@/components/empty-state';
+import { LoadError } from '@/components/load-state';
 import { File } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatBytes } from '@/lib/format';
@@ -25,7 +25,7 @@ export function FileLoadState({
   return (
     <>
       {isPending && <Skeleton role="status" aria-label="Loading the file" className="h-[50vh] w-full" />}
-      {error && <QueryError error={error} onRetry={() => void refetch()} what="this file" />}
+      {error && <LoadError error={error} onRetry={() => void refetch()} what="this file" />}
       {data?.binary && (
         <EmptyState icon={File} title="Binary file" description={describeBinary(formatBytes(data.size))} />
       )}
