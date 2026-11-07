@@ -346,6 +346,23 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     },
     "name": "delete_skill_file",
   },
+  {
+    "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the linked skill to sync.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "sync_skill",
+  },
 ]
 `;
 
@@ -677,6 +694,23 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
       "type": "object",
     },
     "name": "delete_skill_file",
+  },
+  {
+    "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the linked skill to sync.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "sync_skill",
   },
   {
     "description": "Write conventional commit messages.",
@@ -1027,6 +1061,23 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
       "type": "object",
     },
     "name": "delete_skill_file",
+  },
+  {
+    "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Slug of the linked skill to sync.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "sync_skill",
   },
   {
     "description": "Write conventional commit messages.",

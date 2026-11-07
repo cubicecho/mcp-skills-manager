@@ -225,7 +225,9 @@ source:
 
 - **Sync is manual.** *Sync now* (or `POST /api/skills/:name/sync`) replaces the
   skill's whole folder with the repo's copy; files removed upstream are removed
-  here. Nothing syncs on a timer.
+  here. Nothing syncs on a timer. Agents can sync too, with the `sync_skill`
+  MCP tool: it only pulls from the source a human linked, and refuses a skill
+  marked read-only. Add `sync_skill` to `disabledAuthoringTools` to turn it off.
 - **Linked skills are locked.** Their content cannot be edited in the web UI,
   over the REST API or by agents over MCP. **Unlink** keeps the current content
   and makes the skill a normal, editable one again.

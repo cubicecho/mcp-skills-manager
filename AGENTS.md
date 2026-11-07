@@ -33,7 +33,7 @@ only left out of the loaded skill's "Bundled supporting files" footer.
 **Agents can author their own skills over MCP** (self-improvement): every MCP
 endpoint also exposes authoring tools (`create_skill`, `update_skill`,
 `edit_skill`, `rename_skill`, `delete_skill`, `write_skill_file`, `read_skill_file`,
-`create_skill_folder`, `move_skill_file`, `delete_skill_file`) that delegate to
+`create_skill_folder`, `move_skill_file`, `delete_skill_file`, `sync_skill`) that delegate to
 the same `ConfigStore` mutators as the REST API. They live in
 `server/src/gateway/authoring-tools.ts` and are gated on the
 `settings.authoringEnabled` flag (default true), less any tool named in
@@ -66,7 +66,9 @@ git CLI (`server/src/sources/git-fetch.ts`, no shell, injected as the store's
 `fetchSource` option so tests use a fake), stage it under `DATA_DIR/.sync` —
 outside the watched dirs — and swap it in for the skill's folder (`SkillSync` in
 `server/src/sources/skill-sync.ts`; the store loads the result). Sync is manual
-(`POST /api/skills/:name/sync`); it forces the local `name` and carries
+(`POST /api/skills/:name/sync`, or the `sync_skill` authoring tool, which
+`requireSyncable` limits to served, linked, not-read-only skills — agents can
+sync but never link, relink or unlink); it forces the local `name` and carries
 `global`/`readonly` over, so identity and workspace membership survive. A linked
 skill's content is **locked**: the REST content routes answer 409
 (`requireUnlinked` in `router.ts`) and every mutating authoring tool refuses it
