@@ -28,6 +28,7 @@ export const authoringToolNameSchema = z.enum([
   'create_skill_folder',
   'move_skill_file',
   'delete_skill_file',
+  'sync_skill',
 ]);
 /** The name of one skill-authoring tool. */
 export type AuthoringToolName = z.infer<typeof authoringToolNameSchema>;

@@ -14,7 +14,8 @@ import { bundledFiles, skillToolName, skillToolNames } from '../skills/skill-vie
  * Every tool delegates to the ConfigStore mutators, so validation and atomic writes are shared with the REST
  * layer. A workspace endpoint scopes a new skill to its workspace by default and reaches only the skills it
  * serves, while the root endpoint reaches them all. A read-only or git-linked skill is refused by every tool
- * that would change it, and no tool here can lift either.
+ * that would change it, and no tool here can lift either. The one exception is sync_skill, which pulls a linked
+ * skill's newest copy from the source a human linked it to; it cannot change that source or the content.
  */
 
 /** JSON Schema of a string argument. */
@@ -49,8 +50,11 @@ interface ToolSpec<T> {
   definition: AuthoringTool['definition'];
   /** Schema the call's arguments are parsed with. */
   args: z.ZodType<T>;
-  /** The existing skill a call addresses, and whether it only reads it; left out by a tool that addresses none. */
-  target?: { skill: (input: T) => string; access: 'read' | 'write' };
+  /**
+   * The existing skill a call addresses, and how: `read` only reads it, `write` changes its content, and `sync`
+   * replaces it from its git source. Left out by a tool that addresses none.
+   */
+  target?: { skill: (input: T) => string; access: 'read' | 'write' | 'sync' };
   /** Does the work, once the arguments are parsed and the addressed skill is cleared. */
   run: (input: T) => Promise<string>;
 }
@@ -179,6 +183,7 @@ const writeFileArgs = z.object({
 });
 /** Arguments of every tool that addresses one path inside a skill's folder. */
 const skillPathArgs = z.object({ skill: z.string(), path: skillRelPathSchema });
+const syncArgs = z.object({ name: z.string() });
 const moveArgs = z.object({
   skill: z.string(),
   from: skillRelPathSchema,
@@ -248,15 +253,49 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
   const requireWritable = (name: string): void => {
     requireServed(name);
     if (store.getSkill(name)?.source) {
+      // Point at sync_skill only while this endpoint serves it.
+      const canSync = store.getDisabledAuthoringTools().includes('sync_skill') === false;
+      const sync = canSync
+        ? 'Call sync_skill to pull its newest copy; only a human can unlink it'
+        : 'Only a human can sync or unlink it';
       throw new Error(
         `Skill "${name}" is managed from a git source and cannot be modified, renamed or deleted over MCP. ` +
-          'Only a human can sync or unlink it in the web UI — do not retry; create a new skill instead if you need a variant.',
+          `${sync} in the web UI — do not retry; create a new skill instead if you need a variant.`,
       );
     }
+    requireUnlocked(name);
+  };
+
+  /**
+   * Refuses a skill marked read-only.
+   *
+   * @param name - Slug the tool call addresses.
+   */
+  const requireUnlocked = (name: string): void => {
     if (store.getSkill(name)?.readOnly) {
       throw new Error(
         `Skill "${name}" is read-only and cannot be modified, renamed or deleted over MCP. ` +
           'Only a human can lift this in the web UI — do not retry; create a new skill instead if you need a variant.',
+      );
+    }
+  };
+
+  /**
+   * Refuses a skill this endpoint does not serve, one marked read-only, or one with no git source to sync from.
+   *
+   * @param name - Slug the tool call addresses.
+   *
+   * @remarks
+   * An unknown name falls through to the store's 404.
+   */
+  const requireSyncable = (name: string): void => {
+    requireServed(name);
+    requireUnlocked(name);
+    const skill = store.getSkill(name);
+    if (skill !== undefined && skill.source === undefined) {
+      throw new Error(
+        `Skill "${name}" is not linked to a git source, so there is nothing to sync. ` +
+          'Only a human can link a skill to a repo, in the web UI.',
       );
     }
   };
@@ -317,6 +356,9 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       }
       if (spec.target?.access === 'read') {
         requireServed(spec.target.skill(input));
+      }
+      if (spec.target?.access === 'sync') {
+        requireSyncable(spec.target.skill(input));
       }
       return spec.run(input);
     },
@@ -654,6 +696,32 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
       run: async (input) => {
         const skill = await guard(() => store.deleteSupportingFile(input.skill, input.path));
         return `Deleted "${input.path}" from skill "${skill.name}". ${fileSummary(skill)}`;
+      },
+    }),
+    tool({
+      definition: {
+        name: 'sync_skill',
+        description:
+          'Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a ' +
+          'git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, ' +
+          'visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a ' +
+          'skill that is not linked or that a human marked read-only.',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { ...JSON_STRING, description: 'Slug of the linked skill to sync.' } },
+          required: ['name'],
+          additionalProperties: false,
+        },
+      },
+      args: syncArgs,
+      target: { skill: (input) => input.name, access: 'sync' },
+      run: async (input) => {
+        const { skill, changed } = await guard(() => store.syncSkill(input.name));
+        const commit = skill.source?.commit ? ` at commit ${skill.source.commit}` : '';
+        const what = changed
+          ? `Synced skill "${skill.name}" to the newest copy${commit}.`
+          : `Skill "${skill.name}" was already up to date${commit}.`;
+        return `${what} ${fileSummary(skill)}`;
       },
     }),
   ];

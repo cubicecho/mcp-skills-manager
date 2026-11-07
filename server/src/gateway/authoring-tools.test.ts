@@ -3,7 +3,7 @@ import path from 'node:path';
 import { authoringToolNameSchema } from '@mcp-skills/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { ConfigStore } from '../config/store.ts';
 import { useTempStore } from '../test/temp-store.ts';
 import { firstText } from '../test/tool-result.ts';
@@ -28,8 +28,11 @@ async function connect(store: ConfigStore, workspaceSlug?: string): Promise<Clie
 /** One call an agent might make. */
 type Attempt = { name: string; arguments: Record<string, unknown> };
 
-/** The authoring tools that change nothing, so are allowed on a protected skill. */
-const NON_MUTATING_TOOLS = ['create_skill', 'read_skill_file'];
+/**
+ * The authoring tools left out of the mutating attempts: two change no existing skill, and sync_skill only works
+ * on a git-linked skill, so it has its own tests.
+ */
+const NON_MUTATING_TOOLS = ['create_skill', 'read_skill_file', 'sync_skill'];
 
 /**
  * Builds a call to every tool that changes an existing skill, for a skill holding a body passage and a file.
@@ -58,14 +61,20 @@ function mutatingAttempts(skill: string, passage: string, file: string): Attempt
 }
 
 describe('MCP authoring tools', () => {
+  /** What the fake repo holds: tests change it to stand in for a new upstream commit. */
+  const upstream = { body: 'upstream', commit: 'c1' };
   // The store seeds getting-started and the examples workspace.
   const temp = useTempStore({
     // Stands in for git: every source resolves to the same tiny skill folder.
     fetchSource: async (_source, destDir) => {
-      await writeFile(path.join(destDir, 'SKILL.md'), '---\nname: upstream\n---\n\nupstream\n');
+      await writeFile(path.join(destDir, 'SKILL.md'), `---\nname: upstream\n---\n\n${upstream.body}\n`);
       await writeFile(path.join(destDir, 'notes.md'), 'notes');
-      return { commit: 'c1' };
+      return { commit: upstream.commit };
     },
+  });
+  beforeEach(() => {
+    upstream.body = 'upstream';
+    upstream.commit = 'c1';
   });
 
   it('advertises authoring tools on the root endpoint', async () => {
@@ -304,6 +313,57 @@ describe('MCP authoring tools', () => {
 
     expect(firstText(await client.callTool({ name: 'linked' }))).toContain('upstream');
     expect(firstText(await client.callTool({ name: 'list_skills' }))).toMatch(/^linked \(read-only; /m);
+  });
+
+  it('points a git-linked refusal at sync_skill only while sync_skill is served', async () => {
+    await temp.store.importSkillFromSource({ source: { repo: 'https://example.com/acme/skills.git' }, name: 'linked' });
+    const client = await connect(temp.store);
+    const attempt = { name: 'update_skill', arguments: { name: 'linked', body: 'hacked' } };
+    expect(firstText(await client.callTool(attempt))).toContain('Call sync_skill');
+
+    await temp.store.updateSettings({ disabledAuthoringTools: ['sync_skill'] });
+    expect(firstText(await client.callTool(attempt))).toContain('Only a human can sync or unlink it');
+  });
+
+  it('syncs a git-linked skill to its newest upstream copy, keeping its name and workspaces', async () => {
+    await temp.store.importSkillFromSource({ source: { repo: 'https://example.com/acme/skills.git' }, name: 'linked' });
+    await temp.store.addSkillToWorkspace('examples', 'linked');
+    const client = await connect(temp.store);
+
+    const same = await client.callTool({ name: 'sync_skill', arguments: { name: 'linked' } });
+    expect((same as { isError?: boolean }).isError).toBeFalsy();
+    expect(firstText(same)).toBe('Skill "linked" was already up to date at commit c1. Supporting files: notes.md.');
+
+    upstream.body = 'newer';
+    upstream.commit = 'c2';
+    const moved = await client.callTool({ name: 'sync_skill', arguments: { name: 'linked' } });
+    expect(firstText(moved)).toBe('Synced skill "linked" to the newest copy at commit c2. Supporting files: notes.md.');
+    const skill = temp.store.getSkill('linked');
+    expect(skill?.body.trim()).toBe('newer');
+    expect(skill?.source?.commit).toBe('c2');
+    expect(temp.store.getWorkspace('examples')?.skills).toContain('linked');
+  });
+
+  it('refuses to sync a skill that is not linked, is read-only, or that the workspace does not serve', async () => {
+    const root = await connect(temp.store);
+    const plain = await root.callTool({ name: 'sync_skill', arguments: { name: 'getting-started' } });
+    expect((plain as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(plain)).toContain('not linked to a git source');
+
+    await temp.store.importSkillFromSource({ source: { repo: 'https://example.com/acme/skills.git' }, name: 'linked' });
+    await temp.store.updateSkill('linked', { readOnly: true });
+    upstream.body = 'newer';
+    const locked = await root.callTool({ name: 'sync_skill', arguments: { name: 'linked' } });
+    expect((locked as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(locked)).toContain('read-only');
+    expect(temp.store.getSkill('linked')?.body.trim()).toBe('upstream');
+
+    await temp.store.updateSkill('linked', { readOnly: false });
+    const workspace = await connect(temp.store, 'examples');
+    const unserved = await workspace.callTool({ name: 'sync_skill', arguments: { name: 'linked' } });
+    expect((unserved as { isError?: boolean }).isError).toBe(true);
+    expect(firstText(unserved)).toContain('not served by workspace "examples"');
+    expect(temp.store.getSkill('linked')?.body.trim()).toBe('upstream');
   });
 
   it('gives agents no way to lift the read-only flag, and allows edits again once a human does', async () => {
