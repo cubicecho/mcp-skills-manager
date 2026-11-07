@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { BookMarked, Layers } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
+import { LoadState } from '@/components/load-state';
 import { EmptyState } from '@/components/page';
-import { QueryState } from '@/components/query-state';
 import { BarNavItem, Sidebar, SidebarNavItem, type SidebarNavItemStatus, SidebarSection } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
 import { Button } from '@/components/ui/button';
@@ -128,7 +128,7 @@ function SkillNav() {
           />
         }
         status={
-          <QueryState
+          <LoadState
             query={skills}
             what="the skills"
             count={list.length}

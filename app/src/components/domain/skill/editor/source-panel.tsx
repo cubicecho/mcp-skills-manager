@@ -1,9 +1,9 @@
 import type { SkillDetail, SkillSource } from '@mcp-skills/shared';
 import { Unlink } from '@/components/app-icons';
 import { ConfirmButton } from '@/components/confirm-button';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { shortCommit, useSyncNow } from '@/components/domain/skill/editor/use-sync-now';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Section } from '@/components/section';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -68,7 +68,7 @@ export function SourcePanel({
       }
       contentSlot={
         <>
-          <DescriptionList
+          <PropertyList
             contentSlot={[
               <PropertyRow
                 key="repo"

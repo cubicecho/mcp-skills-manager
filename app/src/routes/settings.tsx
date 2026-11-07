@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { CardLayout } from '@/components/card-layout';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { ToggleRow } from '@/components/domain/toggle-row';
 import { PageLayout } from '@/components/page-layout';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Button } from '@/components/ui/button';
 import { Code, CodeBlock } from '@/components/ui/code';
 import { RefreshCw } from '@/components/ui/icons';
@@ -173,7 +173,7 @@ function SettingsPage() {
             loading={isPending}
             contentSlot={
               data && (
-                <DescriptionList
+                <PropertyList
                   contentSlot={[
                     <PropertyRow key="version" label="Version" value={data.version} />,
                     <PropertyRow key="port" label="Port" value={String(data.port)} />,

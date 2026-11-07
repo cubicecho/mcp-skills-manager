@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Layers } from '@/components/app-icons';
 import { DeleteButton } from '@/components/domain/delete-button';
 import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
+import { LoadState } from '@/components/load-state';
 import { EmptyState } from '@/components/page';
 import { PageLayout } from '@/components/page-layout';
-import { QueryState } from '@/components/query-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
@@ -65,7 +65,7 @@ function WorkspacesPage() {
         actionSlot={newWorkspaceButton}
         contentSlot={
           <div className="flex flex-col gap-6 py-6">
-            <QueryState
+            <LoadState
               query={workspaces}
               what="workspaces"
               count={data?.length ?? 0}
