@@ -104,7 +104,7 @@ export function PathPromptDialog({
         footerActionsSlot={(close) => (
           <>
             <Button type="button" variant="outline" onClick={close} content="Cancel" />
-            <form.SubmitButton form={PATH_PROMPT_FORM_ID} pendingLabel="Working…" content={prompt.submitLabel} />
+            <form.SubmitButton form={PATH_PROMPT_FORM_ID} loadingLabel="Working…" createLabel={prompt.submitLabel} />
           </>
         )}
       />

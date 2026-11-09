@@ -3,7 +3,7 @@ import { Markdown } from "@/components/markdown";
 import { SplitLayout } from "@/components/split-layout";
 import { SegmentedButton, SegmentedGroup } from "@/components/ui/segmented";
 import { Textarea, type TextareaProps } from "@/components/ui/textarea";
-import { cn, type SlotNode } from "@/lib/utils";
+import { CODE_TEXT, cn, type SlotNode } from "@/lib/utils";
 
 /**
  * The three views, in the order the toggle draws them, with the name each is shown by.
@@ -123,7 +123,8 @@ export function MarkdownEditor({
               className={cn(
                 // `block`, because a textarea is inline and an inline box sits on a text line: the
                 // pane would be the line's descender taller than the field in it.
-                "block font-mono leading-relaxed",
+                "block",
+                CODE_TEXT,
                 PANE_FLOOR,
                 // Beside the preview it is as tall as the preview, so the two panes end together.
                 view === "split" && "lg:h-full",

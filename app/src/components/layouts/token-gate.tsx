@@ -72,7 +72,12 @@ export function TokenGate({
         footerActionsSlot={
           <form.Subscribe selector={(state) => state.values.token.trim() === ''}>
             {(isBlank) => (
-              <form.SubmitButton form={TOKEN_FORM_ID} disabled={isBlank} pendingLabel="Unlocking…" content="Unlock" />
+              <form.SubmitButton
+                form={TOKEN_FORM_ID}
+                disabled={isBlank}
+                loadingLabel="Unlocking…"
+                createLabel="Unlock"
+              />
             )}
           </form.Subscribe>
         }

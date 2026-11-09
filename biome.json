@@ -129,6 +129,7 @@
         "app/src/lib/frame-focus-guard.ts",
         "app/src/lib/number-draft.ts",
         "app/src/lib/readable-text-color.ts",
+        "app/src/lib/roving-focus.ts",
         "app/src/lib/select-options.ts",
         "app/src/lib/tree.ts",
         "app/src/lib/utils.ts",

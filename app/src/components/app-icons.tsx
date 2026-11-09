@@ -4,8 +4,6 @@ import {
   FilePlus as FilePlusSource,
   FolderPlus as FolderPlusSource,
   FolderUp as FolderUpSource,
-  GitBranch as GitBranchSource,
-  Layers as LayersSource,
   Save as SaveSource,
   Unlink as UnlinkSource,
 } from 'lucide-react';
@@ -17,7 +15,5 @@ export const FileArchive = icon(FileArchiveSource);
 export const FilePlus = icon(FilePlusSource);
 export const FolderPlus = icon(FolderPlusSource);
 export const FolderUp = icon(FolderUpSource);
-export const GitBranch = icon(GitBranchSource);
-export const Layers = icon(LayersSource);
 export const Save = icon(SaveSource);
 export const Unlink = icon(UnlinkSource);

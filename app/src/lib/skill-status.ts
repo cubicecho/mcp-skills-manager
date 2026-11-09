@@ -1,6 +1,5 @@
 import type { SkillSummary } from '@mcp-skills/shared';
-import { GitBranch, Layers } from '@/components/app-icons';
-import { Lock } from '@/components/ui/icons';
+import { GitBranch, Layers, Lock } from '@/components/ui/icons';
 import type { IconComponent } from '@/components/ui/icons-base';
 
 /** The facts about a skill that are worth a mark beside its name, most restrictive first. */
