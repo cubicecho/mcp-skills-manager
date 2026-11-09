@@ -1,7 +1,6 @@
 import type { WorkspaceStatus } from '@mcp-skills/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Layers } from '@/components/app-icons';
 import { DeleteButton } from '@/components/domain/delete-button';
 import { WorkspaceDialog } from '@/components/domain/workspace/workspace-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -11,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { CopyButton } from '@/components/ui/copy-button';
-import { Pencil, Plus } from '@/components/ui/icons';
+import { Layers, Pencil, Plus } from '@/components/ui/icons';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { mcpOrigin } from '@/lib/mcp';
 import { useDeleteWorkspace, useServerStatus, useWorkspaces } from '@/lib/queries';

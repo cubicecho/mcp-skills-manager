@@ -1,7 +1,7 @@
 import type { SkillSummary } from '@mcp-skills/shared';
 import { createLink, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { BookMarked, Layers } from '@/components/app-icons';
+import { BookMarked } from '@/components/app-icons';
 import { ServerStats } from '@/components/domain/server-stats';
 import { NewSkillDialog } from '@/components/domain/skill/new-skill-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -9,7 +9,7 @@ import { LoadState } from '@/components/load-state';
 import { AppBarItem, Sidebar, SidebarItem, type SidebarItemStatus, SidebarSection } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
 import { Button } from '@/components/ui/button';
-import { FileText, Folder, Lock, Plus, Settings } from '@/components/ui/icons';
+import { FileText, Folder, Layers, Lock, Plus, Settings } from '@/components/ui/icons';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { clearToken, requireAuth } from '@/lib/auth';
 import { useServerStatus, useSkills } from '@/lib/queries';

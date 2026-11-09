@@ -155,7 +155,13 @@ export function WorkspaceDialog({ open, onOpenChange, workspace }: Props) {
         footerActionsSlot={(close) => (
           <>
             <Button type="button" variant="outline" onClick={close} content="Cancel" />
-            <form.SubmitButton form={WORKSPACE_FORM_ID} pendingLabel="Saving…" content={isEdit ? 'Save' : 'Create'} />
+            <form.SubmitButton
+              form={WORKSPACE_FORM_ID}
+              loadingLabel="Saving…"
+              isEdit={isEdit}
+              createLabel="Create"
+              editLabel="Save"
+            />
           </>
         )}
       />

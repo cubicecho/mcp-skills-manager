@@ -1,12 +1,12 @@
 import type { SkillDetail } from '@mcp-skills/shared';
 import { useState } from 'react';
 import { useAppForm } from '@/components/app-form';
-import { GitBranch } from '@/components/app-icons';
 import { DialogLayout } from '@/components/dialog-layout';
 import { EMPTY_GIT_SOURCE, GitSourceFields, readGitSourceDraft } from '@/components/domain/skill/git-source-fields';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
+import { GitBranch } from '@/components/ui/icons';
 import { useLinkSkillSource } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
 
@@ -79,8 +79,8 @@ export function LinkSourceButton({
                 <form.SubmitButton
                   form={LINK_SOURCE_FORM_ID}
                   disabled={hasNoSource}
-                  pendingLabel="Fetching…"
-                  content="Link & replace"
+                  loadingLabel="Fetching…"
+                  createLabel="Link & replace"
                   iconSlot={<GitBranch />}
                 />
               )}

@@ -3,12 +3,11 @@ import { slugify } from '@mcp-skills/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { InputField, TextareaField, useAppForm } from '@/components/app-form';
-import { GitBranch } from '@/components/app-icons';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Button } from '@/components/ui/button';
 import { Code } from '@/components/ui/code';
 import { FormElement } from '@/components/ui/form-element';
-import { FileText, Folder, Upload } from '@/components/ui/icons';
+import { FileText, Folder, GitBranch, Upload } from '@/components/ui/icons';
 import { RadioGroupField } from '@/components/ui/radio-group-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isKeyOf } from '@/lib/is-key-of';
@@ -173,7 +172,7 @@ export function NewSkillDialog({
           <>
             <Button type="button" variant="outline" onClick={close} content="Cancel" />
             {tab === 'create' && (
-              <form.SubmitButton form={CREATE_SKILL_FORM_ID} pendingLabel="Creating…" content="Create & edit" />
+              <form.SubmitButton form={CREATE_SKILL_FORM_ID} loadingLabel="Creating…" createLabel="Create & edit" />
             )}
             {tab === 'upload' && (
               <Button
