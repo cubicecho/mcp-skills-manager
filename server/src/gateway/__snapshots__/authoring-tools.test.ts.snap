@@ -3,6 +3,12 @@
 exports[`MCP authoring tools > advertises the same tool definitions on the root endpoint and, scoped, on a workspace > root 1`] = `
 [
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Author a new skill (a Markdown playbook/reference other agents can load). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
     "inputSchema": {
       "additionalProperties": false,
@@ -49,6 +55,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "create_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
@@ -85,6 +97,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "update_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
     "inputSchema": {
       "additionalProperties": false,
@@ -133,6 +151,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "edit_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
     "inputSchema": {
       "additionalProperties": false,
@@ -155,6 +179,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "rename_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a skill and all its supporting files. This cannot be undone.",
     "inputSchema": {
       "additionalProperties": false,
@@ -172,6 +202,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "delete_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -207,6 +243,10 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "write_skill_file",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -229,6 +269,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "read_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
     "inputSchema": {
       "additionalProperties": false,
@@ -251,6 +297,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "create_skill_folder",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename or move a supporting file or folder within a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -278,6 +330,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "move_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a supporting file or folder (folders recursively) from a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -300,6 +358,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "delete_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+    },
     "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
     "inputSchema": {
       "additionalProperties": false,
@@ -322,6 +386,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
 exports[`MCP authoring tools > advertises the same tool definitions on the root endpoint and, scoped, on a workspace > workspace 1`] = `
 [
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Author a new skill (a Markdown playbook/reference other agents can load) (scoped to workspace "examples"). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
     "inputSchema": {
       "additionalProperties": false,
@@ -368,6 +438,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "create_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
@@ -404,6 +480,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "update_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
     "inputSchema": {
       "additionalProperties": false,
@@ -452,6 +534,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "edit_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
     "inputSchema": {
       "additionalProperties": false,
@@ -474,6 +562,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "rename_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a skill and all its supporting files. This cannot be undone.",
     "inputSchema": {
       "additionalProperties": false,
@@ -491,6 +585,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "delete_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -526,6 +626,10 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "write_skill_file",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -548,6 +652,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "read_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
     "inputSchema": {
       "additionalProperties": false,
@@ -570,6 +680,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "create_skill_folder",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename or move a supporting file or folder within a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -597,6 +713,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "move_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a supporting file or folder (folders recursively) from a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -619,6 +741,12 @@ exports[`MCP authoring tools > advertises the same tool definitions on the root 
     "name": "delete_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+    },
     "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
     "inputSchema": {
       "additionalProperties": false,

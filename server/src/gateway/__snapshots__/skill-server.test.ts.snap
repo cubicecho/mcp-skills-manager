@@ -3,6 +3,10 @@
 exports[`skill-server advertised tools with authoring on > pins every tool definition in loader mode 1`] = `
 [
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call \`load_skill\` with the name of each to fetch its full contents.",
     "inputSchema": {
       "additionalProperties": false,
@@ -12,6 +16,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
@@ -33,6 +41,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "search_skills",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Load one skill by name and return its full Markdown contents. Pass the \`name\` of a skill from \`list_skills\`. Use this instead of a per-skill tool — the catalogue is advertised by \`list_skills\`.",
     "inputSchema": {
       "additionalProperties": false,
@@ -50,6 +62,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "load_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Author a new skill (a Markdown playbook/reference other agents can load). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
     "inputSchema": {
       "additionalProperties": false,
@@ -96,6 +114,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
@@ -132,6 +156,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "update_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
     "inputSchema": {
       "additionalProperties": false,
@@ -180,6 +210,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "edit_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
     "inputSchema": {
       "additionalProperties": false,
@@ -202,6 +238,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "rename_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a skill and all its supporting files. This cannot be undone.",
     "inputSchema": {
       "additionalProperties": false,
@@ -219,6 +261,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -254,6 +302,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "write_skill_file",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -276,6 +328,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "read_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
     "inputSchema": {
       "additionalProperties": false,
@@ -298,6 +356,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill_folder",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename or move a supporting file or folder within a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -325,6 +389,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "move_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a supporting file or folder (folders recursively) from a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -347,6 +417,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+    },
     "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
     "inputSchema": {
       "additionalProperties": false,
@@ -369,6 +445,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
 exports[`skill-server advertised tools with authoring on > pins every tool definition in per-skill mode 1`] = `
 [
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call the tool named after each to fetch its full contents (its notes say \`tool …\` where that name differs from the skill’s).",
     "inputSchema": {
       "additionalProperties": false,
@@ -378,6 +458,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
@@ -399,6 +483,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "search_skills",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Author a new skill (a Markdown playbook/reference other agents can load). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
     "inputSchema": {
       "additionalProperties": false,
@@ -445,6 +535,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
@@ -481,6 +577,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "update_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
     "inputSchema": {
       "additionalProperties": false,
@@ -529,6 +631,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "edit_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
     "inputSchema": {
       "additionalProperties": false,
@@ -551,6 +659,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "rename_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a skill and all its supporting files. This cannot be undone.",
     "inputSchema": {
       "additionalProperties": false,
@@ -568,6 +682,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -603,6 +723,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "write_skill_file",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -625,6 +749,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "read_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
     "inputSchema": {
       "additionalProperties": false,
@@ -647,6 +777,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "create_skill_folder",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename or move a supporting file or folder within a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -674,6 +810,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "move_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a supporting file or folder (folders recursively) from a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -696,6 +838,12 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "delete_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+    },
     "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
     "inputSchema": {
       "additionalProperties": false,
@@ -713,6 +861,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "sync_skill",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Write conventional commit messages.",
     "inputSchema": {
       "additionalProperties": false,
@@ -722,6 +874,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "commit_messages",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Fill and inspect PDF forms.",
     "inputSchema": {
       "additionalProperties": false,
@@ -736,6 +892,10 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
 exports[`skill-server advertised tools with authoring on > pins the authoring tools of a workspace endpoint 1`] = `
 [
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "List every skill available from this endpoint, one per line and without loading any skill bodies: \`name [#tags] (notes): description\`. The notes give its supporting files, \`read-only\` when the authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to load, then call the tool named after each to fetch its full contents (its notes say \`tool …\` where that name differs from the skill’s).",
     "inputSchema": {
       "additionalProperties": false,
@@ -745,6 +905,10 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "list_skills",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
     "inputSchema": {
       "additionalProperties": false,
@@ -766,6 +930,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "search_skills",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Author a new skill (a Markdown playbook/reference other agents can load) (scoped to workspace "examples"). Provide either \`name\` (a slug) or \`title\` (a slug is derived from it), plus a one-line \`description\` and the Markdown \`body\`. Defaults to the directory layout (\`<name>/SKILL.md\`) so you can attach supporting files later with write_skill_file. Skills authored on the root endpoint are global; skills authored via a workspace are scoped to it by default — pass \`global\` to override.",
     "inputSchema": {
       "additionalProperties": false,
@@ -812,6 +982,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "create_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Update an existing skill in place: replace its \`description\` and/or its Markdown \`body\`, and/or toggle its \`global\` visibility on the root /mcp endpoint. Preserves the skill format, supporting files and any hand-added frontmatter. To change part of the body, use edit_skill, which sends only the passages that change. Use rename_skill to change the slug and write_skill_file to change supporting files. Skills marked read-only (\`readOnly\` in the catalogue) cannot be changed by this or any other authoring tool.",
     "inputSchema": {
       "additionalProperties": false,
@@ -848,6 +1024,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "update_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Change part of a skill without sending the rest of it: each edit swaps one exact passage (\`old_text\`) for another (\`new_text\`), in the skill’s Markdown body, or in the supporting file at \`path\` when given. \`old_text\` must match character for character, as the skill or read_skill_file returned it, and be there exactly once unless \`replace_all\` is true, so include enough of the surrounding text to make it unique. Edits are made in order, each on the result of the one before, and if any of them does not apply nothing is written. An empty \`new_text\` deletes the passage. A passage that is not found is answered with the nearest one the text does have.",
     "inputSchema": {
       "additionalProperties": false,
@@ -896,6 +1078,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "edit_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename a skill, moving its file/directory on disk. Fails if the new slug is already taken.",
     "inputSchema": {
       "additionalProperties": false,
@@ -918,6 +1106,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "rename_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a skill and all its supporting files. This cannot be undone.",
     "inputSchema": {
       "additionalProperties": false,
@@ -935,6 +1129,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "delete_skill",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Add or overwrite a supporting file inside a skill (e.g. reference.md, scripts/run.py). To change part of a text file that is already there, use edit_skill with its \`path\`. Promotes a \`file\`-format skill to a directory automatically. Binary content must be base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -970,6 +1170,10 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "write_skill_file",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Read one supporting file from a skill so you can review it before editing. Binary files come back base64-encoded.",
     "inputSchema": {
       "additionalProperties": false,
@@ -992,6 +1196,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "read_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Create an empty sub-directory inside a skill (promotes a \`file\` skill to a directory).",
     "inputSchema": {
       "additionalProperties": false,
@@ -1014,6 +1224,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "create_skill_folder",
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Rename or move a supporting file or folder within a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1041,6 +1257,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "move_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
     "description": "Delete a supporting file or folder (folders recursively) from a skill.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1063,6 +1285,12 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "delete_skill_file",
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+    },
     "description": "Pull the newest copy of a git-linked skill (one the other authoring tools refuse as "managed from a git source") from the repo, branch and folder a human linked it to, replacing its content. Its name, visibility and workspaces stay as they are. Cannot change where the skill comes from, and refuses a skill that is not linked or that a human marked read-only.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1080,6 +1308,10 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "sync_skill",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Write conventional commit messages.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1089,6 +1321,10 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "commit_messages",
   },
   {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
     "description": "Fill and inspect PDF forms.",
     "inputSchema": {
       "additionalProperties": false,
