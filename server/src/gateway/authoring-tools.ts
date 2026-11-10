@@ -1,11 +1,13 @@
 import type { AuthoringToolName, Skill } from '@mcp-skills/shared';
 import { fileEncodingSchema, HttpStatus, skillFormatSchema, skillRelPathSchema, slugSchema } from '@mcp-skills/shared';
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { ConfigStore } from '../config/store.ts';
 import { errorDetailMessage, HttpError } from '../errors.ts';
 import { applyReplacements, type Replacement } from '../skills/replacements.ts';
 import { resolveSkillName } from '../skills/skill-name.ts';
 import { bundledFiles, skillToolName, skillToolNames } from '../skills/skill-view.ts';
+import { READ_ONLY_HINTS } from './meta-tools.ts';
 
 /**
  * MCP tools that let an agent author and maintain skills over the endpoint it reads them from.
@@ -35,6 +37,11 @@ export interface AuthoringTool {
       required?: string[];
       additionalProperties: false;
     };
+    /**
+     * What the tool does to the skills store, which a host may use to run calls together, cache them, or ask
+     * before one that deletes. Required, so a new tool says it rather than being taken for a destructive write.
+     */
+    annotations: ToolAnnotations;
   };
   /** Runs the tool on a call's raw arguments and resolves to the text it answers with. */
   run: (args: Record<string, unknown>) => Promise<string>;
@@ -404,6 +411,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: [],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       },
       args: createArgs,
       run: async (input) => {
@@ -460,6 +468,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['name'],
           additionalProperties: false,
         },
+        // It replaces the fields it is given outright, so the old text is gone, and a repeat writes the same values.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       },
       args: updateArgs,
       target: { skill: (input) => input.name, access: 'write' },
@@ -516,6 +526,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['name', 'edits'],
           additionalProperties: false,
         },
+        // A passage can be deleted, and a repeat can match again: `replace_all` of `a` with `aa` grows every time.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       },
       args: editArgs,
       target: { skill: (input) => input.name, access: 'write' },
@@ -547,6 +559,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['name', 'new_name'],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       },
       args: renameArgs,
       target: { skill: (input) => input.name, access: 'write' },
@@ -570,6 +583,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['name'],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       },
       args: deleteArgs,
       target: { skill: (input) => input.name, access: 'write' },
@@ -596,6 +610,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['skill', 'path', 'content'],
           additionalProperties: false,
         },
+        // It overwrites a file already at `path`; the same path and content twice leave the one file.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       },
       args: writeFileArgs,
       target: { skill: (input) => input.skill, access: 'write' },
@@ -620,6 +636,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['skill', 'path'],
           additionalProperties: false,
         },
+        annotations: READ_ONLY_HINTS,
       },
       args: skillPathArgs,
       target: { skill: (input) => input.skill, access: 'read' },
@@ -647,6 +664,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['skill', 'path'],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       },
       args: skillPathArgs,
       target: { skill: (input) => input.skill, access: 'write' },
@@ -669,6 +687,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['skill', 'from', 'to'],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       },
       args: moveArgs,
       target: { skill: (input) => input.skill, access: 'write' },
@@ -690,6 +709,7 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['skill', 'path'],
           additionalProperties: false,
         },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       },
       args: skillPathArgs,
       target: { skill: (input) => input.skill, access: 'write' },
@@ -712,6 +732,8 @@ export function buildAuthoringTools(deps: AuthoringDeps): AuthoringTool[] {
           required: ['name'],
           additionalProperties: false,
         },
+        // It fetches a git remote, and what a repeat pulls depends on what was pushed there in between.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
       },
       args: syncArgs,
       target: { skill: (input) => input.name, access: 'sync' },

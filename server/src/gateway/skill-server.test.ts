@@ -810,3 +810,47 @@ describe('skill-server advertised tools with authoring on', () => {
     expect((await client.listTools()).tools).toMatchSnapshot();
   });
 });
+
+describe('skill-server tool annotations', () => {
+  const temp = useTempStore();
+  const READ = { readOnlyHint: true, openWorldHint: false };
+  /** Hints of a tool that writes the store and nothing else. */
+  const write = (destructiveHint: boolean, idempotentHint: boolean) => ({
+    readOnlyHint: false,
+    destructiveHint,
+    idempotentHint,
+    openWorldHint: false,
+  });
+
+  it('says on tools/list which tools only read, which delete, and which are safe to repeat', async () => {
+    const client = await connect(() => SKILLS, { authoring: { store: temp.store }, getSkillToolMode: () => 'loader' });
+    const hints = Object.fromEntries((await client.listTools()).tools.map((tool) => [tool.name, tool.annotations]));
+    expect(hints).toEqual({
+      list_skills: READ,
+      search_skills: READ,
+      load_skill: READ,
+      read_skill_file: READ,
+      create_skill: write(false, false),
+      create_skill_folder: write(false, false),
+      rename_skill: write(false, false),
+      move_skill_file: write(false, false),
+      edit_skill: write(true, false),
+      update_skill: write(true, true),
+      write_skill_file: write(true, true),
+      delete_skill: write(true, true),
+      delete_skill_file: write(true, true),
+      sync_skill: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    });
+  });
+
+  it('marks every per-skill tool read-only', async () => {
+    const client = await connect(() => SKILLS);
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => [tool.name, tool.annotations])).toEqual([
+      ['list_skills', READ],
+      ['search_skills', READ],
+      ['commit_messages', READ],
+      ['pdf-forms', READ],
+    ]);
+  });
+});

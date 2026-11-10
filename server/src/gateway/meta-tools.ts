@@ -1,5 +1,5 @@
 import type { SkillToolMode } from '@mcp-skills/shared';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 
 /**
  * Name of the meta-tool that returns the skill catalogue.
@@ -28,6 +28,16 @@ export const SEARCH_TOOL_NAME = 'search_skills';
 /** JSON Schema for a tool that takes no arguments. */
 export const NO_ARGS_SCHEMA: Tool['inputSchema'] = { type: 'object', properties: {}, additionalProperties: false };
 
+/**
+ * Hints for a tool that only reads the skills store.
+ *
+ * @remarks
+ * A host that believes them may run these calls side by side and answer a repeat from a cache. Loading a skill still
+ * counts a use for the web UI's stats, which a cached repeat goes without: that is bookkeeping, and nothing a tool
+ * reads back depends on it.
+ */
+export const READ_ONLY_HINTS: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
+
 /** How an agent loads a skill it found in the catalogue, by how the endpoint advertises skills. */
 const HOW_TO_LOAD: Record<SkillToolMode, string> = {
   loader: 'call `load_skill` with the name of each to fetch its full contents.',
@@ -51,6 +61,7 @@ export function indexToolDefinition(mode: SkillToolMode): Tool {
       'authoring tools will refuse it, and when it last changed. Call this first to decide which skill(s) to ' +
       `load, then ${HOW_TO_LOAD[mode]}`,
     inputSchema: NO_ARGS_SCHEMA,
+    annotations: READ_ONLY_HINTS,
   };
 }
 
@@ -74,6 +85,7 @@ export const SEARCH_TOOL_DEFINITION: Tool = {
     },
     additionalProperties: false,
   },
+  annotations: READ_ONLY_HINTS,
 };
 
 /** Definition of the `load_skill` tool, advertised in `loader` mode only. */
@@ -90,4 +102,5 @@ export const LOAD_TOOL_DEFINITION: Tool = {
     required: ['name'],
     additionalProperties: false,
   },
+  annotations: READ_ONLY_HINTS,
 };

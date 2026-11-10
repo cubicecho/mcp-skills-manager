@@ -26,6 +26,7 @@ import {
   LOAD_TOOL_DEFINITION,
   LOAD_TOOL_NAME,
   NO_ARGS_SCHEMA,
+  READ_ONLY_HINTS,
   SEARCH_TOOL_DEFINITION,
   SEARCH_TOOL_NAME,
 } from './meta-tools.ts';
@@ -265,6 +266,7 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
         name,
         description: skill.description || `Load the "${skill.name}" skill.`,
         inputSchema: NO_ARGS_SCHEMA,
+        annotations: READ_ONLY_HINTS,
       }));
     return { tools: [indexToolDefinition(mode), SEARCH_TOOL_DEFINITION, ...authoring, ...skillTools] };
   });

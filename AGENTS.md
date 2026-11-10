@@ -40,7 +40,11 @@ the same `ConfigStore` mutators as the REST API. They live in
 `settings.disabledAuthoringTools`; the names are `authoringToolNameSchema` in
 `shared/src/settings.ts`. `edit_skill` swaps exact passages of a skill's body, or
 of a supporting file given a `path` (`server/src/skills/replacements.ts`): all of
-its edits are written or none. `list_skills` and `search_skills` answer in text,
+its edits are written or none. Every tool carries MCP annotations (`readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`), which `AuthoringTool`
+requires; a host that trusts them runs reads together and caches repeats, so a
+hint must say what the handler does — anything that overwrites is destructive, and
+`sync_skill` is the one open-world tool. `list_skills` and `search_skills` answer in text,
 one line per skill (`renderIndex` in `skill-render.ts`), not JSON. A skill authored **via a
 workspace endpoint** is scoped to that workspace by default: written with a
 `global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
