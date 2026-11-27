@@ -27,6 +27,7 @@ RUN npm run build
 # a folder in a git repo — so the slim node image gets git, CA certificates for
 # https remotes and an ssh client for SSH ones.
 FROM node:26-slim
+LABEL org.opencontainers.image.source=https://github.com/cubicecho/mcp-skills-manager
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
