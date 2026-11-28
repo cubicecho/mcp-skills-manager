@@ -1,7 +1,7 @@
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCount, formatDuration } from '@/lib/format';
 import { useServerStatus, useSkills } from '@/lib/queries';
-import { cn } from '@/lib/utils';
 
 /** What the server is serving, at the foot of the sidebar: the figures every page wants to know. */
 export function ServerStats() {
@@ -20,7 +20,7 @@ export function ServerStats() {
   return (
     <div className="flex flex-col gap-0.5 px-2 py-1.5 text-xs">
       <output className="flex items-center gap-1.5 font-medium">
-        <span aria-hidden className={cn('size-1.5 rounded-full', data ? 'bg-primary' : 'bg-destructive')} />
+        <Badge variant={data ? 'positive' : 'destructive'} />
         {data ? `Serving ${formatCount(data.skillCount, 'skill')}` : 'Server unreachable'}
       </output>
       {data && (

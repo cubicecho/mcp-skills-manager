@@ -20,7 +20,7 @@ vi.mock('@/lib/toast', async () => (await import('@/test/toasts')).mockToasts())
 const SKILL = aSkill({ description: 'Write commits', body: '# Commits', tags: ['git'] });
 
 const saveButton = () => screen.getByRole('button', { name: /Save/ });
-const pressSaveChord = () => fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+const pressSaveChord = () => fireEvent.keyDown(document.body, { key: 's', ctrlKey: true });
 
 describe('SkillBodyEditor', () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
 import { type SkillSummary, skillSummarySchema } from '@mcp-skills/shared';
 import { describe, expect, it } from 'vitest';
-import { collectTags, filterAndSort } from './skill-list';
+import { collectTags, filterAndSort, isFiltering, NO_FILTERS } from './skill-list';
 
 /** A listed skill, with only what a test cares about spelled out. */
 function aSkill(name: string, overrides: Partial<SkillSummary> = {}): SkillSummary {
@@ -100,5 +100,19 @@ describe('collectTags', () => {
 
   it('is empty when no skill has a tag', () => {
     expect(collectTags([aSkill('plain')])).toEqual([]);
+  });
+});
+
+describe('isFiltering', () => {
+  it('is off for no filters, whatever the sort order', () => {
+    expect(isFiltering(NO_FILTERS)).toBe(false);
+    expect(isFiltering({ ...NO_FILTERS, sort: 'used', query: '  ' })).toBe(false);
+  });
+
+  it('is on once the search, the scope, the format or the tag narrows the list', () => {
+    expect(isFiltering({ ...NO_FILTERS, query: 'git' })).toBe(true);
+    expect(isFiltering({ ...NO_FILTERS, scope: 'global' })).toBe(true);
+    expect(isFiltering({ ...NO_FILTERS, format: 'file' })).toBe(true);
+    expect(isFiltering({ ...NO_FILTERS, tag: 'style' })).toBe(true);
   });
 });

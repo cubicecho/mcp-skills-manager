@@ -10,9 +10,10 @@ import { LoadState } from '@/components/load-state';
 import { PageLayout } from '@/components/page-layout';
 import { Button } from '@/components/ui/button';
 import { Plus, Search } from '@/components/ui/icons';
+import { formatCount } from '@/lib/format';
 import { mcpOrigin } from '@/lib/mcp';
 import { useServerStatus, useSkills } from '@/lib/queries';
-import { collectTags, filterAndSort, NO_FILTERS } from '@/lib/skill-list';
+import { collectTags, filterAndSort, isFiltering, NO_FILTERS } from '@/lib/skill-list';
 
 /** The `/` route: the skills page. */
 export const Route = createFileRoute('/')({
@@ -35,6 +36,8 @@ function SkillsPage() {
   const hasSkills = Boolean(data && data.length > 0);
   // The sort order is not a filter: clearing keeps it.
   const clearFilters = () => setChosen({ ...NO_FILTERS, sort: chosen.sort });
+  const isFiltered = isFiltering(filters);
+  const filterStatus = isFiltered && data ? `${visible.length} of ${formatCount(data.length, 'skill')}` : undefined;
 
   const newSkillButton = <Button onClick={() => setNewOpen(true)} content="New skill" iconSlot={<Plus />} />;
 
@@ -50,6 +53,9 @@ function SkillsPage() {
               filters={filters}
               tags={allTags}
               onChange={(change) => setChosen((current) => ({ ...current, ...change }))}
+              status={filterStatus}
+              isFiltered={isFiltered}
+              onClear={clearFilters}
             />
           ) : undefined
         }
@@ -64,7 +70,7 @@ function SkillsPage() {
                   <EmptyState
                     icon={Search}
                     title="No skills match your filters"
-                    actionSlot={<Button variant="outline" onClick={clearFilters} content="Clear filters" />}
+                    description="Clear filters to see them all."
                   />
                 ) : (
                   <EmptyState

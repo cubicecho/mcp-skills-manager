@@ -1,5 +1,6 @@
 import type { SelectEntry } from '@/components/app-form';
 import { Combobox } from '@/components/combobox';
+import { FilterBar } from '@/components/filter-bar';
 import { SearchInput } from '@/components/ui/search-input';
 import { isKeyOf } from '@/lib/is-key-of';
 import { FORMAT_LABELS, SCOPE_LABELS, type SkillListFilters, SORT_LABELS } from '@/lib/skill-list';
@@ -19,11 +20,19 @@ const SCOPE_OPTIONS = toOptions(SCOPE_LABELS);
 const FORMAT_OPTIONS = toOptions(FORMAT_LABELS);
 const SORT_OPTIONS = toOptions(SORT_LABELS);
 
-/** The skills page's search box and its scope, format, tag and sort selects. */
+/**
+ * The skills page's filter bar: its search box, its scope, format, tag and sort selects, and Clear filters while
+ * one narrows the list.
+ *
+ * @returns The bar to put over the list.
+ */
 export function SkillFilters({
   filters,
   tags,
   onChange,
+  status,
+  isFiltered,
+  onClear,
 }: {
   /** The filters as they stand. */
   filters: SkillListFilters;
@@ -31,9 +40,15 @@ export function SkillFilters({
   tags: string[];
   /** Called with the filters that differ, to merge into the rest. */
   onChange: (change: Partial<SkillListFilters>) => void;
+  /** What the filters leave, such as "2 of 5 skills"; left out while nothing is filtered. */
+  status: string | undefined;
+  /** Whether any filter narrows the list, which is when Clear filters shows. */
+  isFiltered: boolean;
+  /** Puts every filter back, keeping the sort order. */
+  onClear: () => void;
 }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
+  const controls = (
+    <>
       <SearchInput
         wrapperClassName="w-64"
         label="Search skills"
@@ -86,6 +101,8 @@ export function SkillFilters({
           }
         }}
       />
-    </div>
+    </>
   );
+
+  return <FilterBar contentSlot={controls} status={status} isFiltered={isFiltered} onClear={onClear} />;
 }

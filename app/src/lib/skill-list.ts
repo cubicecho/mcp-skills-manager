@@ -30,6 +30,17 @@ export interface SkillListFilters {
 export const NO_FILTERS: SkillListFilters = { query: '', scope: 'all', format: 'all', tag: undefined, sort: 'name' };
 
 /**
+ * Whether any filter narrows the list. The sort order only reorders it, so it does not count.
+ *
+ * @param filters - The filters as they stand.
+ * @returns True when the search, the scope, the format or the tag leaves a skill out.
+ */
+export function isFiltering(filters: SkillListFilters): boolean {
+  const { query, scope, format, tag } = filters;
+  return query.trim() !== '' || scope !== NO_FILTERS.scope || format !== NO_FILTERS.format || tag !== undefined;
+}
+
+/**
  * Narrows the skill list to what the filters allow and orders it.
  *
  * @param skills - The full list; not mutated.
