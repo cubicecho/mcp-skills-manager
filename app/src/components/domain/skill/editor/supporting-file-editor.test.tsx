@@ -21,7 +21,7 @@ const PATH = 'reference/notes.md';
 // The card is labelled by the path too, so the textarea is found by its role.
 const editor = () => screen.getByRole('textbox', { name: PATH });
 const saveButton = () => screen.getByRole('button', { name: /Save/ });
-const pressSaveChord = () => fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+const pressSaveChord = () => fireEvent.keyDown(document.body, { key: 's', ctrlKey: true });
 
 function renderEditor(handle?: Ref<EditorHandle>) {
   return render(<SupportingFileEditor skillName="pdf-forms" path={PATH} ref={handle} onClose={() => {}} />);

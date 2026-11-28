@@ -69,9 +69,11 @@ describe('the skills page', () => {
 
   it('narrows the list as the search is typed, and clears every filter at once', async () => {
     await renderPage();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search skills' }), 'commit');
     expect(rowNames()).toEqual(['commits']);
+    expect(screen.getByText('1 of 3 skills')).toBeInTheDocument();
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search skills' }), 'zzz');
     expect(screen.getByText('No skills match your filters')).toBeInTheDocument();
@@ -79,6 +81,7 @@ describe('the skills page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(rowNames()).toEqual(['alpha', 'commits', 'review']);
     expect(screen.getByRole('searchbox', { name: 'Search skills' })).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
   it('offers a tag filter only when a skill has a tag', async () => {

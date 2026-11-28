@@ -3,10 +3,10 @@ import { useAppForm } from '@/components/app-form';
 import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor/editor-frame';
 import { FileLoadState } from '@/components/domain/skill/editor/file-load-state';
 import { MarkdownEditor } from '@/components/markdown-editor';
+import { useHotkey } from '@/components/ui/hotkey';
 import { useFormStore } from '@/lib/form-store';
 import { useSkillFileContent, useWriteSkillFile } from '@/lib/queries';
 import { useToasts } from '@/lib/toast';
-import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
 /** The editor for a supporting `.md` file's contents. */
 export function SupportingFileEditor({
@@ -71,7 +71,17 @@ export function SupportingFileEditor({
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && write.isPending === false);
+  const canSave = dirty && write.isPending === false;
+  // Always bound, so the browser's own save dialog stays shut while there is nothing to save.
+  useHotkey(
+    'mod+s',
+    () => {
+      if (canSave) {
+        save();
+      }
+    },
+    { whileTyping: true },
+  );
 
   return (
     <EditorFrame

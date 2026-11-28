@@ -5,11 +5,11 @@ import { EditorFrame, type EditorHandle } from '@/components/domain/skill/editor
 import { SkillFlags } from '@/components/domain/skill/editor/skill-flags';
 import { MarkdownEditor } from '@/components/markdown-editor';
 import { Code } from '@/components/ui/code';
+import { useHotkey } from '@/components/ui/hotkey';
 import { useFormStore } from '@/lib/form-store';
 import { useSkills, useUpdateSkill } from '@/lib/queries';
 import { skillMarkdownPath } from '@/lib/skill';
 import { useToasts } from '@/lib/toast';
-import { useSaveShortcut } from '@/lib/use-save-shortcut';
 
 /** The editor for the skill's own Markdown: its description, tags and body, with its local settings between. */
 export function SkillBodyEditor({
@@ -53,7 +53,17 @@ export function SkillBodyEditor({
 
   const save = () => void form.handleSubmit();
 
-  useSaveShortcut(save, dirty && update.isPending === false);
+  const canSave = dirty && update.isPending === false;
+  // Always bound, so the browser's own save dialog stays shut while there is nothing to save.
+  useHotkey(
+    'mod+s',
+    () => {
+      if (canSave) {
+        save();
+      }
+    },
+    { whileTyping: true },
+  );
 
   return (
     <EditorFrame
